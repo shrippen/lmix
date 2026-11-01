@@ -205,6 +205,7 @@ pub const ACTION_GROUPS: &[(&str, &[&str])] = &[
             "stop_output",
             "start_outputs",
             "stop_outputs",
+            "mark_recording",
             "set_master_format",
             "set_multiview",
             "set_sample_rate",
@@ -550,6 +551,13 @@ pub enum Action {
     /// Stop every running output of `group`.
     StopOutputs {
         group: OutputGroup,
+    },
+    /// A line in the protocol of every running recording (REC.8): the
+    /// time of day, the time into the recording and its file, and
+    /// `text` (at most `MARK_TEXT_MAX` characters), e.g. "Q&A starts".
+    MarkRecording {
+        #[serde(default)]
+        text: Option<String>,
     },
 
     // ---- Audio (AUD) ----
@@ -1600,6 +1608,10 @@ pub enum ActionError {
     OutputSending { reference: String },
     #[error("encoding: {reason}")]
     BadEncoding { reason: String },
+    #[error("recording: {reason}")]
+    BadRecording { reason: String },
+    #[error("no recording runs")]
+    NoRecording,
     #[error("send delay: {reason}")]
     BadDelay { reason: String },
     #[error("sample rate {hz} Hz: 48000 or 44100")]

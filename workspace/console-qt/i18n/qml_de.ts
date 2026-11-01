@@ -98,6 +98,11 @@
     </message>
     <message>
       <location line="+1" />
+      <source>Mark in recordings</source>
+      <translation>Zeitmarke in Aufnahmen</translation>
+    </message>
+    <message>
+      <location line="+1" />
       <source>Sound of input on</source>
       <translation>Ton des Inputs an</translation>
     </message>
@@ -112,7 +117,7 @@
       <translation>Andere (JSON)</translation>
     </message>
     <message>
-      <location line="+112" />
+      <location line="+114" />
       <source>Action %1 is not valid JSON</source>
       <translation>Aktion %1 ist kein gültiges JSON</translation>
     </message>
@@ -481,7 +486,7 @@
       <translation>Karte %1 (nicht gefunden)</translation>
     </message>
     <message>
-      <location line="+67" />
+      <location line="+69" />
       <source>folder in the engine's media directory</source>
       <translation>Ordner im Medienverzeichnis der Engine</translation>
     </message>
@@ -512,7 +517,7 @@
       <translation>Speichern</translation>
     </message>
     <message>
-      <location line="+172" />
+      <location line="+177" />
       <source>The output is sending. Stop it first to change its settings.</source>
       <translation>Der Ausgang sendet. Erst stoppen, dann lassen sich seine Einstellungen ändern.</translation>
     </message>
@@ -608,6 +613,31 @@
     </message>
     <message>
       <location line="+14" />
+      <source>New file every (min)</source>
+      <translation>Neue Datei alle (min)</translation>
+    </message>
+    <message>
+      <location line="+10" />
+      <source>or at (MB)</source>
+      <translation>oder bei (MB)</translation>
+    </message>
+    <message>
+      <location line="+11" />
+      <source>New file</source>
+      <translation>Neue Datei</translation>
+    </message>
+    <message>
+      <location line="+1" />
+      <source>Help on new files</source>
+      <translation>Hilfe zu neuen Dateien</translation>
+    </message>
+    <message>
+      <location line="+1" />
+      <source>0: one file. A new file starts at the next keyframe; no frame is lost.</source>
+      <translation>0: eine Datei. Die neue Datei beginnt am nächsten Keyframe; kein Bild geht verloren.</translation>
+    </message>
+    <message>
+      <location line="+7" />
       <source>Send delay (s)</source>
       <translation>Sendeverzögerung (s)</translation>
     </message>
@@ -640,13 +670,13 @@
   <context>
     <name>AppShell</name>
     <message>
-      <location filename="../qml/AppShell.qml" line="+633" />
-      <location line="+112" />
+      <location filename="../qml/AppShell.qml" line="+634" />
+      <location line="+113" />
       <source>Open show</source>
       <translation>Show öffnen</translation>
     </message>
     <message>
-      <location line="-111" />
+      <location line="-112" />
       <location line="+13" />
       <source>lmix shows (*.lmix)</source>
       <translation>lmix-Shows (*.lmix)</translation>
@@ -660,12 +690,12 @@
     </message>
     <message>
       <location line="-61" />
-      <location line="+102" />
+      <location line="+103" />
       <source>Save show</source>
       <translation>Show speichern</translation>
     </message>
     <message>
-      <location line="-87" />
+      <location line="-88" />
       <source>Export settings</source>
       <translation>Einstellungen exportieren</translation>
     </message>
@@ -702,7 +732,7 @@
       <translation>Leerer Ordner für Show und Medien des Pakets</translation>
     </message>
     <message>
-      <location line="+34" />
+      <location line="+35" />
       <source>button in the page bar or at the foot of a page's window</source>
       <translation>Knopf in der Seitenleiste oder unten im Fenster einer Seite</translation>
     </message>
@@ -2594,7 +2624,7 @@
       <translation>Tasten</translation>
     </message>
     <message>
-      <location line="+6" />
+      <location line="+7" />
       <source>Shortcuts…</source>
       <translation>Belegungen…</translation>
     </message>
@@ -3006,7 +3036,7 @@
   <context>
     <name>MessageToasts</name>
     <message>
-      <location filename="../qml/MessageToasts.qml" line="+144" />
+      <location filename="../qml/MessageToasts.qml" line="+160" />
       <source>Close</source>
       <translation>Schließen</translation>
     </message>
@@ -4340,7 +4370,7 @@
   <context>
     <name>OutputBar</name>
     <message>
-      <location filename="../qml/OutputBar.qml" line="+41" />
+      <location filename="../qml/OutputBar.qml" line="+44" />
       <source>Outputs</source>
       <translation>Ausgänge</translation>
     </message>
@@ -4385,7 +4415,17 @@
       <translation>Alle Streams starten</translation>
     </message>
     <message>
-      <location line="+15" />
+      <location line="+17" />
+      <source>Mark</source>
+      <translation>Zeitmarke</translation>
+    </message>
+    <message>
+      <location line="+4" />
+      <source>Write the time into the protocol beside each running recording</source>
+      <translation>Uhrzeit ins Protokoll neben jeder laufenden Aufnahme schreiben</translation>
+    </message>
+    <message>
+      <location line="+4" />
       <source>+ Output</source>
       <translation>+ Ausgang</translation>
     </message>
@@ -4471,7 +4511,7 @@
   <context>
     <name>OutputsPage</name>
     <message>
-      <location filename="../qml/OutputsPage.qml" line="+68" />
+      <location filename="../qml/OutputsPage.qml" line="+92" />
       <source>Outputs</source>
       <translation>Ausgänge</translation>
     </message>
@@ -4516,7 +4556,22 @@
       <translation>Alle Aufnahmen starten</translation>
     </message>
     <message>
-      <location line="+7" />
+      <location line="+8" />
+      <source>Note for the mark</source>
+      <translation>Notiz zur Zeitmarke</translation>
+    </message>
+    <message>
+      <location line="+14" />
+      <source>Mark</source>
+      <translation>Zeitmarke</translation>
+    </message>
+    <message>
+      <location line="+4" />
+      <source>Write the time and the note into the protocol beside each running recording</source>
+      <translation>Uhrzeit und Notiz ins Protokoll neben jeder laufenden Aufnahme schreiben</translation>
+    </message>
+    <message>
+      <location line="+5" />
       <source>Ask before stopping</source>
       <translation>Vor dem Stoppen fragen</translation>
     </message>
@@ -5484,7 +5539,7 @@
       <translation>Beschriftung</translation>
     </message>
     <message>
-      <location line="+7" />
+      <location line="+12" />
       <source>Press a key…</source>
       <translation>Taste drücken…</translation>
     </message>
@@ -7680,6 +7735,16 @@
       <location line="+1" />
       <source>Encoding: %1</source>
       <translation>Encoding: %1</translation>
+    </message>
+    <message>
+      <location line="+1" />
+      <source>Recording: %1</source>
+      <translation>Aufnahme: %1</translation>
+    </message>
+    <message>
+      <location line="+1" />
+      <source>No recording runs</source>
+      <translation>Keine Aufnahme läuft</translation>
     </message>
     <message>
       <location line="+1" />

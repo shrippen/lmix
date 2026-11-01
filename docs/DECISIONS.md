@@ -6805,6 +6805,221 @@ Klick und Strg+Z, Escape im Namen, Mitglieder beim Zusammenstellen.
 Die Sichtprüfung lief mit der ersten Fassung der Toast-Ebene (immer offen);
 das Heben nur bei abgedunkeltem Fenster prüfen die Tests.
 
+## 2026-11-01 — Stimmungen: Nacharbeiten aus den Reviews (MOOD Stufe 7c)
+
+**Anlass**: Die Reviews zu Stufe 7a (#212) und 7b (#213) ließen Hinweise
+offen: Die Panik-Stimmung lief nach einem späten Notfall-Cue erneut, auch
+wenn die Ebene inzwischen einer anderen Stimmung oder einem GO gehörte; ein
+Notfall-Cue ohne Aktionen ließ sie ebenfalls ein zweites Mal laufen. Beim
+Vergrößern des Fensters mit offenem Dialog sprangen die Toasts zwischen
+Fensterinhalt und eigener Ebene hin und her. Dazu ein älterer Punkt: Beim
+Aufnehmen einer Taste im Kurzbefehl-Dialog nahm der Knopf Tab und
+Umschalt+Tab als Taste auf.
+
+**Entscheidung**:
+- **Panik-Stimmung nur, wo sie noch gilt** (MOOD.9): Der Dienst merkt sich
+  zur Wiederholung auch die Ebene. Bevor die Aktionen der Panik-Stimmung
+  nach denen des Cues noch einmal laufen, prüft er unter der Sperre des
+  Switchers, ob die Ebene noch die Herkunft „Panik“ hat
+  (`MoodRunner::is_panic`); hat inzwischen eine Stimmung oder ein GO sie
+  genommen (etwa während einer langsamen HTTP-Aktion des Cues), entfällt die
+  Wiederholung, und die neue Stimmung bleibt. Zwischen Prüfung und Lauf
+  bleibt ein Fenster von wenigen Schritten ohne Warten auf Geräte; es
+  zu schließen hieße, die Sperre über die Aktionen zu halten, die auf
+  Geräte warten. Ein Cue mit leerer Aktionsliste hat nichts geändert: Die
+  Panik-Stimmung läuft dann kein zweites Mal.
+- **Zweimal laufen** ist sonst gewollt (letzter Befehl gewinnt auf
+  demselben Ziel). Darum gehören in die Panik-Stimmung nur Aktionen, die
+  einen Zustand setzen (Saallicht an), keine umschaltenden (Toggle über HTTP
+  oder OSC); das steht jetzt im Umsetzungsvermerk zu MOOD.9. Verworfen:
+  die Panik-Stimmung erst nach dem letzten Notfall-Cue einmal laufen zu
+  lassen (die sofortigen Ziele wären bis zum Ende der Wartezeiten ohne
+  Saallicht).
+- **Nur das `Out::Mood` der Panik zählt**: `Out::Mood` trägt jetzt, ob es die
+  Panik-Stimmung ist (`panic`) oder das Ausblenden entfernter Ebenen aus
+  `set_moods`. Ob die Panik-Stimmung im selben Batch ohnehin zuletzt läuft,
+  prüft der Dienst nur an ersterem.
+- **Toasts beim Vergrößern** (`MessageToasts`): Qt meldet die neue Größe des
+  Overlays, bevor es die abgedunkelten Gründe nachzieht; `dimmed` fällt
+  darum je Schritt kurz auf 0. Die Ebene merkt sich, für welche Gründe sie
+  zuletzt geöffnet oder geschlossen wurde (`shownGrounds`, die Elemente in
+  der Reihenfolge des Overlays), und handelt im verzögerten Aufruf nur, wenn
+  danach andere Gründe da sind. Beim Vergrößern kommt derselbe Grund zurück:
+  Hover, die Haltezeit des Toasts und die Reihenfolge über einem offenen
+  Menü des Dialogs bleiben erhalten. Ein zweiter Dialog über dem ersten und
+  ein Dialog, der im selben Durchlauf den Platz eines anderen nimmt
+  („Kurzbefehle…“ im Dialog „Tasten“), bringen einen neuen Grund und öffnen
+  die Ebene neu. Verworfen: nur die Zahl der Gründe zu merken (Zwischenstand
+  der Review; beim Tausch blieb sie 1, die Toasts lagen unter dem Grund des
+  neuen Dialogs). Beim Abbau eines Fensters kann das Overlay kurz `null`
+  unter seinen Kindern haben, das überspringt die Zählung jetzt.
+- **Tab beim Aufnehmen einer Taste**: Tab und Umschalt+Tab bewegen den
+  Fokus wie überall, das Aufnehmen endet damit. Als Taste eines
+  Kurzbefehls taugen sie nicht (sie sind die Tastaturbedienung des
+  Fensters); einen Grund, sie aufzunehmen, gab es nicht.
+
+**Bricht** (noch kein Release): nichts an Dateien oder API; `Out::Mood` ist
+intern.
+
+**Geprüft**: `service::tests::the_panic_mood_runs_again_only_on_a_layer_still_the_panics`
+(leere Aktionsliste, Ebene noch „Panik“, Stimmung während der Aktionen
+gesetzt; mit pausierter Zeit), schlägt ohne die Prüfung der Ebene bzw. ohne
+die der leeren Liste fehl; `tst_app_shell.qml`
+`test_the_toasts_stay_raised_while_the_window_grows` (fünf Schritte
+Vergrößern bei offenem Dialog: die Spalte zieht nicht um, die Ebene geht nicht
+zu; ohne die Änderung 40 Umzüge) und
+`test_the_toasts_rise_over_a_dialog_that_takes_anothers_place` („Tasten“ →
+„Kurzbefehle…“: die Ebene liegt über dem Dialog „Kurzbefehle“; mit nur der
+Zahl darunter); `tst_action_rows.qml`
+`test_tab_moves_on_while_a_key_is_recorded`. Alle Tests in `lmix-core`,
+`lmix-types` und alle QML-Tests.
+
+## 2026-11-01 — Aufnahme: Teilen nach Zeit und Zeitmarken (REC.4, REC.8)
+
+**Anlass**: REC.4 (neue Datei alle n Minuten, nahtlos) und REC.8
+(Zeitmarke per Aktion ins Aufnahmeprotokoll) waren offen.
+
+**Optionen REC.4**: (a) lmix-core stoppt und startet die Aufnahme selbst
+alle n Minuten; (b) der Recorder in strom teilt.
+**Entscheidung**: (b). Beide Recorder, die lmix nutzt (Live-Recorder und
+für MKV vor GStreamer 1.26 der ältere `builtin.recorder` mit
+`splitmuxsink`), haben schon `max_size_time_secs` und `max_size_mb`: die
+neue Datei beginnt am nächsten Fragment bzw. Keyframe, ohne Lücke, jede
+mit Zeit 0. Kein strom-Diff nötig. `ts_passthrough` (rohes MPEG-TS ohne
+Neu-Muxen) teilt ebenso, lmix nutzt es nicht.
+- `OutputSpec::Record` bekommt `split_minutes` (0: eine Datei, höchstens
+  1440) und `split_mb` (0: ohne Grenze, sonst 10 MB bis 1 TiB); 0 wird
+  nicht gespeichert und nicht an strom gegeben, alte Shows und Flows
+  bleiben gleich. Außerhalb der Grenzen lehnt der Kern ab
+  (`bad_recording`). Unter 10 MB entstünden Dateien von wenigen Sekunden.
+- Ändern wie die übrigen Einstellungen einer Aufnahme: nur gestoppt
+  (`output_sending` sonst); im Dialog gesperrt, solange sie läuft. Ein
+  Ändern im Lauf hieße Neustart der Aufnahme, also eine Lücke.
+- Console: im Dialog „Ausgang“ bei Aufnahmen „Neue Datei alle (min)“ und
+  „oder bei (MB)“, mit Hilfe-Knopf (`KanteInfoTip`). Ein Wert unter 10 MB
+  wird 10 MB.
+
+**Optionen REC.8**: (a) Protokoll im Datenordner von lmix-core; (b) neben
+der Aufnahme im Medienordner von strom, über strom's Medien-API; (c) neue
+Append-API in strom.
+**Entscheidung**: (b). Wer die Aufnahme sucht, findet das Protokoll daneben,
+auch wenn strom auf einem anderen Rechner läuft (lmix-core kennt den
+Medienordner nicht, Entscheidung 4: nur REST). strom hat kein Anhängen,
+darum schreibt lmix-core die ganze Datei je Marke neu (`POST
+/api/media/upload`, strom schreibt erst in eine temporäre Datei und
+benennt um: nie halb geschrieben). Wenige Zeilen je Aufnahme, ein Upload
+je Marke; (c) wäre ein strom-Diff für eine Kann-Anforderung.
+- Aktion `mark_recording { text? }` (Gruppe `output`, höchstens 200
+  Zeichen): eine Zeile in jede laufende Aufnahme; läuft keine, lehnt der
+  Kern ab (`no_recording`). Über HTTP, WebSocket, TCP, Kurzbefehl, Cue,
+  Auslöser wie jede Aktion; OSC kurz `/lmix/mark [text]`.
+- Datei `<Präfix>_<Startzeit>.marks.csv` neben den Dateien der Aufnahme
+  (deren Name ohne Nummer, gilt für alle Teile nach REC.4). Spalten:
+  `time` (Uhrzeit des Kerns), `recording` (seit dem Start, h:mm:ss),
+  `file` (die Datei, die strom gerade schreibt, aus dem Ereignis
+  `RecorderFileChanged`), `file_time` (seit diese Datei begann), `text`.
+  Zeiten auf die Sekunde, gemessen am Kern: ±1 s gegenüber dem Bild.
+  Notizen, die eine Tabellenkalkulation als Formel läse (`=`, `+`, `-`,
+  `@`, Tab, CR am Anfang), bekommen ein `'` davor (CSV-Injektion).
+- **Uhren**: `time` ist die Uhrzeit des Kerns, der Zeitstempel im
+  Dateinamen die von strom. Laufen beide auf verschiedenen Rechnern,
+  sollten sie dieselbe Zeit und Zeitzone haben (NTP), sonst passen Name
+  und Spalten nicht zusammen.
+- **Vorläufiger Name**: Hat strom bei der ersten Marke noch keine Datei
+  gemeldet (der Live-Recorder meldet sie beim ersten Fragment), heißt das
+  Protokoll nach Präfix (`lmix-<erste 8 Zeichen der Ausgangs-Id>`, wie
+  der Kern ihn dem Recorder gibt) und Startzeit, wie der Kern sie sah. Ist die Datei gemeldet und heißt anders, zieht das
+  Protokoll mit der nächsten Marke neben sie um, der vorläufige Name wird
+  gelöscht (scheitert das Löschen, versucht es die nächste Marke wieder;
+  404 heißt: schon weg).
+  War der Name richtig geraten (ein Rechner, dieselbe Sekunde: der
+  Normalfall), bleibt das Protokoll, wo es ist.
+- **Neustart von lmix-core**: strom meldet die laufende Datei nicht noch
+  einmal, und der Kern kennt die Aufnahme erst ab seinem Neustart. Für
+  eine Aufnahme, die dieser Kern nicht gestartet hat, sucht die Marke im
+  Ordner (`GET /api/media`) die zuletzt geschriebene Datei mit dem Präfix
+  der Aufnahme (nicht die mit dem spätesten Namen: am Ende der Sommerzeit
+  geht die Zeit im Namen zurück) und schreibt im Protokoll daneben weiter; `recording` zählt ab dem
+  Zeitstempel im Dateinamen. Bei einer Aufnahme, die dieser Kern
+  gestartet hat, sucht sie nicht: die neueste Datei im Ordner könnte die
+  eines früheren Laufs sein.
+- **Nichts überschreiben**: Nur 404 heißt „kein Protokoll“. Kann strom es
+  nicht lesen (Fehler, Zeitüberschreitung), schreibt die Marke nichts und
+  meldet den Fehler; die nächste liest neu. Eine Datei des Namens, die
+  kein Protokoll ist, bleibt; das Protokoll nimmt `….marks-2.csv` usw.
+  Eine in einer Tabellenkalkulation neu gespeicherte (BOM, CRLF) gilt
+  weiter als Protokoll. Scheitert das Hochladen, nimmt der Kern die Zeile
+  zurück: eine wiederholte Marke steht einmal.
+- Ohne Sperre des Switchers: der Upload hält kein Schalten auf. Marken
+  laufen nacheinander (eine Sperre im Treiber), so bleibt die Reihenfolge.
+  Jeder Medien-Aufruf einer Marke wartet höchstens 5 s, damit eine Marke
+  in einem Cue die Aktionen danach nicht lange aufhält.
+- **Ein Ordner, eine Schreibweise**: strom setzt den Dateinamen roh an
+  den Ordner (`show/` ergibt `show//lmix-….mkv`). Hielte der Kern
+  `show//…` und `show/…` für zwei Dateien, läse er beim Umzug dasselbe
+  Protokoll noch einmal (die erste Marke doppelt) und löschte danach den
+  „alten“ Namen, also das Protokoll selbst. Darum nimmt der Kern den
+  Aufnahmeordner nur in Normalform an (`normal_folder`: keine leeren und
+  `.`-Teile, kein `/` vorn oder hinten; `..` lehnt er ab, `bad_recording`)
+  und gibt strom genau diesen Wert als `output_dir`. Zusätzlich vergleicht
+  er Pfade normalisiert (`marks::normal_path`): gemeldete Datei,
+  Protokoll daneben, vorläufiger Name, Umzug.
+- Der Aufnahmeordner liegt immer im Medienordner von strom; ein `/` vorn
+  meint dessen Wurzel, nicht die des Rechners. strom selbst prüft das
+  nicht (es hängt `output_dir` ungeprüft an den Medienordner, `../x`
+  schriebe daneben): der Kern sorgt dafür, beim Anlegen und beim Laden.
+- **Alte Shows**: Beim Laden bringt der Kern jeden Aufnahmeordner in
+  Normalform (unabhängig von der Version der Datei, bleibt gleich, was
+  schon normal ist), damit die Console zeigt, wohin strom schreibt.
+  Abgewogen für `..`: Laden ablehnen (die ganze Show wäre weg, wegen eines
+  Ordners) oder kürzen. Entschieden: `..`-Teile fallen weg (`../../x` wird
+  `x`), bleibt nichts übrig, heißt der Ordner `recordings`; das Log nennt
+  alten und neuen Ordner.
+- Console: Knopf „Zeitmarke“ auf der Seite Ausgänge (mit Notizfeld, Enter
+  setzt die Marke; höchstens 200 Zeichen, leert sich erst, wenn der Kern
+  die Marke angenommen hat) und in der Ausgangsleiste, sichtbar während
+  eine Aufnahme läuft; Vorlage „Zeitmarke in Aufnahmen“ für Kurzbefehle, Cues
+  und Auslöser.
+
+**Bricht**: Aufnahmeordner sind jetzt immer relativ zum Medienordner von
+strom und in Normalform. Ein absoluter Ordner (`/home/…/rec`) wird beim
+Anlegen zu `home/…/rec` im Medienordner, `..` abgelehnt. Alte Shows
+laden weiter, ihr Ordner wird beim Laden normalisiert (s. o.). Migriert:
+`demo/run.py` (Ordner `rec` statt eines absoluten Pfads), QML-Fixtures
+(`tst_output_menu`, `tst_outputs_page`) und die Mess-Skripte, die
+aufnehmen (`measure-sdi-latency`, `measure-switch-gaps`, `measure-av`,
+`measure-mixer-growth`, `measure-gui-frames`, `soak-hardware`,
+`test-channel-delay`): sie starten strom mit `--media-path` auf ihren
+Arbeitsordner und geben einen relativen Ordner (`rec`, `mv`, `pgm`, …),
+so bleiben ihre Suchpfade. Sonst nichts (neue Felder mit Standard, neue
+Aktion).
+
+**Geprüft**: lmix-types (Grenzen, alte Shows ohne Teilung),
+`flows::tests::a_split_recording_starts_new_files` (beide Recorder),
+`marks::tests` (Name, Zeile, CSV-Maskierung, Läufe),
+`strom::tests` mit einer strom-Attrappe: `marks_go_beside_the_recording`
+(ein Lesen je Lauf, ein Upload je Marke),
+`a_guessed_protocol_moves_beside_the_recording`,
+`a_right_guess_stays_with_each_mark_once`,
+`a_folder_written_two_ways_is_one_folder` (Ordner `show/`, strom meldet
+`show//…`: „start“ einmal, kein DELETE),
+`a_guess_gone_already_is_removed` (DELETE 404),
+`switcher::tests::a_recording_folder_is_kept_in_its_normal_form`,
+`show::tests::recording_folders_load_in_their_normal_form`,
+`after_a_restart_marks_go_on_in_the_old_protocol`,
+`a_failed_read_overwrites_nothing` (einmal 500),
+`a_foreign_file_is_never_overwritten`,
+`service::tests::marks_go_to_running_recordings`, OSC; QML: Dialog
+(`tst_add_output_dialog`), Seite und Leiste (`tst_outputs_page`,
+`tst_output_bar`). Echte Aufnahme mit strom (GStreamer 1.28, CPU-Mischer,
+Rauschen mit 40 Mbit/s): `split_mb: 10` ergab Dateien von 10–12 MB in
+Folge; `split_minutes: 1` (MP4) die zweite Datei nach gut 60 s; die Marken
+standen in beiden Protokollen mit der jeweils geschriebenen Datei. Nach der
+Umstellung der Skripte (CPU-Mischer, ohne Hardware) fanden
+`test-channel-delay`, `measure-av`, `measure-switch-gaps` und
+`measure-mixer-growth` ihre Aufnahmen; die übrigen brauchen SDI-Karte,
+GPU oder Bildschirm und sind nur mit `bash -n` geprüft.
+
 ## 2026-11-01 — Sendeverzögerung je Stream (STR.5)
 
 **Kontext**: STR.5 verlangt eine Sendeverzögerung von n Sekunden mit Puffer

@@ -66,6 +66,31 @@ TestCase {
         shortcut.close()
     }
 
+    // Recording a key: Tab moves the focus on and is never the key.
+    function test_tab_moves_on_while_a_key_is_recorded() {
+        const shortcut = createTemporaryObject(shortcutDialogComponent, test)
+        shortcut.shortcut = { id: "s", label: "Cut", key: null, midi: null, web: true, actions: [] }
+        shortcut.open()
+        tryVerify(() => shortcut.opened)
+        const key = findChild(shortcut.contentItem, "shortcutKeyButton")
+        verify(key !== null)
+        key.clicked()
+        verify(key.listening)
+        verify(key.activeFocus)
+        keyClick(Qt.Key_Tab)
+        compare(key.sequence, "")
+        verify(!key.activeFocus, "the focus moved on")
+        verify(!key.listening)
+        key.clicked()
+        keyClick(Qt.Key_Tab, Qt.ShiftModifier)
+        compare(key.sequence, "")
+        verify(!key.activeFocus, "and back")
+        key.clicked()
+        keyClick(Qt.Key_F5)
+        compare(key.sequence, "F5")
+        shortcut.close()
+    }
+
     function test_sixteen_actions_come_back_whole() {
         const rows = createTemporaryObject(rowsComponent, test)
         compare(rows.shown, 8)

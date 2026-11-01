@@ -15,6 +15,7 @@
 //! | `Seek`, `PlayItem` | the player's `seek` and `goto` (then play) |
 //! | `Stinger` | vision mixer stinger API: clip ensured in the library, then `stinger/take` with index and file; a cut if it cannot run |
 //! | `StingerLibrary` | vision mixer stinger API: clips removed, added, cut points set |
+//! | `mark_recordings` (REC.8) | media API: a protocol read once per recording run, then written whole per mark (`POST /api/media/upload`) |
 
 use async_trait::async_trait;
 use lmix_types::{
@@ -28,8 +29,9 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::time::Duration;
 use strom_types::api::{
-    FadeToBlackRequest, OutputBytesResponse, SelectPreviewRequest, SrtRole, SrtStats,
-    SrtStatsResponse, TriggerTransitionRequest, UpdateBlockPropertiesRequest, VisionMixerState,
+    FadeToBlackRequest, ListMediaResponse, OutputBytesResponse, SelectPreviewRequest, SrtRole,
+    SrtStats, SrtStatsResponse, TriggerTransitionRequest, UpdateBlockPropertiesRequest,
+    VisionMixerState,
 };
 use strom_types::devtools::HtmlPageCommand;
 use strom_types::discovery::DeviceResponse;
@@ -84,6 +86,7 @@ const NOT_RUNNING_YET: &str = "query pipeline position";
 const LAYOUT_BORDER_COLOR: &str = "#FFFFFF";
 
 use super::flows::{self, MixerBackend, MonitorOut, AUDIO_MIXER, MIXER_BLOCK, PGM_TAP, SLOT_TAP};
+use super::marks::{self, RecordingMark};
 use super::meters::{self, EngineHealth, EngineLevels, FlowError};
 use super::{Engine, EngineError, LivePicture, Picture};
 use crate::switcher::{Command, EngineBox, LibraryClip, MixerBuses, AUDIO_RAMP_MS};
@@ -152,6 +155,13 @@ pub struct StromEngine {
     live_mkv: std::sync::Mutex<flows::LiveMkv>,
     /// Last byte counter reading of each RTMP and recording output.
     output_rates: std::sync::Mutex<super::output_rate::OutputRates>,
+    /// The file each recording writes now, from strom's events (REC.8).
+    recorder_files: Arc<std::sync::Mutex<std::collections::HashMap<FlowId, marks::RecorderFile>>>,
+    /// Recording protocols; one mark at a time, so uploads keep order.
+    protocols: Mutex<marks::Protocols>,
+    /// Recordings started by this lmix-core: strom reports their files.
+    /// Others ran before it came up; their file is looked up.
+    fresh_recordings: std::sync::Mutex<std::collections::HashSet<lmix_types::OutputId>>,
 }
 
 /// Longest wait for one engine call. Commands run under the switcher
@@ -161,6 +171,13 @@ const ENGINE_CALL_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(
 /// How long the failure watcher waits for strom to tell whether a flow
 /// runs.
 const FLOW_CHECK_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(2);
+
+/// Longest wait for a media call of a recording mark: a mark in a cue or
+/// shortcut must not hold up the actions after it for long.
+const MEDIA_CALL_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(5);
+/// Names a recording protocol tries (`….marks-2.csv`, …) past files of
+/// its name that are no protocol.
+const PROTOCOL_NAMES: u32 = 9;
 
 /// How often, and how many times, a new web page is asked to take its CSS.
 const PAGE_READY_POLL: std::time::Duration = std::time::Duration::from_millis(500);
@@ -205,6 +222,9 @@ impl StromEngine {
             playback: Default::default(),
             live_mkv: std::sync::Mutex::new(flows::LiveMkv::No),
             output_rates: Default::default(),
+            recorder_files: Default::default(),
+            protocols: Default::default(),
+            fresh_recordings: Default::default(),
         }
     }
 
@@ -233,6 +253,260 @@ impl StromEngine {
 
     fn url(&self, path: &str) -> String {
         format!("{}/api{}", self.base_url, path)
+    }
+
+    // ---- Recording protocols (REC.8) ----
+
+    /// Output `id` starts anew here: strom reports its files from now on.
+    fn fresh_recording(&self, id: lmix_types::OutputId) {
+        let mut files = self.recorder_files.lock().expect("recorder files lock");
+        files.remove(&flows::output_flow_id(id));
+        let mut fresh = self.fresh_recordings.lock().expect("fresh lock");
+        fresh.insert(id);
+    }
+
+    /// Output `id` stopped.
+    fn forget_recording(&self, id: lmix_types::OutputId) {
+        let mut files = self.recorder_files.lock().expect("recorder files lock");
+        files.remove(&flows::output_flow_id(id));
+        let mut fresh = self.fresh_recordings.lock().expect("fresh lock");
+        fresh.remove(&id);
+    }
+
+    /// `mark`'s line added to its protocol, the whole file written anew.
+    /// Nothing is written while what is there cannot be read.
+    async fn mark_one(
+        &self,
+        protocols: &mut marks::Protocols,
+        mark: &RecordingMark,
+    ) -> Result<(), EngineError> {
+        let file = self.current_file(mark).await?;
+        match (protocols.state(mark), &file) {
+            (None, _) => {
+                let begin = self.begin_protocol(mark, file.as_ref()).await?;
+                protocols.begin(mark, begin);
+            }
+            // The name was a guess; now strom named the file.
+            (Some(marks::Provisional::Yes), Some(file)) => {
+                match marks::protocol_beside(file) {
+                    // The guess was right (same machine, same second):
+                    // the file there is this protocol already.
+                    Some(base) if protocols.named_from(mark, &base, PROTOCOL_NAMES) => {
+                        protocols.confirm(mark);
+                    }
+                    Some(base) => {
+                        let (path, before) = self.free_protocol(&base).await?;
+                        protocols.relocate(mark, path, before);
+                    }
+                    None => {}
+                }
+            }
+            (Some(_), _) => {}
+        }
+
+        let (path, text, len) = protocols
+            .add(mark, file.as_ref())
+            .expect("the protocol was begun");
+        let (path, text) = (path.to_string(), text.as_bytes().to_vec());
+        if let Err(e) = self.upload_media(&path, text).await {
+            protocols.undo(mark, len);
+            return Err(e);
+        }
+        if let Some(old) = protocols
+            .take_stale(mark)
+            .filter(|old| !marks::same_path(old, &path))
+        {
+            if let Err(e) = self.delete_media(&old).await {
+                tracing::warn!(%old, error = %e, "guessed recording protocol not removed");
+                protocols.keep_stale(mark, old);
+            }
+        }
+        Ok(())
+    }
+
+    /// The file `mark`'s recording writes now: as strom reported it, or
+    /// (a recording this lmix-core did not start) the newest of it in
+    /// its folder. `None` while strom has written none.
+    async fn current_file(
+        &self,
+        mark: &RecordingMark,
+    ) -> Result<Option<marks::RecorderFile>, EngineError> {
+        let flow = flows::output_flow_id(mark.output);
+        let reported = {
+            let files = self.recorder_files.lock().expect("recorder files lock");
+            files.get(&flow).cloned()
+        };
+        let fresh = self
+            .fresh_recordings
+            .lock()
+            .expect("fresh lock")
+            .contains(&mark.output);
+        if reported.is_some() || fresh {
+            return Ok(reported);
+        }
+
+        // An earlier file of the folder may be another run's: only for a
+        // recording found running, whose files are all older.
+        let prefix = marks::recording_prefix(mark.output);
+        let files = self.media_files(&mark.folder).await?;
+        let files: Vec<(&str, u64)> = files.iter().map(|(p, m)| (p.as_str(), *m)).collect();
+        let found = marks::newest_recording(&files, &prefix).map(marks::found_file);
+        if let Some(found) = &found {
+            let mut files = self.recorder_files.lock().expect("recorder files lock");
+            // A report that came meanwhile is newer.
+            files.entry(flow).or_insert_with(|| found.clone());
+        }
+        Ok(found)
+    }
+
+    /// Where `mark`'s run begins its protocol: beside `file`, else (no
+    /// file yet) a provisional name.
+    async fn begin_protocol(
+        &self,
+        mark: &RecordingMark,
+        file: Option<&marks::RecorderFile>,
+    ) -> Result<marks::Begin, EngineError> {
+        let fresh = self
+            .fresh_recordings
+            .lock()
+            .expect("fresh lock")
+            .contains(&mark.output);
+        let beside = file.and_then(marks::protocol_beside);
+        let (base, provisional) = match beside {
+            Some(base) => (base, marks::Provisional::No),
+            None => {
+                let prefix = marks::recording_prefix(mark.output);
+                (
+                    marks::protocol_guess(mark, &prefix),
+                    marks::Provisional::Yes,
+                )
+            }
+        };
+        // Found running: the start is in strom's file name, not when
+        // lmix-core came up.
+        let start_ms = file
+            .filter(|_| !fresh)
+            .and_then(|f| marks::recording_stem(&f.path))
+            .and_then(marks::stem_start_ms)
+            .unwrap_or(mark.since_ms);
+        let (path, before) = self.free_protocol(&base).await?;
+        Ok(marks::Begin {
+            path,
+            before,
+            start_ms,
+            provisional,
+        })
+    }
+
+    /// The first name from `base` on that is free or holds a protocol,
+    /// with what it holds: a file that is no protocol stays as it is.
+    async fn free_protocol(&self, base: &str) -> Result<(String, Option<String>), EngineError> {
+        for n in 1..=PROTOCOL_NAMES {
+            let path = marks::numbered(base, n);
+            let Some(text) = self.media_text(&path).await? else {
+                return Ok((path, None));
+            };
+            if let Some(own) = marks::own_text(&text) {
+                return Ok((path, Some(own)));
+            }
+        }
+        Err(EngineError::Refused(format!(
+            "{base}: {PROTOCOL_NAMES} files of that name are no recording protocol"
+        )))
+    }
+
+    /// URL of a file below the media directory, each part encoded.
+    fn media_file_url(&self, path: &str) -> Result<reqwest::Url, EngineError> {
+        let mut url = reqwest::Url::parse(&self.url("/media/file"))
+            .map_err(|e| EngineError::Refused(e.to_string()))?;
+        url.path_segments_mut()
+            .map_err(|()| EngineError::Refused("no media URL".into()))?
+            .extend(path.split('/').filter(|p| !p.is_empty()));
+        Ok(url)
+    }
+
+    /// Text of a file below the media directory; `None` when there is
+    /// none (404). Any other failure is an error: not knowing is not
+    /// "empty".
+    async fn media_text(&self, path: &str) -> Result<Option<String>, EngineError> {
+        let resp = self
+            .http
+            .get(self.media_file_url(path)?)
+            .timeout(MEDIA_CALL_TIMEOUT)
+            .send()
+            .await
+            .map_err(net)?;
+        if resp.status() == StatusCode::NOT_FOUND {
+            return Ok(None);
+        }
+        let text = check(resp).await?.text().await.map_err(net)?;
+        Ok(Some(text))
+    }
+
+    /// Paths of the files in `folder` below the media directory, with when
+    /// each was written last (Unix s); none when it is not there.
+    async fn media_files(&self, folder: &str) -> Result<Vec<(String, u64)>, EngineError> {
+        let resp = self
+            .http
+            .get(self.url("/media"))
+            .query(&[("path", folder)])
+            .timeout(MEDIA_CALL_TIMEOUT)
+            .send()
+            .await
+            .map_err(net)?;
+        if resp.status() == StatusCode::NOT_FOUND {
+            return Ok(Vec::new());
+        }
+        let list: ListMediaResponse = check(resp).await?.json().await.map_err(net)?;
+        Ok(list
+            .entries
+            .into_iter()
+            .filter(|e| !e.is_directory)
+            .map(|e| (e.path, e.modified))
+            .collect())
+    }
+
+    /// Remove a file below the media directory; one gone already is fine.
+    async fn delete_media(&self, path: &str) -> Result<(), EngineError> {
+        let resp = self
+            .http
+            .delete(self.media_file_url(path)?)
+            .timeout(MEDIA_CALL_TIMEOUT)
+            .send()
+            .await
+            .map_err(net)?;
+        if resp.status() == StatusCode::NOT_FOUND {
+            return Ok(());
+        }
+        check(resp).await.map(|_| ())
+    }
+
+    /// `bytes` as file `path` below the media directory, in place of the
+    /// one there (strom writes it whole, then renames it).
+    async fn upload_media(&self, path: &str, bytes: Vec<u8>) -> Result<(), EngineError> {
+        let (folder, name) = marks::split_path(path);
+        let boundary = format!("lmix-{}", uuid::Uuid::new_v4().simple());
+        let mut body = format!(
+            "--{boundary}\r\nContent-Disposition: form-data; name=\"file\"; filename=\"{name}\"\r\n\
+             Content-Type: text/csv\r\n\r\n"
+        )
+        .into_bytes();
+        body.extend_from_slice(&bytes);
+        body.extend_from_slice(format!("\r\n--{boundary}--\r\n").as_bytes());
+        let resp = self
+            .http
+            .post(self.url("/media/upload"))
+            .query(&[("path", folder)])
+            .header(
+                reqwest::header::CONTENT_TYPE,
+                format!("multipart/form-data; boundary={boundary}"),
+            )
+            .body(body)
+            .timeout(MEDIA_CALL_TIMEOUT)
+            .send()
+            .await
+            .map_err(net)?;
+        check(resp).await.map(|_| ())
     }
 
     // ---- Flows ----
@@ -1580,6 +1854,7 @@ impl Engine for StromEngine {
                 self.players.clone(),
                 self.stingers.clone(),
                 self.buses.clone(),
+                self.recorder_files.clone(),
             ));
         }
 
@@ -1643,6 +1918,18 @@ impl Engine for StromEngine {
         self.untapped.lock().expect("untapped lock").clear();
         let wanted = self.mixer_flow();
         self.build_mixer(&wanted).await
+    }
+
+    async fn mark_recordings(&self, marks: &[RecordingMark]) -> Result<(), EngineError> {
+        let mut protocols = self.protocols.lock().await;
+        let mut first_error = None;
+        for mark in marks {
+            if let Err(e) = self.mark_one(&mut protocols, mark).await {
+                tracing::warn!(output = %mark.output, error = %e, "recording mark not written");
+                first_error.get_or_insert(e);
+            }
+        }
+        first_error.map_or(Ok(()), Err)
     }
 
     async fn run(&self, command: &Command) -> Result<(), EngineError> {
@@ -1729,9 +2016,13 @@ impl Engine for StromEngine {
                 let live_mkv = *self.live_mkv.lock().expect("live mkv lock");
                 let flow =
                     flows::output_flow(*id, spec, *feed, *bus, self.backend, framerate, live_mkv);
+                self.fresh_recording(*id);
                 self.put_flow(&flow).await
             }
-            Command::StopOutput { id } => self.drop_flow(flows::output_flow_id(*id)).await,
+            Command::StopOutput { id } => {
+                self.forget_recording(*id);
+                self.drop_flow(flows::output_flow_id(*id)).await
+            }
             Command::SetOutputSound { id, feed, bus } => {
                 // The switcher sends it only for an output with sound before
                 // and after; one without would have no input to move.
@@ -2398,6 +2689,452 @@ mod tests {
         (format!("http://{addr}"), calls)
     }
 
+    /// strom's media directory as a stand-in sees it.
+    #[derive(Default)]
+    struct Media {
+        /// Files by path below the media directory.
+        files: std::collections::HashMap<String, String>,
+        /// Every request as method and path.
+        calls: Vec<String>,
+        /// The next this many file reads fail with 500.
+        failing_reads: u32,
+    }
+    type SharedMedia = std::sync::Arc<std::sync::Mutex<Media>>;
+
+    /// What the stand-in answers: a file, a listing, or nothing.
+    fn media_answer(
+        media: &SharedMedia,
+        method: &str,
+        path: &str,
+        query: &str,
+    ) -> (StatusCode, String) {
+        let mut media = media.lock().unwrap();
+        let folder = query.strip_prefix("path=").unwrap_or_default().to_string();
+        if let Some(file) = path.strip_prefix("/api/media/file/") {
+            if method == "DELETE" {
+                return match media.files.remove(file) {
+                    Some(_) => (StatusCode::OK, "{}".into()),
+                    None => (StatusCode::NOT_FOUND, String::new()),
+                };
+            }
+            if media.failing_reads > 0 {
+                media.failing_reads -= 1;
+                return (StatusCode::INTERNAL_SERVER_ERROR, "busy".into());
+            }
+            return match media.files.get(file) {
+                Some(text) => (StatusCode::OK, text.clone()),
+                None => (StatusCode::NOT_FOUND, String::new()),
+            };
+        }
+        if path == "/api/media" {
+            let entries: Vec<_> = media
+                .files
+                .keys()
+                .filter(|p| marks::split_path(p).0 == folder)
+                .map(|p| {
+                    serde_json::json!({ "name": marks::split_path(p).1, "path": p,
+                        "is_directory": false, "size": 1, "modified": 0 })
+                })
+                .collect();
+            let list = serde_json::json!({ "current_path": folder, "entries": entries });
+            return (StatusCode::OK, list.to_string());
+        }
+        (StatusCode::NOT_FOUND, String::new())
+    }
+
+    /// A strom stand-in with a media directory: files are listed, read,
+    /// deleted and uploaded (multipart, one file).
+    async fn media_strom() -> (StromEngine, SharedMedia) {
+        let media = SharedMedia::default();
+        let shared = media.clone();
+        let app = axum::Router::new().fallback(move |request: axum::extract::Request| {
+            let media = shared.clone();
+            async move {
+                let path = request.uri().path().to_string();
+                let query = request.uri().query().unwrap_or_default().to_string();
+                let method = request.method().to_string();
+                media.lock().unwrap().calls.push(format!("{method} {path}"));
+                if path != "/api/media/upload" {
+                    return media_answer(&media, &method, &path, &query);
+                }
+                let body = axum::body::to_bytes(request.into_body(), 1 << 20)
+                    .await
+                    .unwrap();
+                let body = String::from_utf8(body.to_vec()).unwrap();
+                let name = body.split("filename=\"").nth(1).unwrap();
+                let name = &name[..name.find('"').unwrap()];
+                let (_, content) = body.split_once("\r\n\r\n").unwrap();
+                let content = &content[..content.rfind("\r\n--").unwrap()];
+                let folder = query.strip_prefix("path=").unwrap();
+                let key = format!("{folder}/{name}");
+                media.lock().unwrap().files.insert(key, content.to_string());
+                (StatusCode::OK, "{}".into())
+            }
+        });
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let addr = listener.local_addr().unwrap();
+        tokio::spawn(async move { axum::serve(listener, app).await.unwrap() });
+        let engine = StromEngine::new(
+            format!("http://{addr}"),
+            MixerBackend::Cpu,
+            MonitorOut::None,
+        );
+        (engine, media)
+    }
+
+    const MARK_START_MS: u64 = 1_793_000_000_000;
+    const STEM: &str = "show/lmix-00000000_20261101_143000";
+
+    fn recording_mark(output: OutputId, at_s: u64, text: &str) -> RecordingMark {
+        RecordingMark {
+            output,
+            folder: "show".into(),
+            since_ms: MARK_START_MS,
+            at_ms: MARK_START_MS + at_s * 1000,
+            text: text.into(),
+        }
+    }
+
+    /// strom reported `file` for output `id`, as at the start.
+    fn report_file(engine: &StromEngine, id: OutputId, path: String) {
+        let file = marks::RecorderFile {
+            path,
+            opened_ms: Some(MARK_START_MS),
+        };
+        let mut files = engine.recorder_files.lock().unwrap();
+        files.insert(flows::output_flow_id(id), file);
+    }
+
+    fn file_text(media: &SharedMedia, path: &str) -> String {
+        media.lock().unwrap().files[path].clone()
+    }
+
+    /// REC.8: each mark writes the whole protocol beside the file strom
+    /// reported, one upload per mark; what the protocol held stays.
+    #[tokio::test]
+    async fn marks_go_beside_the_recording() {
+        let (engine, media) = media_strom().await;
+        let id = OutputId::new();
+        engine.fresh_recording(id);
+        report_file(&engine, id, format!("{STEM}_00000.mkv"));
+        let protocol = format!("{STEM}.marks.csv");
+        let earlier = format!("{}earlier\n", marks::HEADER);
+        media
+            .lock()
+            .unwrap()
+            .files
+            .insert(protocol.clone(), earlier);
+
+        engine
+            .mark_recordings(&[recording_mark(id, 5, "intro")])
+            .await
+            .unwrap();
+        engine
+            .mark_recordings(&[recording_mark(id, 65, "Q&A")])
+            .await
+            .unwrap();
+
+        let text = file_text(&media, &protocol);
+        let lines: Vec<&str> = text.lines().collect();
+        assert_eq!(lines.len(), 4, "{text}");
+        assert_eq!(lines[1], "earlier");
+        assert!(lines[2]
+            .ends_with(",0:00:05,\"lmix-00000000_20261101_143000_00000.mkv\",0:00:05,\"intro\""));
+        assert!(lines[3]
+            .ends_with(",0:01:05,\"lmix-00000000_20261101_143000_00000.mkv\",0:01:05,\"Q&A\""));
+        // Read once, when the run's protocol begins; then one upload a mark.
+        let calls = media.lock().unwrap().calls.clone();
+        assert_eq!(
+            calls,
+            [
+                format!("GET /api/media/file/{protocol}"),
+                "POST /api/media/upload".into(),
+                "POST /api/media/upload".into(),
+            ]
+        );
+    }
+
+    /// A mark before strom named a file goes under a guessed name; once
+    /// the file is known the protocol moves beside it and the guess goes.
+    #[tokio::test]
+    async fn a_guessed_protocol_moves_beside_the_recording() {
+        let (engine, media) = media_strom().await;
+        let id = OutputId::new();
+        engine.fresh_recording(id);
+
+        engine
+            .mark_recordings(&[recording_mark(id, 0, "start")])
+            .await
+            .unwrap();
+        let guess = media.lock().unwrap().files.keys().next().unwrap().clone();
+        let prefix = marks::recording_prefix(id);
+        assert!(guess.starts_with(&format!("show/{prefix}_")), "{guess}");
+
+        report_file(&engine, id, format!("{STEM}_00000.mkv"));
+        engine
+            .mark_recordings(&[recording_mark(id, 3, "")])
+            .await
+            .unwrap();
+
+        let files = media.lock().unwrap().files.clone();
+        assert_eq!(files.len(), 1, "{files:?}");
+        let text = &files[&format!("{STEM}.marks.csv")];
+        assert_eq!(text.matches(marks::HEADER).count(), 1);
+        let lines: Vec<&str> = text.lines().collect();
+        assert_eq!(lines.len(), 3, "{text}");
+        assert!(lines[1].ends_with(",0:00:00,\"\",,\"start\""), "{text}");
+        assert!(lines[2].contains(",0:00:03,\"lmix-00000000_"), "{text}");
+    }
+
+    /// The guessed file is gone already (removed by hand): its delete
+    /// answers 404, which is done, not tried again with every mark.
+    #[tokio::test]
+    async fn a_guess_gone_already_is_removed() {
+        let (engine, media) = media_strom().await;
+        let id = OutputId::new();
+        engine.fresh_recording(id);
+        engine
+            .mark_recordings(&[recording_mark(id, 0, "start")])
+            .await
+            .unwrap();
+        media.lock().unwrap().files.clear();
+        report_file(&engine, id, format!("{STEM}_00000.mkv"));
+        for at_s in [3, 4] {
+            engine
+                .mark_recordings(&[recording_mark(id, at_s, "")])
+                .await
+                .unwrap();
+        }
+
+        let media = media.lock().unwrap();
+        let deletes = media.calls.iter().filter(|c| c.starts_with("DELETE"));
+        assert_eq!(deletes.count(), 1, "{:?}", media.calls);
+        let text = &media.files[&format!("{STEM}.marks.csv")];
+        assert_eq!(text.lines().count(), 4, "{text}");
+    }
+
+    /// The guess was right (same machine, same second): once strom names
+    /// the file, the protocol stays, each mark in it once.
+    #[tokio::test]
+    async fn a_right_guess_stays_with_each_mark_once() {
+        let (engine, media) = media_strom().await;
+        let id = OutputId::new();
+        engine.fresh_recording(id);
+        let first = recording_mark(id, 0, "start");
+        let prefix = format!("lmix-{}", &id.to_string()[..8]);
+        let guess = marks::protocol_guess(&first, &prefix);
+
+        engine
+            .mark_recordings(std::slice::from_ref(&first))
+            .await
+            .unwrap();
+        let stem = guess.strip_suffix(".marks.csv").unwrap();
+        report_file(&engine, id, format!("{stem}_00000.mkv"));
+        engine
+            .mark_recordings(&[recording_mark(id, 3, "second")])
+            .await
+            .unwrap();
+        engine
+            .mark_recordings(&[recording_mark(id, 4, "third")])
+            .await
+            .unwrap();
+
+        let files = media.lock().unwrap().files.clone();
+        assert_eq!(files.len(), 1, "{files:?}");
+        let text = &files[&guess];
+        assert_eq!(text.matches("\"start\"").count(), 1, "{text}");
+        assert_eq!(text.lines().count(), 4, "{text}");
+        let deletes = media
+            .lock()
+            .unwrap()
+            .calls
+            .iter()
+            .filter(|c| c.starts_with("DELETE"))
+            .count();
+        assert_eq!(deletes, 0);
+    }
+
+    /// A folder written `show/` (an older show): strom reports
+    /// `show//….mkv`, the same file as `show/….mkv`. The right guess
+    /// stays, "start" in it once, nothing deleted.
+    #[tokio::test]
+    async fn a_folder_written_two_ways_is_one_folder() {
+        let (engine, media) = media_strom().await;
+        let id = OutputId::new();
+        engine.fresh_recording(id);
+        let first = RecordingMark {
+            folder: "show/".into(),
+            ..recording_mark(id, 0, "start")
+        };
+        let guess = marks::protocol_guess(&first, &marks::recording_prefix(id));
+        assert!(guess.starts_with("show/lmix-"), "{guess}");
+
+        engine
+            .mark_recordings(std::slice::from_ref(&first))
+            .await
+            .unwrap();
+        let name = marks::split_path(guess.strip_suffix(".marks.csv").unwrap()).1;
+        report_file(&engine, id, format!("show//{name}_00000.mkv"));
+        let second = RecordingMark {
+            text: "second".into(),
+            at_ms: first.at_ms + 3000,
+            ..first.clone()
+        };
+        engine.mark_recordings(&[second]).await.unwrap();
+
+        let media = media.lock().unwrap();
+        assert_eq!(media.files.len(), 1, "{:?}", media.files);
+        let text = &media.files[&guess];
+        assert_eq!(text.matches("\"start\"").count(), 1, "{text}");
+        assert_eq!(text.lines().count(), 3, "{text}");
+        assert!(text.contains(&format!("\"{name}_00000.mkv\"")), "{text}");
+        assert!(!media.calls.iter().any(|c| c.starts_with("DELETE")));
+    }
+
+    /// lmix-core restarted during a recording: strom reports no file, and
+    /// lmix-core found it running only now. The mark looks the file up in
+    /// the folder and goes on in the protocol there, counting from the
+    /// recording's start in its name.
+    #[tokio::test]
+    async fn after_a_restart_marks_go_on_in_the_old_protocol() {
+        let (engine, media) = media_strom().await;
+        let id = OutputId::new();
+        let prefix = format!("lmix-{}", &id.to_string()[..8]);
+        let stem = format!("show/{prefix}_20261101_143000");
+        let start = marks::stem_start_ms(&stem).unwrap();
+        let protocol = format!("{stem}.marks.csv");
+        {
+            let mut media = media.lock().unwrap();
+            media
+                .files
+                .insert(format!("{stem}_00000.mkv"), String::new());
+            media.files.insert(
+                format!("show/{prefix}_20261031_090000_00000.mkv"),
+                String::new(),
+            );
+            let earlier = format!("{}earlier\n", marks::HEADER);
+            media.files.insert(protocol.clone(), earlier);
+        }
+        // Found running ten seconds before the mark.
+        let mark = RecordingMark {
+            output: id,
+            folder: "show".into(),
+            since_ms: start + 3_715_000,
+            at_ms: start + 3_725_000,
+            text: "after".into(),
+        };
+
+        engine
+            .mark_recordings(std::slice::from_ref(&mark))
+            .await
+            .unwrap();
+
+        let text = file_text(&media, &protocol);
+        let lines: Vec<&str> = text.lines().collect();
+        assert_eq!(lines.len(), 3, "{text}");
+        let name = format!("{prefix}_20261101_143000_00000.mkv");
+        assert!(
+            lines[2].ends_with(&format!(",1:02:05,\"{name}\",1:02:05,\"after\"")),
+            "{text}"
+        );
+        assert_eq!(media.lock().unwrap().files.len(), 3, "no other protocol");
+    }
+
+    /// A protocol strom could not read is not taken for none: nothing is
+    /// written, and the next mark reads again and keeps what was there.
+    #[tokio::test]
+    async fn a_failed_read_overwrites_nothing() {
+        let (engine, media) = media_strom().await;
+        let id = OutputId::new();
+        engine.fresh_recording(id);
+        report_file(&engine, id, format!("{STEM}_00000.mkv"));
+        let protocol = format!("{STEM}.marks.csv");
+        {
+            let mut media = media.lock().unwrap();
+            media
+                .files
+                .insert(protocol.clone(), format!("{}earlier\n", marks::HEADER));
+            media.failing_reads = 1;
+        }
+
+        let first = engine
+            .mark_recordings(&[recording_mark(id, 1, "lost")])
+            .await;
+        assert!(first.is_err());
+        assert!(!media
+            .lock()
+            .unwrap()
+            .calls
+            .iter()
+            .any(|c| c.starts_with("POST")));
+
+        engine
+            .mark_recordings(&[recording_mark(id, 2, "kept")])
+            .await
+            .unwrap();
+        let text = file_text(&media, &protocol);
+        let lines: Vec<&str> = text.lines().collect();
+        assert_eq!(lines.len(), 3, "{text}");
+        assert_eq!(lines[1], "earlier");
+        assert!(lines[2].ends_with("\"kept\""), "{text}");
+    }
+
+    /// A file of the protocol's name that is no protocol stays; the
+    /// protocol takes the next name. One that a spreadsheet saved again
+    /// (byte order mark, CRLF) is still the protocol.
+    #[tokio::test]
+    async fn a_foreign_file_is_never_overwritten() {
+        let (engine, media) = media_strom().await;
+        let id = OutputId::new();
+        engine.fresh_recording(id);
+        report_file(&engine, id, format!("{STEM}_00000.mkv"));
+        let protocol = format!("{STEM}.marks.csv");
+        let foreign = "time;note\r\n14:31;x\r\n".to_string();
+        media
+            .lock()
+            .unwrap()
+            .files
+            .insert(protocol.clone(), foreign.clone());
+
+        engine
+            .mark_recordings(&[recording_mark(id, 1, "")])
+            .await
+            .unwrap();
+
+        assert_eq!(file_text(&media, &protocol), foreign);
+        let second = file_text(&media, &format!("{STEM}.marks-2.csv"));
+        assert_eq!(second.lines().count(), 2);
+
+        // Saved again by a spreadsheet: the next run goes on in it.
+        let saved = format!("\u{feff}{}", second.replace('\n', "\r\n"));
+        let other = OutputId::new();
+        engine.fresh_recording(other);
+        report_file(&engine, other, format!("{STEM}_00000.mkv"));
+        {
+            let mut media = media.lock().unwrap();
+            media.files.insert(format!("{STEM}.marks-2.csv"), saved);
+        }
+        engine
+            .mark_recordings(&[recording_mark(other, 2, "")])
+            .await
+            .unwrap();
+        let text = file_text(&media, &format!("{STEM}.marks-2.csv"));
+        assert!(text.starts_with(marks::HEADER), "{text:?}");
+        assert_eq!(text.lines().count(), 3);
+    }
+
+    /// strom out of reach: the mark is an error.
+    #[tokio::test]
+    async fn a_mark_strom_cannot_take_is_an_error() {
+        let (engine, _) = media_strom().await;
+        let unreachable = StromEngine {
+            base_url: "http://127.0.0.1:9".into(),
+            ..engine
+        };
+        let mark = recording_mark(OutputId::new(), 1, "");
+        assert!(unreachable.mark_recordings(&[mark]).await.is_err());
+    }
+
     /// Whether a flow runs: strom's answer, a missing flow is stopped, and
     /// no answer counts as running (the failure watcher keeps its window).
     #[tokio::test]
@@ -2518,6 +3255,8 @@ mod tests {
             container: lmix_types::Container::Mkv,
             video_kbps: 6000,
             encoding: Default::default(),
+            split_minutes: 0,
+            split_mb: 0,
         };
 
         for _ in 0..3 {

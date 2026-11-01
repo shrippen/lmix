@@ -102,6 +102,8 @@ KanteDialog {
     /** Channel pairs of the chosen channels: 1, 4 or 8. */
     readonly property int cardPairs: cardChannels[cardChannelsBox.currentIndex] ? Number(cardChannels[cardChannelsBox.currentIndex].value) / 2 : 1
     readonly property bool encodes: kind === "srt" || kind === "rtmp" || kind === "record"
+    /** A recording's split ranges (REC.4). */
+    readonly property var recordLimits: JSON.parse(core.choices("record_limits"))
     /** Streams can go out late (STR.5). */
     readonly property bool streams: kind === "srt" || kind === "rtmp"
     readonly property int sendDelayMax: JSON.parse(core.choices("stream_limits")).delay_s_max || 0
@@ -201,6 +203,8 @@ KanteDialog {
         keyframes.value = encoding.keyframe_ms !== undefined ? Math.round(encoding.keyframe_ms / 1000) : 2
         sendDelay.value = spec.delay_s || 0
         containerBox.currentIndex = Math.max(0, containers.findIndex(c => c.value === (spec.container || "mkv")))
+        splitMinutes.value = spec.split_minutes || 0
+        splitMb.value = spec.split_mb || 0
         const source = output.source || { from: "program" }
         const at = source.from === "input" ? inputs.findIndex(i => i.id === source.input) : -1
         // Before the index: the choices change with it.
@@ -242,6 +246,9 @@ KanteDialog {
             },
             name: nameField.text,
             bus: dialog.chosenBus(),
+            split_minutes: dialog.kind === "record" ? splitMinutes.value : 0,
+            // Below the smallest size: the smallest (0 stays off).
+            split_mb: dialog.kind === "record" && splitMb.value > 0 ? Math.max(splitMb.value, dialog.recordLimits.split_mb_min) : 0,
             delay_s: dialog.streams ? sendDelay.value : 0
         })
     }
@@ -456,6 +463,36 @@ KanteDialog {
                     value: 2
                     editable: true
                     KanteFieldSkin { control: keyframes }
+                }
+            }
+
+            // REC.4: a new file every so many minutes or MB, seamless; 0: off.
+            RowLayout {
+                visible: dialog.kind === "record"
+                KanteSectionLabel { text: qsTr("New file every (min)") }
+                QQC2.SpinBox {
+                    id: splitMinutes
+                    objectName: "splitMinutes"
+                    from: 0
+                    to: dialog.recordLimits.split_minutes_max
+                    stepSize: 5
+                    editable: true
+                    KanteFieldSkin { control: splitMinutes }
+                }
+                KanteSectionLabel { text: qsTr("or at (MB)") }
+                QQC2.SpinBox {
+                    id: splitMb
+                    objectName: "splitMb"
+                    from: 0
+                    to: dialog.recordLimits.split_mb_max
+                    stepSize: 1024
+                    editable: true
+                    KanteFieldSkin { control: splitMb }
+                }
+                KanteInfoTip {
+                    term: qsTr("New file")
+                    accessibleName: qsTr("Help on new files")
+                    info: qsTr("0: one file. A new file starts at the next keyframe; no frame is lost.")
                 }
             }
 

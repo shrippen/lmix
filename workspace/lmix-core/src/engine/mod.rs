@@ -10,6 +10,7 @@ use crate::switcher::Command;
 use flows::MixerBackend;
 
 pub mod flows;
+pub mod marks;
 pub mod meters;
 pub mod null;
 pub mod output_rate;
@@ -79,6 +80,11 @@ pub trait Engine: Send + Sync {
 
     /// Carry out one command.
     async fn run(&self, command: &Command) -> Result<(), EngineError>;
+
+    /// Add a line to the protocol of each recording marked (REC.8).
+    async fn mark_recordings(&self, _marks: &[marks::RecordingMark]) -> Result<(), EngineError> {
+        Ok(())
+    }
 
     /// Latest frame as JPEG.
     async fn picture(&self, picture: Picture) -> Result<Vec<u8>, EngineError>;

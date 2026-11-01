@@ -456,6 +456,7 @@ je ein PR:
 | 6b Bedienung | Ziehen nur am Griff, Aktionslisten scrollen, Entwurf zählt nur eigene Antworten | MOOD.6, 12 |
 | 7a Test Kern | Fehler aus dem Test der Seite im Kern | MOOD.1–9 |
 | 7b Test Oberfläche | Fehler aus dem Test der Seite in der Oberfläche | MOOD.6, 10–12 |
+| 7c Nacharbeiten | Hinweise aus den Reviews von 7a und 7b: Panik-Stimmung nur auf Ebenen, die noch der Panik gehören; Toasts beim Vergrößern des Fensters ruhig; Tab beim Aufnehmen einer Taste | MOOD.9, 12 |
 
 Stand: Stufe 1 ✅ (31.10., DECISIONS „Stimmungen: Modell und Engine“),
 Stufe 2 ✅ (31.10., DECISIONS „Stimmungen: die Seite“),
@@ -470,7 +471,8 @@ Stufe 5d ✅ (31.10., DECISIONS „Stimmungen: Panik nach der Notfall-Liste“),
 Stufe 6a ✅ (1.11., DECISIONS „Stimmungen: Nacharbeiten im Kern“),
 Stufe 6b ✅ (1.11., DECISIONS „Stimmungen: Bedienung nachgebessert“),
 Stufe 7a ✅ (1.11., DECISIONS „Stimmungen: Fehler aus dem Test im Kern“),
-Stufe 7b ✅ (1.11., DECISIONS „Stimmungen: Fehler aus dem Test in der Oberfläche“).
+Stufe 7b ✅ (1.11., DECISIONS „Stimmungen: Fehler aus dem Test in der Oberfläche“),
+Stufe 7c ✅ (1.11., DECISIONS „Stimmungen: Nacharbeiten aus den Reviews“).
 
 ---
 

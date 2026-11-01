@@ -78,6 +78,8 @@ const CARD_OUTPUT_BLOCK: &str = "builtin.decklink_output";
 
 /// Block id of a capture or playout card in a slot or output flow.
 const CARD: &str = "card";
+/// Block id of the recorder in a recording's output flow.
+pub const RECORDER: &str = "rec";
 /// Deinterlacer after a card input; progressive pictures pass through.
 const CARD_DEINTERLACE: &str = "card_deinterlace";
 /// Caps of what a card output takes: its mode's size and rate, 8-bit.
@@ -207,10 +209,6 @@ pub fn tiles_grid() -> (usize, usize) {
 /// Outputs buffer a little more than the mixer: they are not on the
 /// switching path, an encoder hiccup must not drop frames.
 const OUTPUT_BUFFER_MS: &str = "500";
-/// Recording files: `<folder>/lmix-<output>_<date>_<time>_00001.mkv`, …
-/// The output's id in the name: two recordings into one folder that start
-/// in the same second (a restore) would otherwise write the same file.
-const RECORDING_PREFIX: &str = "lmix";
 /// Thumbnail tap in every slot flow: input bar pictures.
 pub const SLOT_TAP: &str = "tap";
 /// Subscriber buffer of a live picture: as short as the mixer's, it
@@ -761,11 +759,6 @@ fn pgm_channel(block: &str) -> String {
 
 /// File name prefix of output `id`'s recordings: `lmix-` and the first 8
 /// characters of its id (not its name), e.g. `lmix-3f2a9c1e`.
-fn recording_prefix(id: OutputId) -> String {
-    let id = id.to_string();
-    format!("{RECORDING_PREFIX}-{}", &id[..8])
-}
-
 /// Whether strom's GStreamer has a live MKV muxer (1.26 and later).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum LiveMkv {
@@ -943,25 +936,33 @@ pub fn output_flow(
             container,
             video_kbps,
             encoding,
+            split_minutes,
+            split_mb,
         } => {
             add_encoder(&mut flow, *video_kbps, encoding, framerate);
             let recorder = match (container, live_mkv) {
                 (lmix_types::Container::Mkv, LiveMkv::No) => MKV_RECORDER_BLOCK,
                 _ => RECORDER_BLOCK,
             };
-            flow.blocks.push(block(
-                "rec",
-                recorder,
-                vec![
-                    ("container", PropertyValue::String(container.nick().into())),
-                    ("output_dir", PropertyValue::String(folder.clone())),
-                    (
-                        "filename_prefix",
-                        PropertyValue::String(recording_prefix(id)),
-                    ),
-                    ("num_audio_tracks", PropertyValue::UInt(u64::from(sound))),
-                ],
-            ));
+            let mut properties = vec![
+                ("container", PropertyValue::String(container.nick().into())),
+                ("output_dir", PropertyValue::String(folder.clone())),
+                (
+                    "filename_prefix",
+                    PropertyValue::String(super::marks::recording_prefix(id)),
+                ),
+                ("num_audio_tracks", PropertyValue::UInt(u64::from(sound))),
+            ];
+            // REC.4: both recorders start the next file at the next
+            // fragment (keyframe); 0 is one file, so it is left out.
+            if *split_minutes > 0 {
+                let secs = u64::from(*split_minutes) * 60;
+                properties.push(("max_size_time_secs", PropertyValue::UInt(secs)));
+            }
+            if *split_mb > 0 {
+                properties.push(("max_size_mb", PropertyValue::UInt(u64::from(*split_mb))));
+            }
+            flow.blocks.push(block(RECORDER, recorder, properties));
             flow.links
                 .push(link("enc:encoded_out".into(), "rec:video_in_0".into()));
             if sound {
@@ -3357,6 +3358,8 @@ mod tests {
             container: lmix_types::Container::Mkv,
             video_kbps: 8000,
             encoding: Default::default(),
+            split_minutes: 0,
+            split_mb: 0,
         };
         let flow = output_flow(
             OutputId::new(),
@@ -3399,7 +3402,7 @@ mod tests {
         );
         assert_ne!(prefix(&flow), prefix(&other));
         let id = OutputId::new();
-        let own = recording_prefix(id);
+        let own = crate::engine::marks::recording_prefix(id);
         assert_eq!(own, format!("lmix-{}", &id.to_string()[..8]));
         assert_eq!(own.len(), "lmix-".len() + 8);
     }
@@ -3411,6 +3414,8 @@ mod tests {
             container,
             video_kbps: 8000,
             encoding: Default::default(),
+            split_minutes: 0,
+            split_mb: 0,
         };
         let recorder = |container, version: &str| {
             let flow = output_flow(
@@ -3436,6 +3441,47 @@ mod tests {
         assert_eq!(recorder(Mp4, "1.24.2"), "builtin.liverecorder");
     }
 
+    // REC.4: both recorders take the split in seconds and MB; one file
+    // leaves them out, so the flow stays as it was.
+    #[test]
+    fn a_split_recording_starts_new_files() {
+        let spec = |split_minutes, split_mb| OutputSpec::Record {
+            folder: "show".into(),
+            container: lmix_types::Container::Mkv,
+            video_kbps: 8000,
+            encoding: Default::default(),
+            split_minutes,
+            split_mb,
+        };
+        let rec = |spec: &OutputSpec, live_mkv| {
+            let flow = output_flow(
+                OutputId::new(),
+                spec,
+                Feed::Program,
+                None,
+                MixerBackend::Cpu,
+                Framerate::default(),
+                live_mkv,
+            );
+            flow.blocks.into_iter().find(|b| b.id == "rec").unwrap()
+        };
+        for live_mkv in [LiveMkv::Yes, LiveMkv::No] {
+            let split = rec(&spec(30, 2048), live_mkv);
+            assert!(matches!(
+                split.properties.get("max_size_time_secs"),
+                Some(PropertyValue::UInt(1800))
+            ));
+            assert!(matches!(
+                split.properties.get("max_size_mb"),
+                Some(PropertyValue::UInt(2048))
+            ));
+
+            let whole = rec(&spec(0, 0), live_mkv);
+            assert!(!whole.properties.contains_key("max_size_time_secs"));
+            assert!(!whole.properties.contains_key("max_size_mb"));
+        }
+    }
+
     #[test]
     fn iso_recording_of_a_silent_input_has_no_audio_track() {
         let spec = OutputSpec::Record {
@@ -3443,6 +3489,8 @@ mod tests {
             container: lmix_types::Container::Mkv,
             video_kbps: 8000,
             encoding: Default::default(),
+            split_minutes: 0,
+            split_mb: 0,
         };
         let flow = output_flow(
             OutputId::new(),
@@ -3715,6 +3763,8 @@ mod tests {
             container: lmix_types::Container::Mkv,
             video_kbps: 8000,
             encoding: Default::default(),
+            split_minutes: 0,
+            split_mb: 0,
         };
         let flow = output_flow(
             OutputId::new(),
@@ -3754,6 +3804,8 @@ mod tests {
                 container: lmix_types::Container::Mkv,
                 video_kbps: 4000,
                 encoding: Default::default(),
+                split_minutes: 0,
+                split_mb: 0,
             },
             OutputSpec::Ndi {
                 name: "lmix".into(),

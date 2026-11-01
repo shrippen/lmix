@@ -812,8 +812,13 @@ impl Service {
         // its actions.
         let last_mood = out
             .iter()
-            .rposition(|o| matches!(o, crate::cues::Out::Mood { .. }));
-        let mut again: Option<(lmix_types::InputId, lmix_types::CueId, Vec<Action>)> = None;
+            .rposition(|o| matches!(o, crate::cues::Out::Mood { panic: true, .. }));
+        let mut again: Option<(
+            lmix_types::InputId,
+            lmix_types::CueId,
+            lmix_types::LayerId,
+            Vec<Action>,
+        )> = None;
         for (at, o) in out.into_iter().enumerate() {
             if self.panicked_since(since)
                 && matches!(
@@ -857,7 +862,9 @@ impl Service {
                     tracing::warn!(?mode, "panic");
                     let _ = self.events.send(Event::Panic { mode });
                 }
-                crate::cues::Out::Mood { actions } => self.run_mood_actions(actions, since).await,
+                crate::cues::Out::Mood { actions, .. } => {
+                    self.run_mood_actions(actions, since).await;
+                }
                 crate::cues::Out::TakeLayer {
                     list,
                     cue,
@@ -876,7 +883,7 @@ impl Service {
                             }
                             crate::moods::Take::Panic(actions) => {
                                 if !actions.is_empty() && last_mood.is_none_or(|m| m < at) {
-                                    again = Some((list, cue, actions));
+                                    again = Some((list, cue, layer, actions));
                                 }
                                 continue;
                             }
@@ -885,9 +892,12 @@ impl Service {
                     self.run_mood_actions(actions, since).await;
                 }
                 crate::cues::Out::Actions { list, cue, actions } => {
+                    // A cue without actions changed nothing there: the
+                    // panic mood's need not run twice.
                     let after = again
-                        .take_if(|(l, c, _)| *l == list && *c == cue)
-                        .map(|(.., actions)| actions);
+                        .take_if(|(l, c, ..)| *l == list && *c == cue)
+                        .filter(|_| !actions.is_empty())
+                        .map(|(.., layer, actions)| (layer, actions));
                     for action in actions {
                         // A panic from a cue always goes.
                         if self.panicked_since(since)
@@ -918,17 +928,32 @@ impl Service {
                         });
                         break;
                     }
-                    if let Some(actions) = after {
-                        self.run_mood_actions(actions, since).await;
+                    if let Some((layer, actions)) = after {
+                        self.run_panic_mood_again(layer, actions, since).await;
                     }
                 }
             }
         }
         // A take without actions after it (never from `fire`): still the
         // panic mood's last.
-        if let Some((.., actions)) = again {
-            self.run_mood_actions(actions, since).await;
+        if let Some((.., layer, actions)) = again {
+            self.run_panic_mood_again(layer, actions, since).await;
         }
+    }
+
+    /// The panic mood's actions on `layer` once more after an emergency
+    /// cue's (MOOD.9), unless the layer is no longer the panic's: a mood
+    /// set or a cue took it while the cue's actions ran.
+    async fn run_panic_mood_again(
+        self: &Arc<Self>,
+        layer: lmix_types::LayerId,
+        actions: Vec<Action>,
+        since: u64,
+    ) {
+        if !self.switcher.lock().await.mood_is_panic(layer) {
+            return;
+        }
+        self.run_mood_actions(actions, since).await;
     }
 
     /// Holds what is held ready until the guard is released or dropped
@@ -2010,6 +2035,22 @@ impl Service {
                 let request =
                     crate::targets::ha_request(service, entity.as_deref(), data.as_ref())?;
                 self.send_to_target(config, request, out);
+                return Ok(self.state().await);
+            }
+            // REC.8: written by the engine, without the switcher locked
+            // (an upload must not hold up switching).
+            Action::MarkRecording { text } => {
+                let marks = self
+                    .switcher
+                    .lock()
+                    .await
+                    .recording_marks(now_ms(), text.as_deref())?;
+                self.engine
+                    .mark_recordings(&marks)
+                    .await
+                    .map_err(|e| ActionError::Engine {
+                        message: e.to_string(),
+                    })?;
                 return Ok(self.state().await);
             }
             Action::TestTarget { name } => {
@@ -4291,6 +4332,77 @@ mod tests {
         assert!(sw.state().running_cues.is_empty());
     }
 
+    /// A late emergency cue on a layer of the panic mood: the panic mood's
+    /// actions there run again only while the layer is still the panic's,
+    /// and not for a cue without actions (MOOD.9).
+    #[tokio::test(start_paused = true)]
+    async fn the_panic_mood_runs_again_only_on_a_layer_still_the_panics() {
+        use lmix_types::LayerOrigin;
+        let (service, _, mut moods) = tavern_service().await;
+        let licht = moods.layers[0].id;
+        let light = |value: &str| Action::SetDynamicValue {
+            slot: 1,
+            value: value.into(),
+        };
+        moods.panic.insert(
+            licht,
+            lmix_types::LayerContent::Actions {
+                actions: vec![light("Saallicht")],
+            },
+        );
+        service.handle(Action::SetMoods { moods }).await.unwrap();
+        let state = service
+            .handle(Action::CuePanic { ms: Some(0) })
+            .await
+            .unwrap();
+        assert_eq!(state.mood.layers[0].origin, LayerOrigin::Panic);
+        let since = service.panics.load(Ordering::Acquire);
+        let (list, cue) = (InputId::new(), lmix_types::CueId::new());
+        let late = |actions| {
+            vec![
+                crate::cues::Out::TakeLayer {
+                    list,
+                    cue,
+                    layer: licht,
+                    panic: true,
+                },
+                crate::cues::Out::Actions { list, cue, actions },
+            ]
+        };
+        let value = |service: &Arc<Service>| {
+            let service = service.clone();
+            async move { service.state().await.dynamic_values[0].clone() }
+        };
+
+        // A cue without actions changes nothing: the panic mood's do not
+        // run twice.
+        service.handle(light("dunkel")).await.unwrap();
+        service.run_cue_outs_held(late(vec![]), since).await;
+        assert_eq!(value(&service).await, "dunkel");
+
+        // A cue's actions on a layer still the panic's: the panic mood wins.
+        service
+            .run_cue_outs_held(late(vec![light("dunkel")]), since)
+            .await;
+        assert_eq!(value(&service).await, "Saallicht");
+
+        // A mood set while the cue's actions ran (a slow device): the
+        // layer is the mood's, the panic mood's do not run again there.
+        let set = Action::SetMood {
+            mood: "Taverne".into(),
+            fade_ms: None,
+        };
+        service
+            .run_cue_outs_held(late(vec![light("dunkel"), set]), since)
+            .await;
+        let state = service.state().await;
+        assert!(matches!(
+            state.mood.layers[0].origin,
+            LayerOrigin::Mood { .. }
+        ));
+        assert_eq!(state.dynamic_values[0], "dunkel");
+    }
+
     #[tokio::test]
     async fn panic_runs_the_emergency_list_and_a_restart_starts_nothing() {
         use lmix_types::{Cue, StopMode};
@@ -5331,6 +5443,76 @@ mod tests {
             state.outputs[0].status,
             lmix_types::OutputStatus::Running { .. }
         ));
+    }
+
+    /// REC.8: a mark reaches the engine for each running recording only,
+    /// with its folder, start and text; without one it is refused. REC.4:
+    /// a split out of range is refused.
+    #[tokio::test]
+    async fn marks_go_to_running_recordings() {
+        use lmix_types::{OutputRef, OutputSpec, OutputStatus};
+        let engine = Arc::new(NullEngine::default());
+        let service = Service::new(4, engine.clone(), None);
+        let record = |folder: &str, split_minutes| OutputSpec::Record {
+            folder: folder.into(),
+            container: Default::default(),
+            video_kbps: 6000,
+            encoding: Default::default(),
+            split_minutes,
+            split_mb: 0,
+        };
+        let refused = service
+            .handle(Action::AddOutput {
+                spec: record("show", lmix_types::output::SPLIT_MINUTES_MAX + 1),
+                source: lmix_types::OutputSource::Program,
+                bus: None,
+                name: None,
+            })
+            .await;
+        assert!(matches!(refused, Err(ActionError::BadRecording { .. })));
+        for folder in ["show", "spare"] {
+            service
+                .handle(Action::AddOutput {
+                    spec: record(folder, 30),
+                    source: lmix_types::OutputSource::Program,
+                    bus: None,
+                    name: None,
+                })
+                .await
+                .unwrap();
+        }
+        let mark = |text: Option<&str>| Action::MarkRecording {
+            text: text.map(str::to_string),
+        };
+        assert_eq!(
+            service.handle(mark(None)).await,
+            Err(ActionError::NoRecording)
+        );
+
+        service
+            .handle(Action::StartOutput {
+                output: OutputRef::Number(1),
+            })
+            .await
+            .unwrap();
+        service.handle(mark(Some(" Q&A "))).await.unwrap();
+        let too_long = "x".repeat(lmix_types::output::MARK_TEXT_MAX + 1);
+        let refused = service.handle(mark(Some(&too_long))).await;
+        assert!(matches!(refused, Err(ActionError::BadRecording { .. })));
+
+        let state = service.state().await;
+        let OutputStatus::Running { since_ms } = state.outputs[0].status else {
+            panic!("{:?}", state.outputs[0].status);
+        };
+        let marks = engine.marks();
+        assert_eq!(marks.len(), 1, "{marks:?}");
+        assert_eq!(marks[0].output, state.outputs[0].id);
+        assert_eq!(
+            (marks[0].folder.as_str(), marks[0].text.as_str()),
+            ("show", "Q&A")
+        );
+        assert_eq!(marks[0].since_ms, since_ms);
+        assert!(marks[0].at_ms >= since_ms);
     }
 
     /// The cards start off: a card input shows black with a banner and a

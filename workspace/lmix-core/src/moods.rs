@@ -285,6 +285,14 @@ impl MoodRunner {
         self.layers.len() != before
     }
 
+    /// Whether layer `layer` still runs the panic mood (MOOD.9): no mood
+    /// set and no cue took it since.
+    pub fn is_panic(&self, layer: LayerId) -> bool {
+        self.layers
+            .get(&layer)
+            .is_some_and(|p| p.origin == LayerOrigin::Panic)
+    }
+
     /// Whether cue `cue` of `list` holds a layer.
     pub fn holds(&self, list: InputId, cue: CueId) -> bool {
         self.layers

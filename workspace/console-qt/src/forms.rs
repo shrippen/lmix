@@ -51,6 +51,19 @@ pub fn values(list: &str) -> Option<String> {
                     .to_string(),
             )
         }
+        // A recording's split and its marks (REC.4, REC.8).
+        "record_limits" => {
+            use lmix_types::output::{MARK_TEXT_MAX, SPLIT_MB_MAX, SPLIT_MB_MIN, SPLIT_MINUTES_MAX};
+            return Some(
+                serde_json::json!({
+                    "split_minutes_max": SPLIT_MINUTES_MAX,
+                    "split_mb_min": SPLIT_MB_MIN,
+                    "split_mb_max": SPLIT_MB_MAX,
+                    "mark_text_max": MARK_TEXT_MAX,
+                })
+                .to_string(),
+            )
+        }
         // A stream's longest send delay (STR.5).
         "stream_limits" => {
             return Some(
@@ -232,6 +245,11 @@ pub struct OutputForm {
     /// A card output's sound beyond its mode.
     #[serde(default)]
     pub card: CardSoundForm,
+    /// A recording's new file every so many minutes and MB (REC.4).
+    #[serde(default)]
+    pub split_minutes: u32,
+    #[serde(default)]
+    pub split_mb: u32,
     /// A stream's send delay in seconds (STR.5); other outputs ignore it.
     #[serde(default)]
     pub delay_s: u32,
@@ -273,6 +291,21 @@ pub fn with_card_sound(mut spec: OutputSpec, form: &CardSoundForm) -> OutputSpec
         more_pairs.pop();
     }
     *sound_delay_ms = form.sound_delay_ms;
+    spec
+}
+
+/// `spec` split as the form says if it is a recording (REC.4); other
+/// outputs as they are.
+fn with_split(mut spec: OutputSpec, minutes: u32, mb: u32) -> OutputSpec {
+    if let OutputSpec::Record {
+        split_minutes,
+        split_mb,
+        ..
+    } = &mut spec
+    {
+        *split_minutes = minutes;
+        *split_mb = mb;
+    }
     spec
 }
 
@@ -326,6 +359,8 @@ pub fn output_of(
                 .unwrap_or_default(),
             video_kbps,
             encoding,
+            split_minutes: 0,
+            split_mb: 0,
         },
         "ndi" => OutputSpec::Ndi { name: text },
         "window" => OutputSpec::Display {
@@ -389,6 +424,7 @@ fn output_parts(form: &OutputForm) -> Option<(OutputSpec, OutputSource, Option<S
         &form.mode,
     )?;
     let spec = with_card_sound(spec, &form.card);
+    let spec = with_split(spec, form.split_minutes, form.split_mb);
     let spec = with_send_delay(spec, form.delay_s);
     let name = form.name.trim().to_string();
     Some((
@@ -666,6 +702,31 @@ mod tests {
         assert_eq!(update_output_action("o1", "{"), None);
     }
 
+    // REC.4: a recording takes the split; other outputs have none.
+    #[test]
+    fn a_recording_form_splits() {
+        let form = r#"{"kind":"record","text":"show","source":"program","video_kbps":0,"split_minutes":30,"split_mb":2048}"#;
+        let Some(Action::AddOutput { spec, .. }) = add_output_action(form) else {
+            panic!("an output");
+        };
+        assert!(matches!(
+            spec,
+            OutputSpec::Record {
+                split_minutes: 30,
+                split_mb: 2048,
+                ..
+            }
+        ));
+        let srt = form.replace(r#""kind":"record""#, r#""kind":"srt""#);
+        let Some(Action::AddOutput { spec, .. }) = add_output_action(&srt) else {
+            panic!("an output");
+        };
+        assert!(matches!(spec, OutputSpec::Srt { .. }));
+        let limits: serde_json::Value =
+            serde_json::from_str(&values("record_limits").unwrap()).unwrap();
+        assert_eq!(limits["split_minutes_max"], 24 * 60);
+    }
+
     // STR.5: a stream takes the delay; other outputs have none.
     #[test]
     fn a_stream_form_delays() {
@@ -713,6 +774,8 @@ mod tests {
                 container: Container::Mp4,
                 video_kbps: DEFAULT_VIDEO_KBPS,
                 encoding: VideoEncoding::default(),
+                split_minutes: 0,
+                split_mb: 0,
             })
         );
         assert_eq!(

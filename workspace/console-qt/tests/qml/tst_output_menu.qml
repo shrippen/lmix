@@ -138,7 +138,7 @@ TestCase {
         const copy = named(menu, "copyAddress")
         compare(copy.valueText, "srt://example.org:9921")
         compare(menu.address, "srt://example.org:9921?streamid=secret")
-        menu.output = Object.assign({}, stream, { spec: { kind: "record", folder: "/home/me/Videos/Show" } })
+        menu.output = Object.assign({}, stream, { spec: { kind: "record", folder: "videos/Show" } })
         compare(copy.valueText, "Show")
         menu.output = Object.assign({}, stream, { spec: { kind: "display", mode: null } })
         compare(copy.visible, false)

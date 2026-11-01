@@ -64,7 +64,7 @@ if [[ -z "${CORE_BIN:-}" ]]; then
 fi
 
 (cd "$WORK" && exec "$STROM_BIN" --host 127.0.0.1 --port "$STROM_PORT" --no-auto-restart \
-    --data-dir "$WORK/strom-data" >"$WORK/strom.log" 2>&1) &
+    --data-dir "$WORK/strom-data" --media-path "$WORK" >"$WORK/strom.log" 2>&1) &
 PIDS+=($!)
 wait_up "http://127.0.0.1:${STROM_PORT}/health" strom
 "$CORE_BIN" --strom "http://127.0.0.1:${STROM_PORT}" --listen "127.0.0.1:${CORE_PORT}" \
@@ -83,7 +83,7 @@ offset() {
     mkdir -p "$dir"
     act "{\"action\":\"set_channel_strip\",\"input\":1,\"strip\":{\"delay_ms\":$1}}"
     sleep 2
-    act "{\"action\":\"add_output\",\"spec\":{\"kind\":\"record\",\"folder\":\"$dir\",\"container\":\"mkv\"},\"name\":\"Pgm\"}"
+    act "{\"action\":\"add_output\",\"spec\":{\"kind\":\"record\",\"folder\":\"delay$1\",\"container\":\"mkv\"},\"name\":\"Pgm\"}"
     act '{"action":"start_output","output":"Pgm"}'
     sleep "$SECS"
     act '{"action":"stop_output","output":"Pgm"}'

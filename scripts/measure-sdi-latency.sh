@@ -76,7 +76,7 @@ for run in $(seq 1 "$RUNS"); do
     dir="$WORK/run$run"
     mkdir -p "$dir/mv"
     (cd "$dir" && exec env -u WAYLAND_DISPLAY GST_GL_WINDOW=x11 "$STROM_BIN" --host 127.0.0.1 --port "$STROM_PORT" \
-        --no-auto-restart --data-dir "$dir/strom-data" >"$dir/strom.log" 2>&1) &
+        --no-auto-restart --data-dir "$dir/strom-data" --media-path "$dir" >"$dir/strom.log" 2>&1) &
     PIDS=($!)
     wait_up "http://127.0.0.1:${STROM_PORT}/health" strom
     "$CORE_BIN" --strom "http://127.0.0.1:${STROM_PORT}" --listen "127.0.0.1:${CORE_PORT}" \
@@ -95,7 +95,7 @@ for run in $(seq 1 "$RUNS"); do
     act '{"action":"start_output","output":"SDI out"}'
     sleep "$SETTLE"
 
-    act "{\"action\":\"add_output\",\"spec\":{\"kind\":\"record\",\"folder\":\"$dir/mv\",\"container\":\"mkv\",\"video_kbps\":20000},\"source\":{\"from\":\"multiview\"},\"name\":\"MV\"}"
+    act "{\"action\":\"add_output\",\"spec\":{\"kind\":\"record\",\"folder\":\"mv\",\"container\":\"mkv\",\"video_kbps\":20000},\"source\":{\"from\":\"multiview\"},\"name\":\"MV\"}"
     act '{"action":"start_output","output":"MV"}'
     sleep "$SECS"
     act '{"action":"stop_output","output":"MV"}'
