@@ -6513,6 +6513,50 @@ nach der der Panik-Stimmung ankommen und gewinnen.
 (die erste Anfrage antwortet langsam, die zweite kommt trotzdem danach).
 `service::tests::a_silent_backup_address_holds_up_nothing`.
 
+## 2026-11-01 — Stimmungen: Nacharbeiten im Kern (MOOD Stufe 6a)
+
+**Anlass**: Die Reviews der Stufen 5a–5d ließen Punkte offen, die nicht
+blockierten, aber im Betrieb stören können.
+
+**Entscheidung**:
+- **Panik gewinnt auch gegen schon berechnete Aktionen** (SAF.1, MOOD.9):
+  Der Dienst zählt Paniken, harte Stopps und Resets (`Service::panics`,
+  unter der Sperre des Switchers erhöht). Cue- und Stimmungsaktionen
+  tragen den Stand, mit dem sie berechnet wurden (`Origin::Cue`); kam
+  seitdem eine Panik, tun sie nichts mehr (übrige Aktionen eines Cues,
+  Ebenen einer Stimmung, das Übernehmen einer Ebene, Anfragen an Ziele).
+  Geprüft wird unter derselben Sperre, die die Panik nimmt: eine Aktion,
+  die auf die Sperre wartet, während die Panik läuft, sieht sie danach.
+  Ereignisse gehen weiter hinaus; zu stoppen bleibt nichts, das tut die
+  Panik selbst. Eine Panik als Aktion eines Cues geht immer.
+  Vorher konnte eine Stimmung, deren Aktionen gerade liefen, nach der
+  Panik noch Klang starten.
+- **Abgebrochenes GO**: Die Aktionen eines GO und einer gesetzten
+  Stimmung laufen in einer eigenen Task, auf die die Anfrage wartet.
+  Trennt ein Client (HTTP, Companion) vorher, laufen sie trotzdem zu Ende,
+  statt mitten im Cue abzubrechen.
+- **Medien-Ids** zählen beim Öffnen einer Show weiter
+  (`MoodRunner::reset`): das späte Ende eines Klangs der alten Show
+  schaltet keine Ebene der neuen ab. `media_gone` prüft nur Ids von
+  Ebenen (`mood-…`).
+- **Ein Cue, der eine Ebene übernommen hat und noch einmal läuft**, gibt
+  sie erst ab, wenn kein gestarteter Lauf mehr spielt (einer in seiner
+  Wartezeit vor dem Start zählt nicht); ein Fehlschlag gibt sie sofort ab.
+- **Leistung**: Das Ende eines Cues durchsucht die Show nur, wenn der Cue
+  eine Ebene hält.
+- **Vorladen nach Neuaufbau des Mischers**: Wird `SetPreload` verworfen,
+  weil der Wiedergabe-Flow bleibt, gilt weiter das zuletzt Gesendete als
+  vorgeladen.
+
+**Bewusst offen**: Ausgabeziele prüfen die Sperre (RUN.9) beim Einreihen,
+nicht beim Senden; eine Warteschlange eines entfernten Ziels bleibt bis zum
+Ende des Dienstes (wenige Ziele, kein Aufwand).
+
+**Geprüft**: `service::tests::a_mood_worked_out_before_a_panic_starts_nothing_after_it`
+und `a_mood_cue_waiting_for_the_lock_starts_nothing_after_a_panic` (beide
+schlagen ohne die Prüfung fehl), `a_dropped_hold_preloads_what_waited`,
+`moods::tests::a_new_show_counts_media_ids_on`.
+
 ## 2026-11-01 — Stimmungen: Bedienung nachgebessert (MOOD Stufe 6b)
 
 **Anlass**: Offene Punkte aus den Reviews von „Stimmungen bearbeiten“ und
