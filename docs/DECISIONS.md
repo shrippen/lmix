@@ -8013,14 +8013,10 @@ sichtbar ist nur, was einer kurzen Liste schlichter Formen entspricht.
   jedes Anbieters; Preis: HTTP-Fehler verlieren Dateinamen. Die vier
   WHIP/WHEP-Blöcke und Properties auf `endpoint` zeigen nur die Herkunft.
   Satzzeichen am Ende (`:`, `,`, `)`, Anführungszeichen) gehören nicht
-  zur URL (`srt://h:9000: Connection refused` behält den Host). Steht im
-  Wort vor der URL ein offenes Anführungszeichen (`"`, `'`, Backtick; direkt
-  davor wie `uri="srt://…` oder vor dem ganzen Argument wie
-  `"uri=srt://…`, in Dumps das innerste), ist die URL der ganze Lauf bis zu
-  dessen Partner,
-  auch über Leerraum, wenn ihr erstes Wort maskiert wird oder ein `@` folgt
-  (`uri="srt://h?passphrase=a b"`, `"srt://u:1 2@h"`); ohne Partner wird bis
-  Textende maskiert. Ein anderes Präfix vor `scheme://` (`rtmp?://`,
+  zur URL (`srt://h:9000: Connection refused` behält den Host). Steht die
+  URL in einem offenen Anführungszeichen (`uri="srt://…`, `"uri=srt://…`),
+  ist sie der ganze Lauf bis zu dessen Partner, auch über Leerraum, wenn ihr
+  erstes Wort maskiert wird oder ein `@` folgt (`"srt://u:1 2@h"`). Ein anderes Präfix vor `scheme://` (`rtmp?://`,
   `us@er://`) maskiert das Wort. `value()` maskiert einen String, der eine
   URL ist, als eine URL.
 - Paare: jedes `name=` und `name:` im Wort, auch nach `&`, `;`, `,`, `?`, `(`
@@ -8034,6 +8030,19 @@ sichtbar ist nur, was einer kurzen Liste schlichter Formen entspricht.
 - Öffnet in einem maskierten Teil ein Anführungszeichen (`"zwei Wörter"`,
   `(string)"a b"`, `\"` im `{:?}`-Dump), läuft die Maske bis zum Partner
   mit gleich vielen Backslashes davor, sonst bis Textende.
+- Anführungszeichen werden vom Textanfang an verfolgt (seit e5b75db, nach
+  drei Runden mit je einer neuen Quote-Stellung: um die URL, um das ganze
+  Argument, um ein geheimes Paar): `"`, `'` oder Backtick am Wortanfang
+  oder hinter einem Nicht-Buchstaben öffnet (das Apostroph in `can't`
+  nicht), dasselbe Zeichen mit gleich vielen Backslashes schließt. Beginnt
+  irgendeine Maske (URL-Teil oder geheimer Wert) in einem offenen
+  Anführungszeichen, läuft sie bis zum Partner des innersten, ohne Partner
+  bis Textende; weiter, wenn ein im Wert geöffnetes Anführungszeichen
+  darüber hinaus läuft, ein Buchstabe folgt (Apostroph im Wert) oder ein
+  `@` im selben Wort folgt. Das deckt `"passphrase=a b"`,
+  `'passphrase=a b'`, `"uri=srt://h?passphrase=a b"` und ein in einem
+  früheren Wort geöffnetes Anführungszeichen. Partner- und `@`-Suche sind
+  zwischengespeichert, die Laufzeit bleibt linear.
 
 lmix-core maskiert zusätzlich (Verteidigung in der Tiefe) strom-Fehlertexte,
 die es weitergibt (`check()` in `engine/strom.rs`, `PipelineError` in
@@ -8050,9 +8059,11 @@ Bewusst nicht abgedeckt (Prosa nicht unterscheidbar, im Doc-Kommentar von
 (`srt://u:a b@h` zeigt `b@h`), ein rohes `&` in einem geheimen Query-Wert
 vor `name=` (`passphrase=a&b=c` zeigt `b=c`), Geheimnisse im Pfad einer
 URL, die weder HTTP noch RTMP ist, Namen ohne geheime Endung oder ohne
-`=`/`:`. In Anführungszeichen (um die URL oder das ganze Argument) ist der
-Leerraum in einer URL abgedeckt; ein Apostroph in einem einfach gequoteten
-Wert, auf den ein Buchstabe folgt (`'…passphrase=it's a'`), auch.
+`=`/`:`. In Anführungszeichen (wo auch immer sie öffnen) ist Leerraum in
+einem Geheimnis abgedeckt. Kosten: in einem offenen Anführungszeichen
+verliert eine Zeile alles bis zu dessen Partner, sobald darin etwas
+maskiert wird (`"uri=srt://h?passphrase=x&latency=120 refused"` →
+`"uri=srt://h?passphrase=…`).
 Kosten: Werte und URL-Teile mit Sonderzeichen werden samt Rest maskiert,
 ein offenes Anführungszeichen in einem maskierten Teil maskiert bis
 Textende. Queue (strom #60): Variante (b); zurück unter die Schwelle meldet
