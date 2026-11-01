@@ -65,6 +65,9 @@ AppPage {
         }
         return all
     }
+    /** Ids of those pads: a collection keeps the cues of a list switched
+     *  off (lmix-core), shown and counted only while it has pads. */
+    readonly property var padIds: new Set(pads.map(p => p.cue.id))
     readonly property var runningIds: ((show && show.running_cues) || []).map(r => r.cue)
 
     /** Groups shown: all, or those with a mood in the collection. */
@@ -346,10 +349,11 @@ AppPage {
                         required property var modelData
                         focusOnClick: false
                         readonly property string cid: modelData ? modelData.id : ""
+                        objectName: modelData ? "collection:" + modelData.name : "collection:"
                         Layout.fillWidth: true
                         text: modelData ? modelData.name : qsTr("All")
                         subtitle: modelData
-                            ? root.moodCount((modelData.moods || []).length) + " · " + root.shotCount((modelData.pads || []).length)
+                            ? root.moodCount((modelData.moods || []).length) + " · " + root.shotCount((modelData.pads || []).filter(id => root.padIds.has(id)).length)
                             : qsTr("Every mood and one-shot")
                         selected: root.shownCollectionId === cid
                         onClicked: {
