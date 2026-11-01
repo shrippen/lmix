@@ -233,9 +233,8 @@ Aus dem Dummy noch offen, **nur Oberfläche** (der Kern kann es):
   Verbindung im Kern, siehe Schritt 4).
 
 **Braucht den Kern** (Lastenheft offen): Vorhören (RUN.10), Sperren je Ein-/Ausgabeklasse
-(RUN.9), Pause inputs (INP.12), Dateiteilung und Namensmuster (REC.4,
-REC.5), Marken ins Protokoll (REC.8), Sendeverzögerung (STR.5), Puffer und
-Encoder-Last (STR.7), Vorlagen und Assistent (UI.13).
+(RUN.9), Pause inputs (INP.12), Namensmuster (REC.5), Sendeverzögerung
+(STR.5), Puffer und Encoder-Last (STR.7), Vorlagen und Assistent (UI.13).
 
 **Vor Schritt 4**: Anmeldung der Arbeitsplätze am Kern (Schlüssel bzw.
 Pairing, TLS im WAN); „alle dürfen alles“ gilt nur für angemeldete Plätze

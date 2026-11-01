@@ -6606,3 +6606,75 @@ dem Griff bewegt nichts, weggenommenes Ziehen legt nicht ab, Deckkraft und
 Ebene eines Bilds, nur eigene Antworten beenden den Entwurf),
 `tst_action_rows.qml` (16 Zeilen scrollen in beiden Dialogen und bleiben
 im Fenster), `tst_show_moods.qml`; alle QML-Tests (254).
+
+## 2026-11-01 — Aufnahme: Teilen nach Zeit und Zeitmarken (REC.4, REC.8)
+
+**Anlass**: REC.4 (neue Datei alle n Minuten, nahtlos) und REC.8
+(Zeitmarke per Aktion ins Aufnahmeprotokoll) waren offen.
+
+**Optionen REC.4**: (a) lmix-core stoppt und startet die Aufnahme selbst
+alle n Minuten; (b) der Recorder in strom teilt.
+**Entscheidung**: (b). Beide Recorder, die lmix nutzt (Live-Recorder und
+für MKV vor GStreamer 1.26 der ältere `builtin.recorder` mit
+`splitmuxsink`), haben schon `max_size_time_secs` und `max_size_mb`: die
+neue Datei beginnt am nächsten Fragment bzw. Keyframe, ohne Lücke, jede
+mit Zeit 0. Kein strom-Diff nötig. `ts_passthrough` (rohes MPEG-TS ohne
+Neu-Muxen) teilt ebenso, lmix nutzt es nicht.
+- `OutputSpec::Record` bekommt `split_minutes` (0: eine Datei, höchstens
+  1440) und `split_mb` (0: ohne Grenze, sonst 10 MB bis 1 TiB); 0 wird
+  nicht gespeichert und nicht an strom gegeben, alte Shows und Flows
+  bleiben gleich. Außerhalb der Grenzen lehnt der Kern ab
+  (`bad_recording`). Unter 10 MB entstünden Dateien von wenigen Sekunden.
+- Ändern wie die übrigen Einstellungen einer Aufnahme: nur gestoppt
+  (`output_sending` sonst); im Dialog gesperrt, solange sie läuft. Ein
+  Ändern im Lauf hieße Neustart der Aufnahme, also eine Lücke.
+- Console: im Dialog „Ausgang“ bei Aufnahmen „Neue Datei alle (min)“ und
+  „oder bei (MB)“, mit Hilfe-Knopf (`KanteInfoTip`). Ein Wert unter 10 MB
+  wird 10 MB.
+
+**Optionen REC.8**: (a) Protokoll im Datenordner von lmix-core; (b) neben
+der Aufnahme im Medienordner von strom, über strom's Medien-API; (c) neue
+Append-API in strom.
+**Entscheidung**: (b). Wer die Aufnahme sucht, findet das Protokoll daneben,
+auch wenn strom auf einem anderen Rechner läuft (lmix-core kennt den
+Medienordner nicht, Entscheidung 4: nur REST). strom hat kein Anhängen,
+darum schreibt lmix-core die ganze Datei je Marke neu (`POST
+/api/media/upload`, strom schreibt erst in eine temporäre Datei und
+benennt um: nie halb geschrieben). Wenige Zeilen je Aufnahme, ein Upload
+je Marke; (c) wäre ein strom-Diff für eine Kann-Anforderung.
+- Aktion `mark_recording { text? }` (Gruppe `output`, höchstens 200
+  Zeichen): eine Zeile in jede laufende Aufnahme; läuft keine, lehnt der
+  Kern ab (`no_recording`). Über HTTP, WebSocket, TCP, Kurzbefehl, Cue,
+  Auslöser wie jede Aktion; OSC kurz `/lmix/mark [text]`.
+- Datei `<Präfix>_<Startzeit>.marks.csv` neben den Dateien der Aufnahme
+  (deren Name ohne Nummer, gilt für alle Teile nach REC.4). Spalten:
+  `time` (Uhrzeit des Kerns), `recording` (seit dem Start, h:mm:ss),
+  `file` (die Datei, die strom gerade schreibt, aus dem Ereignis
+  `RecorderFileChanged`), `file_time` (seit diese Datei begann), `text`.
+  Zeiten auf die Sekunde, gemessen am Kern: ±1 s gegenüber dem Bild.
+- Hat strom noch keine Datei gemeldet, nimmt das Protokoll Präfix (aus dem
+  laufenden Flow) und Startzeit. Startet lmix-core während einer Aufnahme
+  neu, liest es das vorhandene Protokoll einmal und schreibt weiter.
+- Ohne Sperre des Switchers: der Upload hält kein Schalten auf. Marken
+  laufen nacheinander (eine Sperre im Treiber), so bleibt die Reihenfolge.
+- Ein absoluter Aufnahmeordner liegt außerhalb des Medienordners; dort
+  lehnt strom den Upload ab und die Marke meldet den Fehler.
+- Console: Knopf „Zeitmarke“ auf der Seite Ausgänge (mit Notizfeld, Enter
+  setzt die Marke) und in der Ausgangsleiste, sichtbar während eine
+  Aufnahme läuft; Vorlage „Zeitmarke in Aufnahmen“ für Kurzbefehle, Cues
+  und Auslöser.
+
+**Bricht**: nichts (neue Felder mit Standard, neue Aktion).
+
+**Geprüft**: lmix-types (Grenzen, alte Shows ohne Teilung),
+`flows::tests::a_split_recording_starts_new_files` (beide Recorder),
+`marks::tests` (Name, Zeile, CSV-Maskierung, Läufe),
+`strom::tests::marks_go_beside_the_recording` und
+`a_mark_before_the_first_file_names_the_start` (strom-Attrappe: ein Lesen
+je Lauf, ein Upload je Marke),
+`service::tests::marks_go_to_running_recordings`, OSC; QML: Dialog
+(`tst_add_output_dialog`), Seite und Leiste (`tst_outputs_page`,
+`tst_output_bar`). Echte Aufnahme mit strom (GStreamer 1.28, CPU-Mischer,
+Rauschen mit 40 Mbit/s): `split_mb: 10` ergab Dateien von 10–12 MB in
+Folge; `split_minutes: 1` (MP4) die zweite Datei nach gut 60 s; die Marken
+standen in beiden Protokollen mit der jeweils geschriebenen Datei.

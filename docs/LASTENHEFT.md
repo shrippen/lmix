@@ -314,11 +314,11 @@ kann es, Console nicht.
 | REC.1 | Aufnahme von Ausgang 1–4 mit Ton-Bus-Wahl; Start/Stopp; Laufzeit + verworfene Frames | M | ◐ (Aufnahme von Program oder Input mit Aux-Ton, Start/Stopp, Laufzeit; ohne verworfene Frames) |
 | REC.2 | Formate: MP4, MOV, MKV, MXF, MPG/TS, AVI; Codecs H.264, MPEG-2, VC-3/DNxHD, MJPEG, verlustfrei; HW-Encode; Ton AAC/PCM (Auswahl im Detail lmix) | M | ◐ (MKV, MP4, TS; H.264 HW/SW + AAC) |
 | REC.3 | Ausfallsicher: unterbrochene Datei bleibt lesbar (fragmentiertes MP4, MKV, MXF, TS) | M | ✅ (Live-Recorder: fragmentiertes MP4, TS, MKV ab GStreamer 1.26; davor MKV über den älteren Recorder; DECISIONS 18.10. „Aufnahmen über den Live-Recorder“) |
-| REC.4 | Neue Datei alle n Minuten, nahtlos | S | – (E: Teilen nach Zeit/Größe im strom-Recorder) |
+| REC.4 | Neue Datei alle n Minuten, nahtlos | S | ✅ (je Aufnahme-Ausgang alle n Minuten und/oder ab n MB, am nächsten Fragment bzw. Keyframe; DECISIONS 01.11. „Aufnahme: Teilen nach Zeit und Zeitmarken“) |
 | REC.5 | Dateinamensmuster mit Datum/Zeit; Standardordner | S | ◐ (Ordner je Ausgang, Datum/Zeit fest im Namen; kein Muster) |
 | REC.6 | Zweiter Recorder mit eigenem Format/Quelle, startet mit dem ersten | S | ◐ (beliebig viele Aufnahme-Ausgänge mit eigenem Format und eigener Quelle; Start nicht gekoppelt) |
 | REC.7 | WAV-Begleitaufnahme (PCM) | K | – |
-| REC.8 | Aufnahmeprotokoll: Zeitmarke per Aktion ins Log schreiben | K | – |
+| REC.8 | Aufnahmeprotokoll: Zeitmarke per Aktion ins Log schreiben | K | ✅ (Aktion `mark_recording` mit optionaler Notiz, OSC `/lmix/mark`, Knopf „Zeitmarke“; CSV neben jeder laufenden Aufnahme mit Uhrzeit, Zeit in Aufnahme und Datei) |
 | REC.9 | Dateiname aus Datenquelle, Titelfeld oder Zeitplan-Eintrag (z. B. Vortrag, Kurs) (P2, P6) | S | – |
 | MCR.1 | Einzelaufnahme: beliebige Live-Inputs und Ausgänge 1–4 gleichzeitig roh in getrennte Dateien | S | ◐ (Aufnahme je Input als ISO-Ausgang, auch gleichzeitig; Ausgänge 2–4 als Quelle fehlen) |
 | MCR.2 | Bereits komprimierte Quellen ohne Neukodierung sichern: SRT als TS, NDI im Original-Format | S | – (E: TS ohne Neukodierung im strom-Recorder) |
