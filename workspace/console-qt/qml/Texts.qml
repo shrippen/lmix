@@ -89,6 +89,13 @@ QtObject {
             case "card": return qsTr("SDI / HDMI card")
             }
             break
+        case "srt_modes":
+            switch (value) {
+            case "caller": return qsTr("Caller", "SRT mode: lmix calls the sender")
+            case "listener": return qsTr("Listener", "SRT mode: lmix waits for the sender")
+            case "rendezvous": return qsTr("Rendezvous", "SRT mode: both sides call")
+            }
+            break
         case "card_modes":
             return cardMode(value)
         case "card_channels":
@@ -118,6 +125,26 @@ QtObject {
         case "card": return "SDI"
         }
         return ""
+    }
+
+    /** Why an SRT address does not do (`SrtProblem` from lmix-types). */
+    function srtProblem(p) {
+        switch (p.problem) {
+        case "no_srt": return qsTr("The address starts with srt://.")
+        case "open_bracket": return qsTr("An IPv6 address ends with ].")
+        case "no_port": return qsTr("Enter a port from 1 to 65535.")
+        case "bad_mode": return qsTr("Mode %1: caller, listener or rendezvous.").arg(p.mode)
+        case "bad_latency": return qsTr("Latency %1 is no number of milliseconds.").arg(p.value)
+        case "bad_key_length": return qsTr("Key length %1: 16, 24 or 32.").arg(p.value)
+        case "needs_host": return qsTr("A caller or rendezvous needs the address of the other side.")
+        case "bad_host": return qsTr("“%1” is no host name or IP address; the port goes in its own field.").arg(p.host)
+        case "latency_too_high": return qsTr("Latency %1 ms is above %2 ms.").arg(p.ms).arg(p.max)
+        case "decoder_delay_too_high": return qsTr("Decoder delay %1 ms is above %2 ms.").arg(p.ms).arg(p.max)
+        case "passphrase_length": return qsTr("A passphrase has %1 to %2 bytes, this one %3; umlauts and other special characters count twice or more.").arg(p.min).arg(p.max).arg(p.bytes)
+        case "key_needs_passphrase": return qsTr("A key length needs a passphrase.")
+        case "stream_id_too_long": return qsTr("A stream id has at most %1 bytes.").arg(p.max)
+        }
+        return String(p.problem)
     }
 
     /** A card mode as people write it: `1080p2997` → `1080p 29.97`. */
@@ -353,6 +380,7 @@ QtObject {
         case "bad_quick_play": return qsTr("Quick play: %1").arg(e.reason)
         case "no_audio": return qsTr("%1 has no sound").arg(e.reference)
         case "bad_card": return qsTr("Card: %1").arg(e.reason)
+        case "bad_srt": return qsTr("SRT: %1").arg(e.reason)
         case "bad_web_url": return qsTr("Web page %1 is not an http:// or https:// address").arg(e.url)
         case "no_page": return qsTr("%1 shows no page (not a web or graphics input)").arg(e.reference)
         case "bad_fade": return qsTr("A level fade lasts 0–%1 ms, not %2").arg(e.max).arg(e.duration_ms)

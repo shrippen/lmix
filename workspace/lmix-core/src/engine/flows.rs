@@ -1972,21 +1972,32 @@ fn add_source(flow: &mut Flow, source: &SourceSpec, env: &SlotEnv) -> Option<Str
             let items = player_items(source).expect("a player source");
             add_player(flow, &items, playout_delay_ms(source), backend)
         }
-        SourceSpec::Srt { uri } => {
-            flow.blocks.push(block(
-                "srt",
-                SRT_INPUT_BLOCK,
-                vec![
-                    ("srt_uri", PropertyValue::String(uri.clone())),
-                    ("decode", PropertyValue::Bool(true)),
-                    // Wait for the sender instead of ending at once, and keep
-                    // listening when it drops: it can come back (failback).
-                    ("wait_for_connection", PropertyValue::Bool(true)),
-                    ("keep_listening", PropertyValue::Bool(true)),
-                    ("num_video_tracks", PropertyValue::UInt(1)),
-                    ("num_audio_tracks", PropertyValue::UInt(1)),
-                ],
-            ));
+        SourceSpec::Srt {
+            uri,
+            decoder_delay_ms,
+        } => {
+            let mut properties = vec![
+                ("srt_uri", PropertyValue::String(uri.clone())),
+                ("decode", PropertyValue::Bool(true)),
+                // Wait for the sender instead of ending at once, and keep
+                // listening when it drops: it can come back (failback).
+                ("wait_for_connection", PropertyValue::Bool(true)),
+                ("keep_listening", PropertyValue::Bool(true)),
+                ("num_video_tracks", PropertyValue::UInt(1)),
+                ("num_audio_tracks", PropertyValue::UInt(1)),
+            ];
+            // strom sets `srtsrc`'s latency after the URI, its own default
+            // over the URI's: the URI's goes as the block's property (SRC.12).
+            let latency = lmix_types::SrtAddress::parse(uri)
+                .ok()
+                .and_then(|address| address.latency_ms);
+            if let Some(ms) = latency {
+                properties.push(("latency", PropertyValue::Int(i64::from(ms))));
+            }
+            if let Some(ms) = decoder_delay_ms {
+                properties.push(("tsdemux_latency", PropertyValue::Int(i64::from(*ms))));
+            }
+            flow.blocks.push(block("srt", SRT_INPUT_BLOCK, properties));
             "srt:video_out".into()
         }
         SourceSpec::Ndi { name } => {
@@ -2817,6 +2828,42 @@ mod tests {
         assert!(matches!(
             dev.properties.get("video_framerate"),
             Some(PropertyValue::String(f)) if f == "60/1"
+        ));
+    }
+
+    #[test]
+    fn srt_slot_sets_latency_and_decoder_delay_as_block_properties() {
+        let srt = |uri: &str, decoder_delay_ms| {
+            let flow = slot_flow(
+                0,
+                &SourceSpec::Srt {
+                    uri: uri.into(),
+                    decoder_delay_ms,
+                },
+                &SlotEnv::new(MixerBackend::Cpu),
+            );
+            flow.blocks.into_iter().find(|b| b.id == "srt").unwrap()
+        };
+        // strom's own defaults when nothing is set.
+        let plain = srt("srt://:9000?mode=listener", None);
+        assert!(!plain.properties.contains_key("latency"));
+        assert!(!plain.properties.contains_key("tsdemux_latency"));
+
+        let tuned = srt(
+            "srt://cam:9000?latency=400&passphrase=0123456789",
+            Some(250),
+        );
+        assert!(matches!(
+            tuned.properties.get("srt_uri"),
+            Some(PropertyValue::String(u)) if u == "srt://cam:9000?latency=400&passphrase=0123456789"
+        ));
+        assert!(matches!(
+            tuned.properties.get("latency"),
+            Some(PropertyValue::Int(400))
+        ));
+        assert!(matches!(
+            tuned.properties.get("tsdemux_latency"),
+            Some(PropertyValue::Int(250))
         ));
     }
 

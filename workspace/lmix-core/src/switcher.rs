@@ -6713,7 +6713,8 @@ fn program_then_preview(
 
 /// Reject sources the engine cannot build: a color that is not
 /// `#rrggbb`, a web page that is not an http(s) address, a capture mode
-/// that is not written as `1920x1080` and `30/1`.
+/// that is not written as `1920x1080` and `30/1`, an SRT address that
+/// does not read or that SRT would refuse (SRC.12).
 fn check_source(source: &SourceSpec) -> Result<(), ActionError> {
     match source {
         SourceSpec::Device {
@@ -6738,6 +6739,14 @@ fn check_source(source: &SourceSpec) -> Result<(), ActionError> {
         SourceSpec::Web { url, .. } if !is_web_address(url) => {
             Err(ActionError::BadWebUrl { url: url.clone() })
         }
+        SourceSpec::Srt {
+            uri,
+            decoder_delay_ms,
+        } => lmix_types::srt::check_srt(uri, *decoder_delay_ms)
+            .map(|_| ())
+            .map_err(|problem| ActionError::BadSrt {
+                reason: problem.to_string(),
+            }),
         SourceSpec::Card { pair, .. } if CardChannels::holding(*pair).is_none() => {
             Err(ActionError::BadCard {
                 reason: format!("channel pair {pair}, 1 to 8"),
@@ -13368,6 +13377,49 @@ mod tests {
             .apply(device(Some("1920x1080"), Some("30000/1001")))
             .is_ok());
         assert!(sw.apply(device(None, None)).is_ok());
+    }
+
+    #[test]
+    fn srt_inputs_need_an_address_srt_accepts() {
+        let mut sw = Switcher::new(SLOTS);
+        let srt = |uri: &str, decoder_delay_ms| Action::AddInput {
+            source: SourceSpec::Srt {
+                uri: uri.into(),
+                decoder_delay_ms,
+            },
+            name: None,
+        };
+        for (uri, delay) in [
+            ("rtmp://host:9000", None),
+            ("srt://host", None),
+            ("srt://:9000?mode=caller", None),
+            ("srt://cam.local:9000:9000", None),
+            ("srt://[cam.local:9000]:9000", None),
+            ("srt://cam%20local:9000", None),
+            ("srt://host:9000?passphrase=short", None),
+            ("srt://host:9000?passphrase=%C3%A4%C3%A4%C3%A4%C3%A4", None),
+            ("srt://host:9000?pbkeylen=32", None),
+            ("srt://host:9000?latency=20000", None),
+            ("srt://host:9000", Some(20_000)),
+        ] {
+            assert!(
+                matches!(sw.apply(srt(uri, delay)), Err(ActionError::BadSrt { .. })),
+                "{uri} {delay:?}"
+            );
+        }
+        assert!(sw.apply(srt("srt://:9000?mode=listener", None)).is_ok());
+        // Without mode or host: a listener, as srtsrc takes it.
+        assert!(sw.apply(srt("srt://:9001", None)).is_ok());
+        assert!(sw
+            .apply(srt(
+                "srt://cam:9000?latency=400&passphrase=0123456789&pbkeylen=16",
+                Some(200)
+            ))
+            .is_ok());
+        // The name leaves the passphrase out.
+        let state = sw.state();
+        let names: Vec<&str> = state.inputs.iter().map(|i| i.name.as_str()).collect();
+        assert!(names.contains(&"srt://cam:9000"), "{names:?}");
     }
 
     #[test]
