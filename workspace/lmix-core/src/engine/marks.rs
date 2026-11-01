@@ -90,6 +90,8 @@ struct Protocol {
     text: String,
     start_ms: u64,
     provisional: Provisional,
+    /// The guessed file it moved from, still to delete.
+    stale: Option<String>,
 }
 
 /// Protocols of the recordings marked since they started.
@@ -122,25 +124,50 @@ impl Protocols {
             text: begin.before.unwrap_or_else(|| HEADER.to_string()),
             start_ms: begin.start_ms,
             provisional: begin.provisional,
+            stale: None,
         };
         self.runs.insert(mark.output, protocol);
     }
 
+    /// Whether the provisional protocol of `mark`'s run lies under one of
+    /// the names from `base` on (`numbered`): the guess was right.
+    pub fn named_from(&self, mark: &RecordingMark, base: &str, names: u32) -> bool {
+        self.run(mark)
+            .is_some_and(|p| (1..=names).any(|n| p.path == numbered(base, n)))
+    }
+
+    /// The name of `mark`'s protocol is no guess any more.
+    pub fn confirm(&mut self, mark: &RecordingMark) {
+        if let Some(protocol) = self.run_mut(mark) {
+            protocol.provisional = Provisional::No;
+        }
+    }
+
     /// The provisional protocol of `mark`'s run goes to `path`, after what
-    /// a protocol there held; its old path, to delete once written.
-    pub fn relocate(
-        &mut self,
-        mark: &RecordingMark,
-        path: String,
-        before: Option<String>,
-    ) -> Option<String> {
-        let protocol = self.run_mut(mark)?;
+    /// a protocol there held; the old file is to delete (`take_stale`).
+    pub fn relocate(&mut self, mark: &RecordingMark, path: String, before: Option<String>) {
+        let Some(protocol) = self.run_mut(mark) else {
+            return;
+        };
         let lines = protocol.text.strip_prefix(HEADER).unwrap_or(&protocol.text);
         let mut text = before.unwrap_or_else(|| HEADER.to_string());
         text.push_str(lines);
         protocol.text = text;
         protocol.provisional = Provisional::No;
-        Some(std::mem::replace(&mut protocol.path, path))
+        let old = std::mem::replace(&mut protocol.path, path);
+        protocol.stale = Some(old);
+    }
+
+    /// The guessed file `mark`'s protocol left, to delete now; given back
+    /// with `keep_stale` when that fails, so a later mark tries again.
+    pub fn take_stale(&mut self, mark: &RecordingMark) -> Option<String> {
+        self.run_mut(mark)?.stale.take()
+    }
+
+    pub fn keep_stale(&mut self, mark: &RecordingMark, path: String) {
+        if let Some(protocol) = self.run_mut(mark) {
+            protocol.stale = Some(path);
+        }
     }
 
     /// Add `mark`'s line; the protocol's path and whole text, and its
@@ -201,15 +228,17 @@ pub fn own_text(text: &str) -> Option<String> {
     Some(text)
 }
 
-/// The newest file of the recording with `prefix` among `paths` (a
-/// folder's files), e.g. `show/lmix-3f2a9c1e_20261101_143000_00002.mkv`.
-pub fn newest_recording<'a>(paths: &[&'a str], prefix: &str) -> Option<&'a str> {
-    paths
+/// The newest file of the recording with `prefix` among a folder's files
+/// (path, last written in Unix s), e.g.
+/// `show/lmix-3f2a9c1e_20261101_143000_00002.mkv`: the one written last
+/// (the time in a name goes back with the clock at the end of daylight
+/// saving time), then by name (fixed widths: time, then number).
+pub fn newest_recording<'a>(files: &[(&'a str, u64)], prefix: &str) -> Option<&'a str> {
+    files
         .iter()
-        .copied()
-        .filter(|path| recording_name(split_path(path).1, prefix))
-        // Fixed widths: the name sorts by time, then number.
-        .max_by_key(|path| split_path(path).1)
+        .filter(|(path, _)| recording_name(split_path(path).1, prefix))
+        .max_by_key(|(path, modified)| (*modified, split_path(path).1))
+        .map(|(path, _)| *path)
 }
 
 /// The file found in its folder: begun with the recording if it is the
@@ -501,14 +530,28 @@ mod tests {
         );
         protocols.add(&first, None).unwrap();
 
-        let old = protocols.relocate(&first, "show/real.marks.csv".into(), None);
-        assert_eq!(old.as_deref(), Some("show/guess.marks.csv"));
+        assert!(!protocols.named_from(&first, "show/real.marks.csv", 2));
+        protocols.relocate(&first, "show/real.marks.csv".into(), None);
         assert_eq!(protocols.state(&first), Some(Provisional::No));
+        let stale = protocols.take_stale(&first);
+        assert_eq!(stale.as_deref(), Some("show/guess.marks.csv"));
+        assert_eq!(protocols.take_stale(&first), None, "taken once");
         let (path, text, _) = protocols.add(&mark(2, "b"), None).unwrap();
         assert_eq!(path, "show/real.marks.csv");
         assert!(text.starts_with(HEADER));
         assert_eq!(text.matches(HEADER).count(), 1);
         assert_eq!(text.lines().count(), 3);
+
+        // A right guess, also on a further name, stays where it is.
+        let other = RecordingMark {
+            output: OutputId::new(),
+            ..mark(1, "x")
+        };
+        protocols.begin(&other, begin("show/s.marks-2.csv", None, Provisional::Yes));
+        assert!(protocols.named_from(&other, "show/s.marks.csv", 2));
+        assert!(!protocols.named_from(&other, "show/s.marks.csv", 1));
+        protocols.confirm(&other);
+        assert_eq!(protocols.state(&other), Some(Provisional::No));
     }
 
     // Saved again by a spreadsheet: still the protocol; anything else is
@@ -524,24 +567,30 @@ mod tests {
     #[test]
     fn the_newest_file_of_the_recording_is_found() {
         let paths = [
-            "show/lmix-00000000_20261101_120000_00004.mkv",
-            "show/lmix-00000000_20261101_143000_00001.mkv",
-            "show/lmix-00000000_20261101_143000_00000.mkv",
-            "show/lmix-00000000_20261101_143000.marks.csv",
-            "show/lmix-11111111_20261101_150000_00000.mkv",
-            "show/other.mkv",
+            ("show/lmix-00000000_20261101_120000_00004.mkv", 10),
+            ("show/lmix-00000000_20261101_143000_00001.mkv", 20),
+            ("show/lmix-00000000_20261101_143000_00000.mkv", 20),
+            ("show/lmix-00000000_20261101_143000.marks.csv", 30),
+            ("show/lmix-11111111_20261101_150000_00000.mkv", 30),
+            ("show/other.mkv", 30),
         ];
         assert_eq!(
             newest_recording(&paths, "lmix-00000000"),
             Some("show/lmix-00000000_20261101_143000_00001.mkv")
         );
         assert_eq!(newest_recording(&paths[3..4], "lmix-00000000"), None);
+        // The clock went back: written last counts, not the later name.
+        let back = [
+            ("show/lmix-00000000_20261025_023000_00000.mkv", 100),
+            ("show/lmix-00000000_20261025_021500_00000.mkv", 200),
+        ];
+        assert_eq!(newest_recording(&back, "lmix-00000000"), Some(back[1].0));
 
         // The first file began with the recording, a later one when is unknown.
         let first = found_file("show/lmix-00000000_20261101_143000_00000.mkv");
         let start = stem_start_ms("show/lmix-00000000_20261101_143000").unwrap();
         assert_eq!(first.opened_ms, Some(start));
-        assert_eq!(found_file(paths[1]).opened_ms, None);
+        assert_eq!(found_file(paths[1].0).opened_ms, None);
     }
 
     #[test]

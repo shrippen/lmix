@@ -6663,12 +6663,15 @@ je Marke; (c) wäre ein strom-Diff für eine Kann-Anforderung.
   Protokoll nach Präfix (aus dem laufenden Flow) und Startzeit, wie der
   Kern sie sah. Ist die Datei gemeldet und heißt anders, zieht das
   Protokoll mit der nächsten Marke neben sie um, der vorläufige Name wird
-  gelöscht.
+  gelöscht (scheitert das Löschen, versucht es die nächste Marke wieder).
+  War der Name richtig geraten (ein Rechner, dieselbe Sekunde: der
+  Normalfall), bleibt das Protokoll, wo es ist.
 - **Neustart von lmix-core**: strom meldet die laufende Datei nicht noch
   einmal, und der Kern kennt die Aufnahme erst ab seinem Neustart. Für
   eine Aufnahme, die dieser Kern nicht gestartet hat, sucht die Marke im
-  Ordner (`GET /api/media`) die neueste Datei mit dem Präfix der Aufnahme
-  und schreibt im Protokoll daneben weiter; `recording` zählt ab dem
+  Ordner (`GET /api/media`) die zuletzt geschriebene Datei mit dem Präfix
+  der Aufnahme (nicht die mit dem spätesten Namen: am Ende der Sommerzeit
+  geht die Zeit im Namen zurück) und schreibt im Protokoll daneben weiter; `recording` zählt ab dem
   Zeitstempel im Dateinamen. Bei einer Aufnahme, die dieser Kern
   gestartet hat, sucht sie nicht: die neueste Datei im Ordner könnte die
   eines früheren Laufs sein.
@@ -6699,6 +6702,7 @@ je Marke; (c) wäre ein strom-Diff für eine Kann-Anforderung.
 `strom::tests` mit einer strom-Attrappe: `marks_go_beside_the_recording`
 (ein Lesen je Lauf, ein Upload je Marke),
 `a_guessed_protocol_moves_beside_the_recording`,
+`a_right_guess_stays_with_each_mark_once`,
 `after_a_restart_marks_go_on_in_the_old_protocol`,
 `a_failed_read_overwrites_nothing` (einmal 500),
 `a_foreign_file_is_never_overwritten`,
