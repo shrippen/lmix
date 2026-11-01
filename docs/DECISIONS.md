@@ -6606,3 +6606,77 @@ dem Griff bewegt nichts, weggenommenes Ziehen legt nicht ab, Deckkraft und
 Ebene eines Bilds, nur eigene Antworten beenden den Entwurf),
 `tst_action_rows.qml` (16 Zeilen scrollen in beiden Dialogen und bleiben
 im Fenster), `tst_show_moods.qml`; alle QML-Tests (254).
+
+## 2026-11-01 — Stimmungen: Fehler aus dem Test im Kern (MOOD Stufe 7a)
+
+**Anlass**: Der Test der Seite Stimmungen (Stand 28f341d0) fand im Kern
+Fälle, in denen Klang ohne Besitzer weiterlief, ein Cue nach einer Panik
+gesperrt blieb und `set_moods` Unstimmiges annahm.
+
+**Entscheidung**:
+- **Entfernen, was gerade läuft** (MOOD.12): Eine Ebene, die `set_moods`
+  entfernt, blendet sofort über die Wechselzeit der Show aus und fällt aus
+  dem Zustand (`MoodRunner::trim`); hielt ein Cue sie, spielt sein Klang als
+  gewöhnlicher Cue weiter. Ist die gesetzte Stimmung (Gruppe oder
+  Variante) entfernt, ist keine mehr gesetzt (`mood` leer), ebenso
+  `previous`; die übrigen Ebenen laufen unverändert weiter, ihre Herkunft
+  nennt weiter die Stimmung, die sie gesetzt hat. Verworfen: die
+  Ebenen der entfernten Stimmung mit auszublenden (eine Umbenennung per
+  Entfernen und Neuanlegen schnitte mitten in die Szene) und die Stimmung
+  auf die Basis zurückzusetzen (setzte etwas, das niemand befohlen hat).
+  Wiederherstellen (`restore`) geht denselben Weg.
+- **Bearbeiten stoppt, was es wegnimmt**: Entfernt `remove_cue_list`,
+  `set_cue_list`, `update_cue` oder `add_cue` einen laufenden Cue, stoppt
+  er wie mit `cue_stop` (sein Klang oder Bild blendet mit seiner
+  Ausblendzeit aus, das Ereignis `stopped` geht hinaus) und gibt die Ebene
+  ab, die er hielt. Vorher lief der Klang ohne Cue weiter. Der Switcher
+  sammelt solche Schritte (`Switcher::take_outs`), der Dienst führt sie
+  nach der Änderung aus wie die eines Stopps, vor der Antwort; ohne solche
+  Schritte kostet das nichts.
+- **Nach der Panik** nimmt ein Cue eine Ebene der Panik-Stimmung wie jede
+  andere (MOOD.5); vorher blieb sie bis zur nächsten Stimmung gesperrt.
+  Geschützt bleibt sie nur gegen die Cues der Notfall-Liste derselben
+  Panik: deren Aktionen laufen vor der Panik-Stimmung und verlieren
+  (MOOD.9), die Ebene bleibt „Panik“. Was die Notfall-Liste erst später
+  startet, kommt nach der Panik und nimmt die Ebene.
+- **Aktionen einer Ebene** spielen keinen Klang und zeigen kein Bild
+  (`play_sound`, `show_picture`, Pegel und Blenden davon): die Ebene kennte
+  sie nicht, sie blendeten nie aus. Dafür hat eine Ebene Klang oder Bild.
+  Geprüft bei `set_moods` und beim Öffnen einer Show.
+- **Namen** vergleicht der Kern in jeder Schrift ohne Groß- und
+  Kleinschreibung, beim Finden und beim Prüfen gleich
+  (`lmix_types::mood::same_name`, ohne Speicher je Vergleich):
+  `set_mood "ärger"` findet „Ärger“. Ein Text, der wie eine Id aussieht,
+  aber keine nennt, wird als Name gesucht.
+- **`set_moods` prüft mehr**: Namen von Ebenen und Sammlungen je einmal,
+  Namen einzeilig (keine Steuerzeichen) und höchstens 64 Zeichen lang
+  (`MOOD_NAME_MAX`, wie andere Namen im Kern zwischen 40 und 64); Ids
+  von Sammlungen je einmal und nicht die einer Stimmung (eine Id für
+  Stimmungen und Sammlungen); in einer Sammlung nur Stimmungen und Pads,
+  die es gibt, jede einmal. Pads, die es nicht mehr gibt (Cue entfernt,
+  Liste entfernt oder keine Pads mehr), fallen beim Bearbeiten der Listen,
+  beim Öffnen einer Show und beim Wiederherstellen aus den Sammlungen;
+  sonst lehnte das nächste `set_moods` der Seite sie ab.
+- **Panik-Stimmung und Mischer** (K4, keine Änderung): Die Aktionen der
+  Panik-Stimmung dürfen den Mischer bedienen, auch mit Klang oder Bild
+  (`transport_input`, `quick_play`, `cut_direct`). „Nie Klang oder Bild“
+  in MOOD.9 meint Klänge und Bilder der Show-Seite (SND, VIS); der Mischer
+  ist eine eigene Seite, die die Panik nicht anhält.
+
+**Bricht** (noch kein Release): Show-Dateien mit doppelten Ebenen- oder
+Sammlungsnamen, zu langen Namen oder Klang per Aktion in einer Ebene
+öffnen nicht mehr; tote Pads in Sammlungen fallen beim Öffnen weg.
+
+**Geprüft**: `service::tests::removing_a_layer_or_the_mood_that_runs_stops_what_nobody_has`,
+`removing_a_list_stops_its_cues_and_frees_their_layers`,
+`a_cue_after_a_panic_takes_a_layer_of_the_panic_mood`,
+`a_mood_is_set_by_its_name_in_any_case`;
+`switcher::tests::moods_need_distinct_names_ids_and_entries_that_are_there`,
+`a_pad_edited_away_leaves_its_collections`,
+`an_emergency_cue_takes_no_layer_of_the_panic_mood`;
+`moods::tests::a_layer_the_show_drops_fades_out_at_once`,
+`a_mood_the_show_drops_is_no_longer_set`,
+`a_cues_layer_the_show_drops_leaves_the_cue_playing`,
+`a_cue_edited_away_holds_no_layer`; `lmix_types::mood::tests::names_are_found_in_any_case_and_script`,
+`a_name_that_reads_as_an_id_is_still_a_name`. Alle schlagen ohne die
+Änderung fehl.
