@@ -454,6 +454,7 @@ je ein PR:
 | 6a Nacharbeiten Kern | Nichts startet nach einer Panik, was vor ihr berechnet wurde; abgebrochenes GO läuft zu Ende; Medien-Ids und Vorladen robuster | MOOD.4–6, 9, SAF.1 |
 | 6b Bedienung | Ziehen nur am Griff, Aktionslisten scrollen, Entwurf zählt nur eigene Antworten | MOOD.6, 12 |
 | 7a Test Kern | Fehler aus dem Test der Seite im Kern | MOOD.1–9 |
+| 7b Test Oberfläche | Fehler aus dem Test der Seite in der Oberfläche | MOOD.6, 10–12 |
 
 Stand: Stufe 1 ✅ (31.10., DECISIONS „Stimmungen: Modell und Engine“),
 Stufe 2 ✅ (31.10., DECISIONS „Stimmungen: die Seite“),
@@ -467,7 +468,8 @@ Stufe 5c ✅ (31.10., DECISIONS „Stimmungen: Vorladen“),
 Stufe 5d ✅ (31.10., DECISIONS „Stimmungen: Panik nach der Notfall-Liste“),
 Stufe 6a ✅ (1.11., DECISIONS „Stimmungen: Nacharbeiten im Kern“),
 Stufe 6b ✅ (1.11., DECISIONS „Stimmungen: Bedienung nachgebessert“),
-Stufe 7a ✅ (1.11., DECISIONS „Stimmungen: Fehler aus dem Test im Kern“).
+Stufe 7a ✅ (1.11., DECISIONS „Stimmungen: Fehler aus dem Test im Kern“),
+Stufe 7b ✅ (1.11., DECISIONS „Stimmungen: Fehler aus dem Test in der Oberfläche“).
 
 ---
 

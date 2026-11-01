@@ -677,6 +677,7 @@ Kirigami.ApplicationWindow {
     }
     FactoryResetDialog {
         id: resetSettingsDialog
+        objectName: "resetSettingsDialog"
         onClosed: root.restoreFocus()
         parent: QQC2.Overlay.overlay
         anchors.centerIn: parent
