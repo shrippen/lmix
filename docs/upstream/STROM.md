@@ -4,12 +4,14 @@ Regel: `claude.md`, Arbeitsregeln („Jede Änderung an strom geht auch nach ups
 Jedes Thema auf `dev` steht hier mit seinem Stand, bis upstream es gemergt hat oder der
 User es als lmix-eigen entschieden hat.
 
-Stand 2026-11-01: `dev` (c426a7e) hat 172 Commits ohne Merges, die upstream `main` (4479d8c) nicht
+Stand 2026-11-01: `dev` (7c14dcf) hat 188 Commits ohne Merges, die upstream `main` (4479d8c) nicht
 hat (`git log --no-merges 4479d8c..gitea/dev`).
 
 Stand 2026-11-01: bei Eyevinn liegen 21 PRs von uns (#1185–#1205, unten), auf `main` 4479d8c
-rebasiert. Issue-Entwürfe liegen bereit und gehen erst nach Freigabe raus; weitere PR-Branches
-auf upstream `main` sind vorbereitet und warten auf den Review.
+rebasiert. Issue-Entwürfe liegen in `docs/upstream/issues/` und gehen erst nach Freigabe raus;
+fünf PR-Branches auf upstream `main` folgen ihrem Issue (`gl-upload-udmabuf-nvidia`,
+`media-player-hold-last-frame`, `bind-host`, `identity-ts-offset-live`, `lmix-output-load`; PR-Texte
+der ersten vier in `docs/upstream/prs/`).
 
 Weg: **PR** = gleich als PR (klein, ein Fehler mit Test); **Issue** = zuerst ein Issue
 (Feature, Entscheidung für die Maintainer; upstream zieht das vor). Die Einteilung ist ein
@@ -25,7 +27,7 @@ Abgleich mit upstream: `git fetch https://github.com/Eyevinn/strom main` und
 |---|---|---|---|
 | Media Player: Bus-Watch, die beim Stoppen entfernt wird (CRITICAL „has no signal watches“) | 21d8ec5 (kam mit #1) | – | upstream erledigt: upstream zählt die `add_signal_watch`-Aufrufe und entfernt genau so viele |
 | Vorschaubild-Abgriff liefert kein Bild älter als `max_age` (3 s, mindestens zwei `update_interval`); eine Quelle, die keine Bilder mehr schickt, sah sonst live aus, solange der Abgriff abgefragt wird (`cache_ttl` war ungenutzt) | 7e40604, 594092c, #68 | PR | **Eyevinn #1194** (Branch `thumbnail-max-age-upstream`, a591891; Gitea #68 auf `dev` gemergt) |
-| Vorschaubild: 504 auf DEBUG statt ERROR (eigener `MakeClassifier` im `TraceLayer`; ein abgefragter Abgriff einer toten Quelle schrieb eine ERROR-Zeile je Abfrage) | 1fcd191, #71 | PR | **Eyevinn #1193** (Branch `thumbnail-504-quiet-upstream`; auf `dev` gemergt) |
+| Vorschaubild: 504 auf DEBUG statt ERROR (eigener `MakeClassifier` im `TraceLayer`; ein abgefragter Abgriff einer toten Quelle schrieb eine ERROR-Zeile je Abfrage) | 1fcd191, #71 | PR | **Eyevinn #1193** (Branch `thumbnail-504-quiet-upstream`, 1dd2b39; auf `dev` gemergt) |
 | Panic im eigenständigen nativen Frontend | 779cc60 | PR | **Eyevinn #1190** (Branch `native-frontend-tokio-runtime`, eae43df) |
 | GL-Renderer-Probe auf GStreamer 1.28 | a7a2aa9 | PR | **Eyevinn #1199** (Branch `gl-probe-glmemory`, ecf6736); Test CI-fähig (`backend/tests/gl_probe_test.rs`, Mesa surfaceless EGL) |
 | NVENC-Rate-Control auf GStreamer 1.28 | dcf2b83 | – | upstream erledigt: `videoenc.rs` wählt `rate-control` oder `rc-mode` nach der vorhandenen Eigenschaft (#1166) |
@@ -45,7 +47,7 @@ Abgleich mit upstream: `git fetch https://github.com/Eyevinn/strom main` und
 | Start, Stopp, Löschen und Update eines Flows unter einer Sperre je Flow | #45, #47 | PR | **Eyevinn #1197** (Branch `flow-lifecycle-lock`, d2bc646) |
 | Event-Filter-Test ohne Log-Zähler | #44 | PR | **Eyevinn #1195** (Branch `event-filter-test-direct`, 1fa4b3f) |
 | Thumbnail-Zweig starten, bevor das Tee ihn speist (sonst hält die Quelle an) | #55 | PR | **Eyevinn #1201** (Branch `thumbnail-attach-order`, ae9a378; auf #1189 gestapelt) |
-| Media Player hält beim Pausieren das letzte Bild | 7682d41 | Issue | Issue-Entwurf fertig, wartet auf Freigabe (Standard oder Property, Kosten je pausiertem Player); Branch `media-player-hold-last-frame` (7c9ee0b, enthält #15) korrigiert (nur Raw-Video, `last` leeren, Dateiwechsel in der Pause, EOS-Race, Seek nach Playlist-Ende beendet das Halten); auf `dev` dieselben Korrekturen als Gitea #75. Das CRITICAL `gst_segment_to_stream_time` beim Dateiwechsel-Sturm (Positionsabfrage des Timers) gibt es auch auf upstream `main`, eigener kleiner Fix später |
+| Media Player hält beim Pausieren das letzte Bild | 7682d41 | Issue | Issue-Entwurf fertig, wartet auf Freigabe (Standard oder Property, Kosten je pausiertem Player); Branch `media-player-hold-last-frame` (7c9ee0b, enthält #15) korrigiert (nur Raw-Video, `last` leeren, Dateiwechsel in der Pause, EOS-Race, Seek nach Playlist-Ende beendet das Halten); auf `dev` dieselben Korrekturen als Gitea #75. Das CRITICAL `gst_segment_to_stream_time` beim Dateiwechsel-Sturm (Positionsabfrage des Timers) sah ein Agent auch auf upstream `main`, ein zweiter konnte es nicht nachstellen (todo) |
 | DeckLink Output mit direktem Media-Timing | #50 | – | geht in #53 auf. Abgleich: upstream #1131 (f294622, Video an den Modus anpassen) und #1168 (a340f49, Audio anpassen) sind gemergt und berühren weder den Kartentakt-Seed noch den Vorlauf. Der Seed (eefe858, 56245a9, 031721f) ist auf `dev` durch #53 (decklink2sink) wieder entfernt; übrig bleibt der Vorlauf (`processing_deadline_ms`, 1e98a41), der im decklink2sink-Issue-Entwurf mitläuft |
 | CUDA-Mischer auf echter Hardware (Alpha nach Fade, Stinger, Thumbnails) | #29 | PR | offen; hängt am CUDA-Mischer |
 | Vorschaubild-Abgriff: Abhängen ohne Zustandssperre (Verklemmung mit dem Appsink-Callback) | 5f32f15, #63 | PR | **Eyevinn #1187** (Branch `thumbnail-detach-deadlock`, 523a390) |
