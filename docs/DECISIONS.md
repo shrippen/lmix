@@ -8407,3 +8407,45 @@ Klassifizierer rot: „assertion failed: !is_failure(thumbnail, StatusCode::GATE
 Beleg: strom-Tests `test_tap_does_not_serve_a_picture_after_frames_stop` (vorher altes JPEG nach
 1,5 s ohne Bild, jetzt Timeout; eine laufende Quelle bleibt über `max_age` hinaus ohne Lücke) und
 `test_max_age_covers_two_grabs`.
+
+## 2026-11-01 — vm-check: „paused clip not held on program“ erledigt, Mischer hinter der Uhr
+
+Branch `vm-paused-clip`, nur Doku; strom unverändert (Submodul bleibt auf `dev` c426a7e).
+
+- **CI-Verlauf seit 25.10.:** 5 Fehlschläge mit „paused clip not held on program“ (40261817405,
+  40668775295, 40960842473, 40968188881, 41012411347, 26.–30.10.), alle mit strom vor #55 (Pins
+  067862d, d4c588f, 78efa1a): 5 in rund 250 Läufen. Seit dem ersten Lauf mit #55 (31.10. 12:13)
+  165 fertige Läufe, 0 Fehlschläge an dieser Stelle (die 8 roten scheiterten danach, ein erster
+  Versuch davor); 21 davon mit #63, 9 mit #65/#66, diese 9 alle grün. In allen fünf antwortete
+  der Program-Abgriff direkt nach der Pause 504 (Andocken; das Muster von #55), in 40968188881
+  und 41012411347 standen dazu die Multiview- und Kachel-Queues voll (das Muster von #65).
+  **Entscheidung:** der Punkt gilt als durch strom #55 und #65 behoben, todo geschlossen.
+- **Was der Test prüfte:** `held_bright` holt Program zweimal im Abstand von 2 s über lmix-core
+  und will beide hell. Der Program-Abgriff war bis dahin über 10 s unbenutzt und abgehängt; der
+  erste Abruf hängt ihn an (seit strom #66 504 bis zum nächsten Bild), und lmix-core gab bis
+  #238 sein letztes Program-Bild aus, das vom Quellentausch eine Minute vorher (Ball, hell).
+  Lokal nachgewiesen: das erste `hold.jpg` war byte-gleich mit `b.jpg` aus `moving_bright`; die
+  erste Hälfte der Prüfung war wertlos. Seit #238 („Bilder der API ohne eigenen Speicher“)
+  antwortet lmix-core dann 503, `picture` versucht es weiter und bekommt das erste frische Bild.
+  **Entscheidung:** am Test nichts ändern. Verworfen: im Test erst den strom-Abgriff fragen
+  (erster Stand dieses Branches; doppelt zu #238) und länger warten (prüft nichts Neues).
+- **Warum das Video in CI Sekunden hinter der Uhr lag:** Lokal nachgestellt mit dem ganzen
+  VM-Test auf `taskset -c 0` (3 von 3 rot) bzw. `0,1` (2 von 6 rot), der Rechner daneben mit
+  anderen Builds belegt; mit aktuellem strom und nur frischen Bildern (erster Stand dieses
+  Branches). Program zeigt dann bis 20 s lang dasselbe Bild aus Clip a. Ohne `taskset` läuft der
+  ganze Test grün. Grund laut `videoaggregator:5`/`aggregator:6`: der CPU-Mischer schafft keine
+  30 Bilder/s mehr, und der Live-Compositor rechnet trotzdem jedes Ausgabebild; wartet er nicht
+  auf die Uhr („all pads have data“), läuft seine Ausgabe immer weiter hinter ihr her (0,2–0,55
+  s je Sekunde, bis 62 s; auf `0-3` in einem grünen Lauf 0 s). Nichts meldet ihm die Verspätung,
+  also überspringt er keine Bilder: Program verlässt den Mischer-Flow nur über `intersink` und
+  den Vorschaubild-Abgriff, beides `appsink`s mit `qos=false`; die Senken mit `qos=true` (RTMP,
+  SRT, Aufnahme) stehen in eigenen Ausgangs-Flows hinter `intersrc`, und Upstream-Events laufen
+  nicht über die inter-Grenze zurück. strom #58 (`block-sink-qos`) wirkt nur in diesen
+  Ausgangs-Flows; es spielte hier nur hinein, wenn man am Program-`intersink` `qos=true` setzte,
+  dann schluckte seine Probe genau diese Events. Er holt nur auf, wenn die CPU wieder Luft hat
+  (62 → 28 s). Alle Quellen stempeln mit der Uhr, ihre Bilder liegen für den Mischer dann so
+  weit in der Zukunft, und das Pad hält bis dahin sein altes Bild (Log: „Keeping buffer until
+  …“, 27 s voraus). Das erklärt wohl auch die „bis 6 s“ in CI (dort ohne Log nicht
+  nachgewiesen), ist aber Überlast, kein Fehler im Test oder in lmix-core. Der Mischer muss
+  seine Verspätung darum selbst gegen die Uhr messen und verspätete Ausgabebilder auslassen; das
+  wird in strom gebaut (todo), dann Issue/PR bei Eyevinn.
