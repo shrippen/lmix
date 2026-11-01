@@ -2108,6 +2108,134 @@
     </message>
   </context>
   <context>
+    <name>GuidesPicker</name>
+    <message>
+      <location filename="../qml/GuidesPicker.qml" line="+30" />
+      <source>Guides</source>
+      <translation>Hilfslinien</translation>
+    </message>
+    <message>
+      <location line="+3" />
+      <source>Safe-area frame</source>
+      <translation>Rahmen für den Schutzbereich</translation>
+    </message>
+    <message>
+      <location line="+1" />
+      <source>No frame</source>
+      <translation>Kein Rahmen</translation>
+    </message>
+    <message>
+      <location line="+0" />
+      <source>93/90 %</source>
+      <translation>93/90 %</translation>
+    </message>
+    <message>
+      <location line="+0" />
+      <source>90 %</source>
+      <translation>90 %</translation>
+    </message>
+    <message>
+      <location line="+0" />
+      <source>80 %</source>
+      <translation>80 %</translation>
+    </message>
+    <message>
+      <location line="+1" />
+      <source>No safe-area frame</source>
+      <translation>Kein Rahmen für den Schutzbereich</translation>
+    </message>
+    <message>
+      <location line="+1" />
+      <source>Action safe 93 % and title safe 90 %, dashed (EBU R 95, SMPTE)</source>
+      <translation>Bildsicher 93 % und titelsicher 90 %, gestrichelt (EBU R 95, SMPTE)</translation>
+    </message>
+    <message>
+      <location line="+1" />
+      <source>A frame at 90 % of the picture</source>
+      <translation>Ein Rahmen bei 90 % des Bildes</translation>
+    </message>
+    <message>
+      <location line="+1" />
+      <source>A frame at 80 % of the picture</source>
+      <translation>Ein Rahmen bei 80 % des Bildes</translation>
+    </message>
+    <message>
+      <location line="+10" />
+      <source>Crop for another aspect</source>
+      <translation>Ausschnitt für ein anderes Seitenverhältnis</translation>
+    </message>
+    <message>
+      <location line="+1" />
+      <source>No crop</source>
+      <translation>Kein Ausschnitt</translation>
+    </message>
+    <message>
+      <location line="+1" />
+      <source>The whole picture</source>
+      <translation>Das ganze Bild</translation>
+    </message>
+    <message>
+      <location line="+1" />
+      <source>What a 4:3 picture keeps; the rest dimmed</source>
+      <translation>Was ein 4:3-Bild behält; der Rest abgedunkelt</translation>
+    </message>
+    <message>
+      <location line="+1" />
+      <source>What a square picture keeps; the rest dimmed</source>
+      <translation>Was ein quadratisches Bild behält; der Rest abgedunkelt</translation>
+    </message>
+    <message>
+      <location line="+1" />
+      <source>What a portrait picture keeps; the rest dimmed</source>
+      <translation>Was ein Hochkant-Bild behält; der Rest abgedunkelt</translation>
+    </message>
+    <message>
+      <location line="+10" />
+      <source>Thirds</source>
+      <translation>Drittel</translation>
+    </message>
+    <message>
+      <location line="+9" />
+      <source>Show on</source>
+      <translation>Zeigen auf</translation>
+    </message>
+    <message>
+      <location line="+4" />
+      <source>Show guides on</source>
+      <translation>Hilfslinien zeigen auf</translation>
+    </message>
+    <message>
+      <location line="+1" />
+      <source>Preview</source>
+      <translation>Vorschau</translation>
+    </message>
+    <message>
+      <location line="+0" />
+      <source>Program</source>
+      <translation>Programm</translation>
+    </message>
+    <message>
+      <location line="+0" />
+      <source>Both</source>
+      <translation>Beide</translation>
+    </message>
+    <message>
+      <location line="+1" />
+      <source>Guides on the preview monitor</source>
+      <translation>Hilfslinien auf dem Vorschau-Monitor</translation>
+    </message>
+    <message>
+      <location line="+0" />
+      <source>Guides on the program monitor</source>
+      <translation>Hilfslinien auf dem Programm-Monitor</translation>
+    </message>
+    <message>
+      <location line="+0" />
+      <source>Guides on both monitors</source>
+      <translation>Hilfslinien auf beiden Monitoren</translation>
+    </message>
+  </context>
+  <context>
     <name>InputMenu</name>
     <message>
       <location filename="../qml/InputMenu.qml" line="+115" />
@@ -3235,7 +3363,7 @@
       <translation>Doppelklick in die Vorschau</translation>
     </message>
     <message>
-      <location line="+118" />
+      <location line="+125" />
       <source>Layout %1 %2</source>
       <translation>Layout %1 %2</translation>
     </message>
@@ -3275,23 +3403,23 @@
       <translation>Einige Sekunden lang Aufnahme bis Programm messen</translation>
     </message>
     <message>
-      <location line="+50" />
+      <location line="+51" />
       <source>Preview</source>
       <translation>Vorschau</translation>
     </message>
     <message>
-      <location line="+45" />
+      <location line="+47" />
       <source>Program</source>
       <translation>Programm</translation>
     </message>
     <message>
-      <location line="+20" />
+      <location line="+21" />
       <source>Height of the monitors</source>
       <translation>Höhe der Monitore</translation>
     </message>
     <message>
       <location line="+9" />
-      <location line="+17" />
+      <location line="+27" />
       <source>Inputs</source>
       <translation>Inputs</translation>
     </message>
@@ -3336,22 +3464,22 @@
       <translation>Dazu Overlay-Tasten und Tonleiste</translation>
     </message>
     <message>
-      <location line="+99" />
+      <location line="+122" />
       <source>Add input…</source>
       <translation>Input hinzufügen…</translation>
     </message>
     <message>
-      <location line="+366" />
+      <location line="+377" />
       <source>Level of %1</source>
       <translation>Pegel von %1</translation>
     </message>
     <message>
-      <location line="-490" />
+      <location line="-534" />
       <source>View</source>
       <translation>Ansicht</translation>
     </message>
     <message>
-      <location line="-501" />
+      <location line="-512" />
       <source>FTB</source>
       <comment>fade to black</comment>
       <translation>FTB</translation>
@@ -3367,7 +3495,7 @@
       <translation>Schwarzblende: Programm auf Schwarz und zurück (SWI.9); Show und Ausgänge laufen weiter</translation>
     </message>
     <message>
-      <location line="+538" />
+      <location line="+560" />
       <source>Multiview</source>
       <translation>Multiview</translation>
     </message>
@@ -3387,7 +3515,7 @@
       <translation>Seite</translation>
     </message>
     <message>
-      <location line="+55" />
+      <location line="+77" />
       <source>More input actions</source>
       <translation>Weitere Input-Aktionen</translation>
     </message>
@@ -3442,7 +3570,7 @@
       <translation>Breite der Tonspalte</translation>
     </message>
     <message>
-      <location line="-335" />
+      <location line="-357" />
       <source>Audio at the edge</source>
       <translation>Ton am Rand</translation>
     </message>
@@ -3452,7 +3580,7 @@
       <translation>Einfacher Modus</translation>
     </message>
     <message>
-      <location line="+72" />
+      <location line="+94" />
       <source>Find missing files…</source>
       <translation>Fehlende Dateien suchen…</translation>
     </message>
@@ -5356,6 +5484,20 @@
       <location line="+22" />
       <source>Name</source>
       <translation>Name</translation>
+    </message>
+  </context>
+  <context>
+    <name>SafeAreaGuides</name>
+    <message>
+      <location filename="../qml/SafeAreaGuides.qml" line="+136" />
+      <source>Guides</source>
+      <translation>Hilfslinien</translation>
+    </message>
+    <message>
+      <location line="+87" />
+      <source>%1 %</source>
+      <comment>a safe-area frame: its share of the picture</comment>
+      <translation>%1 %</translation>
     </message>
   </context>
   <context>
