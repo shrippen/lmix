@@ -479,6 +479,7 @@ pub fn read_bytes(bytes: &[u8], name: &str) -> Result<Loaded, ShowFileError> {
         serde_json::from_value(value).map_err(|e| format_err(e.to_string()))?;
     normal_recording_folders(&mut file.show);
     send_delays_in_range(&mut file.show);
+    names_without_secrets(&mut file.show);
     recording_file_names_checked(&mut file.show);
     Ok(Loaded {
         show: file.show,
@@ -541,6 +542,104 @@ fn send_delays_in_range(show: &mut Show) {
                 "send delay at its limit"
             );
             *delay_s = lmix_types::MAX_SEND_DELAY_S;
+        }
+    }
+}
+
+/// Names lmix once proposed from an address with its secrets (SRT
+/// passphrase, RTMP key at the address's end, `user:password@`, tokens)
+/// become what it proposes now. Only a name that is exactly an old
+/// proposal counts, built as when it was made: an input's with the
+/// number a second one of the address got (`… (2)`), an output's with
+/// its source (`… (Multiview)`, `… (Preview)`, `… (<input>)` with the
+/// input's name then; new: the input's name now). One renamed by hand
+/// stays. An input whose new name another has gets the next free number
+/// (two of one relay differing only in passphrase); outputs may share a
+/// name, as on adding.
+fn names_without_secrets(show: &mut Show) {
+    use crate::switcher::same_input_name;
+    use std::collections::HashMap;
+    fn old_input_name(source: &SourceSpec) -> Option<String> {
+        match source {
+            SourceSpec::Srt { uri, .. } => Some(uri.clone()),
+            SourceSpec::Url { url } | SourceSpec::Web { url, .. } => Some(url.clone()),
+            SourceSpec::Whip { endpoint } => Some(format!("WHIP {endpoint}")),
+            _ => None,
+        }
+    }
+    fn old_output_name(spec: &OutputSpec) -> Option<String> {
+        match spec {
+            OutputSpec::Srt { uri, .. } => Some(format!("SRT {uri}")),
+            OutputSpec::Rtmp { url, .. } => Some(format!("RTMP {url}")),
+            _ => None,
+        }
+    }
+    /// `name` is `old` or `old (n)`: the `" (n)"`, if any.
+    fn numbered<'a>(name: &'a str, old: &str) -> Option<&'a str> {
+        let rest = name.strip_prefix(old)?;
+        if rest.is_empty() {
+            return Some(rest);
+        }
+        let n = rest.strip_prefix(" (")?.strip_suffix(')')?;
+        (!n.is_empty() && n.bytes().all(|b| b.is_ascii_digit())).then_some(rest)
+    }
+    fn taken(names: &[String], name: &str, own: usize) -> bool {
+        names
+            .iter()
+            .enumerate()
+            .any(|(at, n)| at != own && same_input_name(n, name))
+    }
+
+    // Input names as they were: ISO outputs were named after them.
+    let before: HashMap<InputId, String> =
+        show.inputs.iter().map(|i| (i.id, i.name.clone())).collect();
+    let mut names: Vec<String> = show.inputs.iter().map(|i| i.name.clone()).collect();
+    for (at, input) in show.inputs.iter_mut().enumerate() {
+        let Some(old) = old_input_name(&input.source) else {
+            continue;
+        };
+        let Some(number) = numbered(&input.name, &old) else {
+            continue;
+        };
+        // Two of one relay may differ only in what the new name drops
+        // (passphrase, `streamid`): the second gets a number, as on adding.
+        let base = input.source.default_name();
+        if format!("{base}{number}") == input.name {
+            // Nothing secret in it: a name another input has too is left to
+            // `distinct_input_names`, where the first keeps it (INP.2).
+            continue;
+        }
+        let new = std::iter::once(format!("{base}{number}"))
+            .chain((2..).map(|n| format!("{base} ({n})")))
+            .find(|n| !taken(&names, n, at))
+            .expect("a free name");
+        if new != input.name {
+            tracing::info!(input = %input.id, kind = "input", "name without the secrets of its address");
+            names[at] = new.clone();
+            input.name = new;
+        }
+    }
+    let now: HashMap<InputId, String> =
+        show.inputs.iter().map(|i| (i.id, i.name.clone())).collect();
+    // Output names need not differ (as on adding): two to one relay may
+    // both be `SRT srt://relay:9000`.
+    for output in &mut show.outputs {
+        let Some(old) = old_output_name(&output.spec) else {
+            continue;
+        };
+        let new = output.spec.default_name();
+        let (old, new) = match output.source {
+            OutputSource::Program => (old, new),
+            OutputSource::Multiview => (format!("{old} (Multiview)"), format!("{new} (Multiview)")),
+            OutputSource::Preview => (format!("{old} (Preview)"), format!("{new} (Preview)")),
+            OutputSource::Input(id) => (
+                format!("{old} ({})", before.get(&id).map_or("", String::as_str)),
+                format!("{new} ({})", now.get(&id).map_or("", String::as_str)),
+            ),
+        };
+        if output.name == old && new != old {
+            tracing::info!(output = %output.id, kind = "output", "name without the secrets of its address");
+            output.name = new;
         }
     }
 }
@@ -1278,6 +1377,133 @@ mod tests {
 
         let loaded: Vec<u32> = show.outputs.iter().map(|o| o.spec.send_delay_s()).collect();
         assert_eq!(loaded, [lmix_types::MAX_SEND_DELAY_S, 60, 7]);
+    }
+
+    #[test]
+    fn names_with_secrets_load_without_them() {
+        let mut value = serde_json::to_value(sample()).unwrap();
+        let input = |name: &str, uri: &str, slot: usize| {
+            serde_json::json!({ "id": InputId::new(), "name": name,
+                "source": { "kind": "srt", "uri": uri }, "slot": slot })
+        };
+        let cam = "srt://cam:9000?passphrase=geheim0123";
+        let far = "srt://far:7001?passphrase=geheim0123";
+        value["inputs"] = serde_json::json!([
+            input(cam, cam, 0),
+            serde_json::json!({ "id": InputId::new(), "name": "rtsp://u:geheim@cam/live",
+                "source": { "kind": "url", "url": "rtsp://u:geheim@cam/live" }, "slot": 1 }),
+            // Renamed by hand: stays, even if it holds the address.
+            input(
+                "Bühne srt://x:1?passphrase=geheim0123",
+                "srt://x:1?passphrase=geheim0123",
+                2
+            ),
+            // The new name is another input's: the first gets a number.
+            serde_json::json!({ "id": InputId::new(), "name": "srt://cam:9000",
+                "source": { "kind": "pattern", "pattern": "bars" }, "slot": 3 }),
+            input(far, far, 4),
+            // A second input of the same address got a number.
+            input(&format!("{far} (2)"), far, 5),
+            // A "number" that is none: renamed by hand.
+            input(&format!("{far} (B)"), far, 6),
+            // One relay, two passphrases: one name without them.
+            input(
+                "srt://relay:9000?passphrase=geheim0123",
+                "srt://relay:9000?passphrase=geheim0123",
+                7
+            ),
+            input(
+                "srt://relay:9000?passphrase=anders4567",
+                "srt://relay:9000?passphrase=anders4567",
+                8
+            ),
+            // Two without a secret, one name: the first keeps it.
+            input("srt://open:9000", "srt://open:9000", 9),
+            input("srt://open:9000", "srt://open:9000", 10),
+        ]);
+        let far_id = value["inputs"][4]["id"].clone();
+        let output = |name: &str, spec: serde_json::Value, source: serde_json::Value| serde_json::json!({ "id": OutputId::new(), "name": name, "spec": spec, "source": source });
+        let program = serde_json::json!({ "from": "program" });
+        value["outputs"] = serde_json::json!([
+            output(
+                "RTMP rtmp://ingest.example/live/GEHEIMKEY",
+                serde_json::json!({ "kind": "rtmp", "url": "rtmp://ingest.example/live/GEHEIMKEY" }),
+                program.clone()
+            ),
+            output(
+                "SRT srt://cdn:9000?passphrase=geheim0123",
+                serde_json::json!({ "kind": "srt", "uri": "srt://cdn:9000?passphrase=geheim0123" }),
+                program.clone()
+            ),
+            output(
+                "Stream",
+                serde_json::json!({ "kind": "rtmp", "url": "rtmp://a/b", "key": "geheim" }),
+                program.clone()
+            ),
+            output(
+                "SRT srt://cdn:9001?passphrase=geheim0123 (Multiview)",
+                serde_json::json!({ "kind": "srt", "uri": "srt://cdn:9001?passphrase=geheim0123" }),
+                serde_json::json!({ "from": "multiview" })
+            ),
+            // ISO: named after the input's name then; now its new one.
+            output(
+                &format!("SRT srt://iso:9000?passphrase=geheim0123 ({far})"),
+                serde_json::json!({ "kind": "srt", "uri": "srt://iso:9000?passphrase=geheim0123" }),
+                serde_json::json!({ "from": "input", "input": far_id })
+            ),
+            // An RTMP server without a key part keeps its application.
+            output(
+                "RTMP rtmp://server/live",
+                serde_json::json!({ "kind": "rtmp", "url": "rtmp://server/live", "key": "k" }),
+                program.clone()
+            ),
+            // Two streams to one service, the key at the address's end:
+            // both lose it, both have one name.
+            output(
+                "RTMP rtmp://a.example/live2/GEHEIM1",
+                serde_json::json!({ "kind": "rtmp", "url": "rtmp://a.example/live2/GEHEIM1" }),
+                program.clone()
+            ),
+            output(
+                "RTMP rtmp://a.example/live2/GEHEIM2",
+                serde_json::json!({ "kind": "rtmp", "url": "rtmp://a.example/live2/GEHEIM2" }),
+                program
+            ),
+        ]);
+        let file =
+            serde_json::json!({ "format": FILE_FORMAT, "version": FILE_VERSION, "show": value });
+        let show = from_bytes(&serde_json::to_vec(&file).unwrap(), "old").unwrap();
+        let inputs: Vec<&str> = show.inputs.iter().map(|i| i.name.as_str()).collect();
+        assert_eq!(
+            inputs,
+            [
+                "srt://cam:9000 (2)",
+                "rtsp://…@cam/live",
+                "Bühne srt://x:1?passphrase=geheim0123",
+                "srt://cam:9000",
+                "srt://far:7001",
+                "srt://far:7001 (2)",
+                "srt://far:7001?passphrase=geheim0123 (B)",
+                "srt://relay:9000",
+                "srt://relay:9000 (2)",
+                "srt://open:9000",
+                "srt://open:9000",
+            ]
+        );
+        let outputs: Vec<&str> = show.outputs.iter().map(|o| o.name.as_str()).collect();
+        assert_eq!(
+            outputs,
+            [
+                "RTMP rtmp://ingest.example/live/…",
+                "SRT srt://cdn:9000",
+                "Stream",
+                "SRT srt://cdn:9001 (Multiview)",
+                "SRT srt://iso:9000 (srt://far:7001)",
+                "RTMP rtmp://server/live",
+                "RTMP rtmp://a.example/live2/…",
+                "RTMP rtmp://a.example/live2/…",
+            ]
+        );
     }
 
     #[test]

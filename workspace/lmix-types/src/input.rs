@@ -279,7 +279,7 @@ impl SourceSpec {
                 None => "Playlist".into(),
             },
             Self::Ndi { name } => name.clone(),
-            Self::Whip { endpoint } => format!("WHIP {endpoint}"),
+            Self::Whip { endpoint } => format!("WHIP {}", crate::srt::redact_url(endpoint)),
             Self::Web { url, .. } => crate::srt::redact_url(url),
             Self::Graphics { graphics } => format!("Graphics {graphics}"),
             Self::Card { device, .. } => format!("Card {}", u64::from(*device) + 1),
@@ -920,6 +920,20 @@ mod tests {
         assert_eq!(
             page.default_name(),
             "https://grafana.local/d/x?token=…&theme=dark"
+        );
+        assert_eq!(whip.default_name(), "WHIP stage?token=…");
+        // RTMP outputs: neither a key at the address's end nor a password.
+        assert_eq!(whole.default_name(), "RTMP rtmp://ingest.example/live/…");
+        let with_user = crate::OutputSpec::Rtmp {
+            url: "rtmp://u:pw@ingest.example/live".into(),
+            key: "k".into(),
+            video_kbps: 6000,
+            encoding: Default::default(),
+            delay_s: 0,
+        };
+        assert_eq!(
+            with_user.default_name(),
+            "RTMP rtmp://…@ingest.example/live"
         );
     }
 }

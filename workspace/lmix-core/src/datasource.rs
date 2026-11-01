@@ -83,18 +83,24 @@ async fn bytes(place: &Place, http: &reqwest::Client) -> Result<Vec<u8>, String>
                 .map_err(|e| format!("{shown}: {e}"))
         }
         Place::Url(url) => {
+            // Errors go to every client and the log: the address without
+            // `user:password@` and tokens, reqwest's text without it.
+            let shown = lmix_types::srt::redact_url(url);
             let resp = http
                 .get(url)
                 .send()
                 .await
                 .and_then(reqwest::Response::error_for_status)
-                .map_err(|e| format!("{url}: {e}"))?;
+                .map_err(|e| format!("{shown}: {}", e.without_url()))?;
             if resp.content_length().is_some_and(|n| n > MAX_BYTES) {
-                return Err(format!("{url} is larger than 16 MB"));
+                return Err(format!("{shown} is larger than 16 MB"));
             }
-            let body = resp.bytes().await.map_err(|e| format!("{url}: {e}"))?;
+            let body = resp
+                .bytes()
+                .await
+                .map_err(|e| format!("{shown}: {}", e.without_url()))?;
             if body.len() as u64 > MAX_BYTES {
-                return Err(format!("{url} is larger than 16 MB"));
+                return Err(format!("{shown} is larger than 16 MB"));
             }
             Ok(body.to_vec())
         }
@@ -203,6 +209,7 @@ async fn sheets_api(
     query: &[(&str, &str)],
     http: &reqwest::Client,
 ) -> Result<String, String> {
+    let shown = lmix_types::srt::redact_url(url);
     let key = GOOGLE_API_KEY
         .get()
         .ok_or("lmix-core was started without --google-api-key; a public sheet also reads as CSV export (…/export?format=csv)")?;
@@ -212,17 +219,17 @@ async fn sheets_api(
         .query(query)
         .send()
         .await
-        .map_err(|e| format!("{url}: {}", e.without_url()))?;
+        .map_err(|e| format!("{shown}: {}", e.without_url()))?;
     if resp.content_length().is_some_and(|n| n > MAX_BYTES) {
-        return Err(format!("{url} is larger than 16 MB"));
+        return Err(format!("{shown} is larger than 16 MB"));
     }
     let status = resp.status();
     let body = resp
         .bytes()
         .await
-        .map_err(|e| format!("{url}: {}", e.without_url()))?;
+        .map_err(|e| format!("{shown}: {}", e.without_url()))?;
     if body.len() as u64 > MAX_BYTES {
-        return Err(format!("{url} is larger than 16 MB"));
+        return Err(format!("{shown} is larger than 16 MB"));
     }
     let body = String::from_utf8_lossy(&body).into_owned();
     if !status.is_success() {

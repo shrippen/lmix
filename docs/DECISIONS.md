@@ -7238,6 +7238,71 @@ von #217:
   über eine Auswahl). Ein Zeichen über eine markierte Stelle getippt oder
   gelöscht füllt nichts; die Felder füllen sich dann beim Verlassen.
 
+## 2026-11-01 — Geheimnisse auch nicht in Namen und Fehlertexten
+
+**Anlass**: Abschluss-Review von #219. Logs waren geschwärzt, aber
+vorgeschlagene Namen und einige Fehlertexte trugen Adressen samt
+Geheimnis weiter: in Ausgangsliste, Multiview, Fernbedienung, Tally, API.
+
+**Entscheidung**:
+- **Namen**: Der vorgeschlagene Name eines RTMP-Ausgangs entsteht aus der
+  geschwärzten Adresse (`RTMP rtmp://host/app/…`, wenn der Schlüssel am
+  Ende der Adresse steht, `…@` statt `user:passwort@`), der eines
+  WHIP-Inputs ohne Token (`WHIP stage?token=…`), der einer Datenquelle aus
+  einer Adresse ohne Abfrage und `user:passwort@` (`https://u:pw@feed.example`
+  heißt `feed`).
+- **Alte Shows**: Beim Laden bekommt ein Input oder Ausgang, dessen Name
+  genau der alte Vorschlag ist, den neuen Vorschlag. Der alte Vorschlag
+  wird gebaut wie beim Anlegen: beim SRT-Input die URI, bei URL/Web die
+  Adresse, sonst `WHIP …`, mit der Nummer, die ein zweiter Input derselben
+  Adresse bekam (`… (2)`, bleibt am neuen Namen); beim Ausgang `SRT …` bzw.
+  `RTMP …` mit dem Zusatz seiner Quelle (`(Multiview)`, `(Preview)`, beim
+  ISO-Ausgang der Name des Inputs vor der Umbenennung, am neuen Namen der
+  danach). Eindeutig, weil nur der unveränderte Vorschlag zählt; von Hand
+  umbenannte Namen bleiben. Hat ein anderer Input den neuen Namen schon
+  (ohne Groß-/Kleinschreibung, INP.2), bekommt er wie beim Anlegen die
+  nächste freie Nummer (`srt://relay:9000 (2)`): häufig, denn der neue Name
+  lässt genau weg, was zwei Inputs eines Relays unterscheidet (Passphrase,
+  `streamid`). Den alten Namen zu behalten, ließe gerade dort das Geheimnis
+  stehen. Nur ein Name, der dabei wirklich ein Geheimnis verliert, ändert
+  sich; gleiche Namen ohne Geheimnis nummeriert wie bisher
+  `distinct_input_names`, der erste behält seinen. Ausgänge dürfen gleich heißen (auch `add_output` prüft das nicht):
+  zwei Streams zu einem Dienst heißen danach beide
+  `RTMP rtmp://a.example/live2/…`. Ein ISO-Ausgang, dessen Input nach dem Anlegen
+  des Ausgangs umbenannt wurde, behält seinen alten Namen samt Geheimnis:
+  er trägt den früheren Input-Namen, den der Kern nicht mehr kennt. Jede
+  Umbenennung steht im Log (`info`, Id und Art, ohne Namen). Die Datei
+  ändert sich erst beim nächsten Speichern.
+  - Was einen solchen Input oder Ausgang **über den Namen** anspricht, trifft
+    ihn danach nicht mehr: `InputRef`/`OutputRef` als Text in Makros und
+    Skripten, Companion-Tasten, `--start-outputs`. Bewusst hingenommen: es
+    betrifft nur Namen, die noch das Geheimnis zeigen, und die Ids bleiben.
+  - **Datenquellen** werden nicht umbenannt: Grafiken binden ihre Felder
+    über den Namen der Datenquelle, eine Umbenennung beim Laden würde sie
+    stumm leeren. Ihr alter Vorschlag war der letzte Pfadteil der Adresse,
+    der selten ein Geheimnis trägt.
+  - Ein RTMP-Ausgang mit leerem Schlüsselfeld und nur einem Pfadteil
+    (`rtmp://server/live`) behält ihn; abgeschnitten wird nur ein Teil hinter
+    der Anwendung, wo der Schlüssel steht.
+- **Fehlertexte**: `bad_web_url` und die Lesefehler der Datenquellen
+  (`{Adresse}: {Fehler}`) nennen die Adresse über `redact_url`, die Fehler
+  von reqwest ohne ihre URL (`without_url`, bei jedem Fehler). Ebenso die Ziele von Home Assistant, Companion
+  und HTTP (ungültige Adresse, Sendefehler, HTTP-Status) und das Verwerfen
+  einer zu lange wartenden Anfrage. Sie gehen an alle Clients und ins Log.
+- **Logs**: `Action::without_secrets` schwärzt auch die Adresse von
+  `add_data_source` und ersetzt `body` von `http_request` und `data` von
+  `ha_service` durch ihre Länge (`… (n bytes)`): darin können Passwörter,
+  Codes oder Tokens stehen.
+- **Einfügen ins Adressfeld** (SRT-Input): Als Einfügen gilt, wenn zwei oder
+  mehr Zeichen auf einmal neu sind (was zwischen vorher und jetzt nach
+  gemeinsamem Anfang und Ende bleibt), auch über eine Auswahl und auch
+  wenn vorher schon eine (abgelehnte) Adresse dastand. Eine Taste bringt
+  eines. Unterscheidet sich die eingefügte Korrektur nur in einem Zeichen,
+  füllen sich die Felder beim Verlassen.
+
+**Offen**: Was strom in Fehlerantworten zurückgibt (`EngineError::Refused`),
+ist weiter ungeprüft.
+
 ## 2026-11-01 — Aufnahme: Dateinamen und Standardordner (REC.5)
 
 **Kontext**: REC.5 verlangt ein Dateinamensmuster mit Datum und Zeit und
