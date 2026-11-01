@@ -26,6 +26,7 @@ TestCase {
             property bool connected: true
             property string links: ""
             property string devices: ""
+            signal answered(string action, string refusal)
             function runningTime(since) { return "" }
             // What the add dialog on the page reads.
             function choices(list) {
@@ -60,7 +61,7 @@ TestCase {
     }
 
     // REC.8: Mark and its note show while a recording runs; the note goes
-    // with the mark once.
+    // with the mark once, and stays when lmix-core refuses the mark.
     function test_mark_writes_the_note_once() {
         const page = createTemporaryObject(pageComponent, test)
         // The window's header shows the tools (AppShell).
@@ -71,9 +72,14 @@ TestCase {
         outputs[1].status = { state: "running", since_ms: 0 }
         fakeShell.show = { outputs: outputs.slice(), buses: [] }
         tryVerify(() => button.visible)
+        compare(note.maximumLength, 200)
         note.text = " Q&A "
         button.clicked()
         compare(sent, [{ action: "mark_recording", text: "Q&A" }])
+        // Refused: the note stays; taken: it goes.
+        fakeShell.backend.answered(JSON.stringify(sent[0]), "no recording runs")
+        compare(note.text, " Q&A ")
+        fakeShell.backend.answered(JSON.stringify(sent[0]), "")
         compare(note.text, "")
         button.clicked()
         compare(sent[1], { action: "mark_recording" })

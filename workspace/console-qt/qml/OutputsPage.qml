@@ -29,11 +29,27 @@ AppPage {
     /** A recording runs: marks go into its protocol (REC.8). */
     readonly property bool recording: recordings.some(o => o.status.state === "running")
     function act(action) { shell.act(action) }
+    /** The note of the mark sent last; the field empties once lmix-core
+     *  took it, a refused one (too long, no recording) stays. */
+    property string sentNote: ""
     /** A mark in every running recording, with the note if there is one. */
     function mark() {
         const text = markText.text.trim()
+        sentNote = text
         act(text.length > 0 ? { action: "mark_recording", text: text } : { action: "mark_recording" })
-        markText.clear()
+    }
+    Connections {
+        target: root.backend
+        ignoreUnknownSignals: true
+        function onAnswered(action, refusal) {
+            const a = JSON.parse(action)
+            if (a.action !== "mark_recording" || refusal.length > 0 || (a.text || "") !== root.sentNote) {
+                return
+            }
+            if (markText.text.trim() === root.sentNote) {
+                markText.clear()
+            }
+        }
     }
     // Rows by id: a new state keeps them (and their running-time timers).
     KeyedModel { id: outputModel }
@@ -111,6 +127,13 @@ AppPage {
             visible: root.recording
             placeholderText: qsTr("Note for the mark")
             onAccepted: root.mark()
+            // As long as lmix-core takes (MARK_TEXT_MAX).
+            Component.onCompleted: {
+                const limits = JSON.parse(root.backend.choices("record_limits"))
+                if (limits.mark_text_max) {
+                    maximumLength = limits.mark_text_max
+                }
+            }
         },
         KanteButton {
             objectName: "markButton"
