@@ -8043,8 +8043,16 @@ sichtbar ist nur, was einer kurzen Liste schlichter Formen entspricht.
   (`'a'\''b'`, `"a"'b'`) oder ein `@` im selben Wort folgt; nie vor dem
   Ende des Worts, das die Maske ohnehin erfasst hat (seit 10893ce). Das deckt `"passphrase=a b"`,
   `'passphrase=a b'`, `"uri=srt://h?passphrase=a b"` und ein in einem
-  früheren Wort geöffnetes Anführungszeichen. Partner- und `@`-Suche sind
-  zwischengespeichert, die Laufzeit bleibt linear.
+  früheren Wort geöffnetes Anführungszeichen. Partner, Wortende hinter dem
+  Partner und nächstes `@` stehen in einem Index, der beim ersten Nachschlagen
+  einmal über den Text läuft; jedes Nachschlagen ist eine binäre Suche, die
+  Laufzeit bleibt so linear bis auf den Logarithmus (seit strom #67). Vorher
+  merkte sich ein Cache nur einen Partner: Ein Anführungszeichen über den
+  ganzen Text, darin URLs abwechselnd in einem inneren Paar und ohne, suchte
+  den äußeren Partner je URL erneut bis Textende (quadratisch, 1 MB 11 s;
+  viele URLs in Anführungszeichen in einem langen Wort bis 124 s, jetzt
+  unter 0,1 s). strom maskiert in `api/gst_launch.rs` Request-Bodys
+  beliebiger Größe.
 - Kein Panic, kein Leck bei einem Fehler (seit 10893ce): strom `text()`
   und lmix `redact_text` laufen unter `catch_unwind` und maskieren bei
   einem Panic den ganzen Text. strom maskiert Bus-Meldungen in einem
@@ -8093,7 +8101,9 @@ der Änderung rot: `400 Bad Request: Invalid property
 srt_uri=srt://192.0.2.1:9000?passphrase=topsecret1`). Gemeinsame
 Test-Eingaben: strom `redact::tests::shared_vectors_*`, lmix-types
 `srt::tests::shared_vectors_*` (jede Eingabe der Review-Runden, ohne
-Panic, linear auch bei 1 MB), `fuzzed_inputs_do_not_panic` in beiden.
+Panic, linear auch bei 1 MB), `fuzzed_inputs_do_not_panic` und
+`long_quoted_runs_take_linear_time` (vier 256-KB-Eingaben, je unter 5 s im
+Debug-Build; vor strom #67 rot, 33 s für die erste) in beiden.
 
 ## 2026-11-01 — Ausgänge: Puffer und Encoder-Last (STR.7)
 
