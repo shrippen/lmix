@@ -7,7 +7,7 @@ User es als lmix-eigen entschieden hat.
 Stand 2026-11-01: `dev` (c426a7e) hat 172 Commits ohne Merges, die upstream `main` (4479d8c) nicht
 hat (`git log --no-merges 4479d8c..gitea/dev`).
 
-Stand 2026-11-01: bei Eyevinn liegen 15 PRs von uns (#1185–#1199, unten), auf `main` 4479d8c
+Stand 2026-11-01: bei Eyevinn liegen 18 PRs von uns (#1185–#1202, unten), auf `main` 4479d8c
 rebasiert. Issue-Entwürfe liegen bereit und gehen erst nach Freigabe raus; weitere PR-Branches
 auf upstream `main` sind vorbereitet und warten auf den Review.
 
@@ -24,28 +24,28 @@ Abgleich mit upstream: `git fetch https://github.com/Eyevinn/strom main` und
 | Thema | Commits / Gitea-PR | Weg | Stand, Hinweis |
 |---|---|---|---|
 | Media Player: Bus-Watch, die beim Stoppen entfernt wird (CRITICAL „has no signal watches“) | 21d8ec5 (kam mit #1) | – | upstream erledigt: upstream zählt die `add_signal_watch`-Aufrufe und entfernt genau so viele |
-| Vorschaubild-Abgriff liefert kein Bild älter als `max_age` (3 s, mindestens zwei `update_interval`); eine Quelle, die keine Bilder mehr schickt, sah sonst live aus, solange der Abgriff abgefragt wird (`cache_ttl` war ungenutzt) | 7e40604, 594092c, #68 | PR | **Eyevinn #1194** (Branch `thumbnail-max-age-upstream`, Gitea #68) |
-| Vorschaubild: 504 (kein Bild) auf DEBUG statt ERROR loggen | #71 | PR | **Eyevinn #1193** (Branch `thumbnail-504-quiet-upstream`) |
+| Vorschaubild-Abgriff liefert kein Bild älter als `max_age` (3 s, mindestens zwei `update_interval`); eine Quelle, die keine Bilder mehr schickt, sah sonst live aus, solange der Abgriff abgefragt wird (`cache_ttl` war ungenutzt) | 7e40604, 594092c, #68 | PR | **Eyevinn #1194** (Branch `thumbnail-max-age-upstream`, a591891; Gitea #68 auf `dev` gemergt) |
+| Vorschaubild: 504 auf DEBUG statt ERROR (eigener `MakeClassifier` im `TraceLayer`; ein abgefragter Abgriff einer toten Quelle schrieb eine ERROR-Zeile je Abfrage) | 1fcd191, #71 | PR | **Eyevinn #1193** (Branch `thumbnail-504-quiet-upstream`; auf `dev` gemergt) |
 | Panic im eigenständigen nativen Frontend | 779cc60 | PR | **Eyevinn #1190** (Branch `native-frontend-tokio-runtime`, eae43df) |
 | GL-Renderer-Probe auf GStreamer 1.28 | a7a2aa9 | PR | **Eyevinn #1199** (Branch `gl-probe-glmemory`, ecf6736); Test CI-fähig (`backend/tests/gl_probe_test.rs`, Mesa surfaceless EGL) |
 | NVENC-Rate-Control auf GStreamer 1.28 | dcf2b83 | – | upstream erledigt: `videoenc.rs` wählt `rate-control` oder `rc-mode` nach der vorhandenen Eigenschaft (#1166) |
 | build.rs beobachtet das echte Git-Verzeichnis | 01bdcc0 | PR | **Eyevinn #1191** (Branch `build-rs-git-dir`, 76ed3ac) |
-| Pipeline bleibt PLAYING, wenn ein Thumbnail-Abgriff andockt | da76592 | PR | offen |
+| Pipeline bleibt PLAYING, wenn ein Thumbnail-Abgriff andockt | da76592 | – | upstream erledigt: der Appsink des Abgriffs hat `async=false` |
 | Deinterlace nur bei interlaced | e23f0b5 | – | großteils upstream erledigt (3225792, #952: progressive Pads direkt). Rest ohne Branch: Pads ohne Caps (explizit gebauter Decoder in EFP/MPEG-TS) gehen noch durch deinterlace, VA ohne `vadeinterlace`; kleiner Folge-PR auf `link_raw_video`, noch nicht vorbereitet |
 | Buffer-Alter auch für Puffer vor der Uhr zählen | fb62d2b | PR | **Eyevinn #1198** (Branch `buffer-age-early-buffers`, dd59d7c) |
-| EFP-SRT-H.264-Decoder nach Rang statt Hersteller | ecd2ed6 | PR | Branch `efp-decoder-by-rank` (cd9afee), Text fertig, im Review; Test ist nur Demonstration (alter Code wählt auf NVIDIA denselben Decoder) |
-| GL-Eingänge und Underlays auf NVIDIA ohne udmabuf | 887248d, 2e4a749, #36 | PR | Branch `gl-upload-udmabuf-nvidia` (64a3610), Text fertig, im Review; auf #1199 gestapelt (ohne die Probe bleibt der Workaround auf 1.28 aus); 807221f/658a739 heben sich auf und fehlen |
-| Inaktive Pads in den Compositoren ignorieren | 2ccb62b, bb4fcd5 | PR | offen |
+| EFP-SRT-H.264-Decoder nach Rang statt Hersteller | ecd2ed6 | PR | Branch `efp-decoder-by-rank` (83b6fbf): Decoder jetzt nach den Parser-Caps (`can_sink_all_caps`, einmalige CAPS-Probe), Test mit 4:2:2 10 bit; Text fertig, im Review. Derselbe Fehler auf `dev` (Rang ohne Caps): Gitea #74 (`efp-decoder-from-caps`) |
+| GL-Eingänge und Underlays auf NVIDIA ohne udmabuf | 887248d, 2e4a749, #36 | Issue | Issue-Entwurf fertig, wartet auf Freigabe (Bedingung `/dev/udmabuf` mit logind-ACL, Richtung Funktionsprobe statt Herstellername); Branch `gl-upload-udmabuf-nvidia` wird auf die Probe umgebaut, PR nach dem Issue |
+| Inaktive Pads in den Compositoren ignorieren | 2ccb62b, bb4fcd5 | PR | Branch `vision-mixer-ignore-inactive-pads` (4851902), Review ohne Wichtig, Text korrigiert, wird eingereicht |
 | Encoder: GPU-Speicher vor Software-Konvertierung herunterladen, vor NVENC auf der GPU konvertieren | 79b3b31, 3e8301e | – | upstream erledigt: a0e32bb (#1111, Download-Front) und 1e9b9c0 (kein `autovideoconvert` mehr); übrig nur CUDA-I420 aus dem CUDA-Mischer, gehört ins CUDA-Issue |
 | DSK bleibt an, wenn er während des Ausblendens eingeschaltet wird | 04b87d1 | Issue (mit d47a50a) | gehört zum Ein-/Ausblenden der DSK-Ebenen (d47a50a), steht im DSK-Issue-Entwurf als Folgefix |
-| Losgelassenes Standbild lässt die Haupt-Pipeline fallen | #15 | PR | offen |
-| PiP-Schnitt zeigt das neue Bild vor dem Ausblenden des alten | #35 | PR | offen |
+| Losgelassenes Standbild lässt die Haupt-Pipeline fallen | #15 | Issue (mit 7682d41) | im Branch `media-player-hold-last-frame` enthalten (behebt nur dessen Wiederholung) |
+| PiP-Schnitt zeigt das neue Bild vor dem Ausblenden des alten | #35 | PR | **Eyevinn #1202** (Branch `vision-mixer-pip-cut-order`, a8a6c0c) |
 | CUDA-Thumbnails ohne cudaconvertscale | #37 | PR | offen; hängt am CUDA-Mischer |
 | AAC-Encoder-Delay aus der Zeitachse | #38 | PR | **Eyevinn #1196** (Branch `aac-encoder-delay`, f281979) |
 | Start, Stopp, Löschen und Update eines Flows unter einer Sperre je Flow | #45, #47 | PR | **Eyevinn #1197** (Branch `flow-lifecycle-lock`, d2bc646) |
 | Event-Filter-Test ohne Log-Zähler | #44 | PR | **Eyevinn #1195** (Branch `event-filter-test-direct`, 1fa4b3f) |
-| Thumbnail-Zweig starten, bevor das Tee ihn speist (sonst hält die Quelle an) | #55 | PR | offen; Test vorhanden |
-| Media Player hält beim Pausieren das letzte Bild | 7682d41 | PR | offen |
+| Thumbnail-Zweig starten, bevor das Tee ihn speist (sonst hält die Quelle an) | #55 | PR | **Eyevinn #1201** (Branch `thumbnail-attach-order`, ae9a378; auf #1189 gestapelt) |
+| Media Player hält beim Pausieren das letzte Bild | 7682d41 | Issue | Issue-Entwurf fertig, wartet auf Freigabe (Standard oder Property, Kosten je pausiertem Player); Branch `media-player-hold-last-frame` (enthält #15) wird korrigiert (nur Raw-Video, `last` leeren, Dateiwechsel in der Pause, EOS-Race), auf `dev` dieselben Fehler |
 | DeckLink Output mit direktem Media-Timing | #50 | – | geht in #53 auf. Abgleich: upstream #1131 (f294622, Video an den Modus anpassen) und #1168 (a340f49, Audio anpassen) sind gemergt und berühren weder den Kartentakt-Seed noch den Vorlauf. Der Seed (eefe858, 56245a9, 031721f) ist auf `dev` durch #53 (decklink2sink) wieder entfernt; übrig bleibt der Vorlauf (`processing_deadline_ms`, 1e98a41), der im decklink2sink-Issue-Entwurf mitläuft |
 | CUDA-Mischer auf echter Hardware (Alpha nach Fade, Stinger, Thumbnails) | #29 | PR | offen; hängt am CUDA-Mischer |
 | Vorschaubild-Abgriff: Abhängen ohne Zustandssperre (Verklemmung mit dem Appsink-Callback) | 5f32f15, #63 | PR | **Eyevinn #1187** (Branch `thumbnail-detach-deadlock`, 523a390) |
@@ -73,7 +73,7 @@ Abgleich mit upstream: `git fetch https://github.com/Eyevinn/strom main` und
 | Mischer starten beim ersten Puffer | #1 | Issue | Issue-Entwurf fertig, wartet auf Freigabe; mit `sample_rate` des Audiomischers (ed647f2); `eos_on_stop` eigene Zeile |
 | DSK-Ebenen ein- und ausblenden (`duration_ms` in `DskToggleRequest`) | d47a50a (kam mit #5) | Issue | Issue-Entwurf fertig, wartet auf Freigabe (neues API-Feld); 04b87d1 gehört dazu |
 | identity ts-offset im Lauf änderbar | #5 (401053c) | Issue | Issue-Entwurf fertig, wartet auf Freigabe (globale Allowlist gegen GStreamer-Flags, `mutable_in_playing` in der Discovery); Branch `identity-ts-offset-live` (a444006) für den späteren PR |
-| Media Player gibt Video im Systemspeicher aus | #3 | PR | offen |
+| Media Player gibt Video im Systemspeicher aus | #3 | – | widerspricht upstreams Block-Vertrag (`docs/BLOCK_GUIDELINES.md`: der Verbraucher passt den Speicher an); upstream löst es beim Verbraucher |
 | Playlist-Loop im Lauf umschalten | #17 | Issue | Issue-Entwurf fertig, wartet auf Freigabe (neue API-Felder oder Endpunkte: Entscheidung der Maintainer, wie bei der Block-Statistik #61/#64) |
 | Rand-Underlays live, Startzeit zuerst | 9274bbd | Issue | nur mit `start_time_selection` sinnvoll, gehört in den Issue-Entwurf „Mischer starten beim ersten Puffer“ |
 | HTML-Input: Seite per API steuern | #22 | Issue | Issue-Entwurf fertig, wartet auf Freigabe |
@@ -90,7 +90,7 @@ Abgleich mit upstream: `git fetch https://github.com/Eyevinn/strom main` und
 | Block-Statistik: Warteschlange des Inter Input (wartend, verworfen) und Encoder-Zeit des Video Encoder (`/flows/{id}/rtp-stats`) | #61, #64 | Issue | Entwurf fertig, wartet auf Freigabe (zwei Buffer-Probes am Encoder und neue API-Typen sind eine Entscheidung der Maintainer); Branch `lmix-output-load` auf upstream `main` 4479d8c |
 | Kachel-Ausgang des Mischers (`tiles_out`) | #52, #57 | Issue | im Issue-Entwurf zum Vorschau-Ausgang |
 | DeckLink-Ausgang über `decklink2sink` (spätes Bild beim zweiten Start) | #53 | Issue | Issue-Entwurf fertig, wartet auf Freigabe; braucht GStreamer 1.30, upstream-Ziel ist 1.28 |
-| QoS-Events an blockgebauten Sinks verwerfen | #58 | PR | offen; wird geprüft: ob der Fehler auf upstream `main` auftritt (Sinks, die Blöcke selbst bauen) und ob der Branch ohne lmix-Teile auf `main` passt |
+| QoS-Events an blockgebauten Sinks verwerfen | #58 | PR | **Eyevinn #1200** (Branch `block-sink-qos`, 9c6c122); Fehler auch auf upstream `main` (rtmp2sink/srtsink/decklinkvideosink mit qos), Refs #1183/#1177 |
 
 ## Von upstream übernommen (nichts zu tun)
 
