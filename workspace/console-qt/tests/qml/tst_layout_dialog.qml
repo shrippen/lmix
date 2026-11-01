@@ -72,6 +72,7 @@ TestCase {
         compare(sent.length, 1)
         const boxes = sent[0].boxes
         compare(sent[0].action, "set_layout")
+        compare(sent[0].layout, "l1")
         compare(boxes.map(b => b.input), ["c", "b"])
         compare(boxes[0].rect.x, 0.2)
         compare(boxes[1].rect.x, 0.6)
@@ -106,8 +107,32 @@ TestCase {
         const dialog = openOn(layouts[0])
         dialog.edit(0, { input: "d" })
         layouts = [interview([box("b", 0.1), box("d", 0.6)])]
+        verify(hint(dialog).visible)
+        compare(hint(dialog).text, "This layout was changed elsewhere while the dialog was open. Saving replaces it with what is shown here.")
         dialog.accept()
         compare(sent[0].boxes.map(b => b.input), ["d", "c"])
+    }
+
+    // Another console removes the layout before it: the edited one moves
+    // up to number 1, Save must still reach it, not the one now first.
+    function test_save_addresses_the_layout_by_id() {
+        const second = { id: "l2", number: 2, name: "Single", background: null, boxes: [box("d", 0.1)] }
+        layouts = [layouts[0], second]
+        const dialog = openOn(second)
+        dialog.edit(0, { framed: true })
+        layouts = [Object.assign({}, second, { number: 1 })]
+        verify(!hint(dialog).visible)
+        dialog.accept()
+        compare(sent.length, 1)
+        compare(sent[0].layout, "l2")
+    }
+
+    function test_a_layout_removed_while_open_cannot_be_saved() {
+        const dialog = openOn(layouts[0])
+        layouts = []
+        verify(hint(dialog).visible)
+        compare(hint(dialog).text, "This layout was removed while the dialog was open. It can no longer be saved.")
+        verify(!dialog.acceptEnabled)
     }
 
     function test_unchanged_layout_saves_as_edited_without_notice() {

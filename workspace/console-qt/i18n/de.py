@@ -1129,6 +1129,7 @@ DE = {
     'Save layout': 'Layout speichern',
     'Add layout': 'Layout hinzufügen',
     'Reload': 'Neu laden',
+    'This layout was removed while the dialog was open. It can no longer be saved.': 'Das Layout wurde entfernt, während der Dialog offen war. Es lässt sich nicht mehr speichern.',
     'This layout was changed elsewhere while the dialog was open. Saving replaces it with what is shown here.': 'Das Layout wurde anderswo geändert, während der Dialog offen war. Speichern ersetzt es durch das hier Gezeigte.',
     'This layout was changed while the dialog was open. Saving keeps those changes wherever you changed nothing here.': 'Das Layout wurde geändert, während der Dialog offen war. Speichern behält diese Änderungen überall dort, wo hier nichts geändert wurde.',
     'Save shortcut': 'Belegung speichern',

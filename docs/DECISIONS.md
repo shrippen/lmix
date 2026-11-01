@@ -7679,8 +7679,20 @@ bearbeitet wird (verbietet Bedienung auf Sendung, die Vorrang hat).
   lehnte das ab, die Arbeit im Dialog wäre verloren).
 - Der Dialog sagt es (`KanteCallout`, solange das Layout anders ist als
   beim Öffnen): „wird behalten, wo hier nichts geändert wurde“ bzw.
-  (Warnung) „Speichern ersetzt es durch das hier Gezeigte“, beide mit
-  „Neu laden“ (übernimmt den jetzigen Stand, verwirft die Arbeitskopie).
+  (Warnung, auch wenn der Abgleich an einem doppelten Input scheitert)
+  „Speichern ersetzt es durch das hier Gezeigte“, beide mit „Neu laden“
+  (übernimmt den jetzigen Stand, verwirft die Arbeitskopie).
+- `set_layout` nennt das Layout über seine Id, nicht die Nummer: Entfernt
+  eine andere Console (oder ein Rückgängig) ein Layout davor, träfe die
+  Nummer beim Öffnen ein anderes Layout und überschriebe es, womöglich auf
+  Sendung. Ist das bearbeitete Layout selbst weg, sagt es der Hinweis
+  (Warnung, ohne „Neu laden“), Speichern ist gesperrt.
+- Grenze: Boxen werden über ihre Stelle in der Liste zugeordnet (die
+  Boxen haben keine Id). Ersetzt eine andere Console das Layout mit gleich
+  vielen, aber anderen Boxen, gilt der Abgleich trotzdem Stelle für Stelle;
+  der Hinweis erscheint, der Inhalt kann aber gemischt werden. Mit
+  `swap_boxes`, `set_box_input` und `show_box` (die die Boxen nicht
+  umordnen) passt die Zuordnung immer.
 - Muster wie `AddOutputDialog` (Zustand der Show als Eigenschaft, der
   Dialog vergleicht selbst); kein Rückfrage-Dialog beim Speichern, der
   im Betrieb aufhielte.
@@ -7689,4 +7701,5 @@ bearbeitet wird (verbietet Bedienung auf Sendung, die Vorrang hat).
 Tausch während offen bleibt mit eigenem Platz, eigene Änderung am selben
 Teil gewinnt, entfernte Box, doppelter Input fällt auf das Gezeigte
 zurück, unverändert ohne Hinweis, Boxen anderswo hinzugefügt mit Hinweis
-und „Neu laden“, neues Layout unverändert.
+und „Neu laden“, neues Layout unverändert, Speichern über die Id nach
+Entfernen des Layouts davor, entferntes Layout gesperrt mit Hinweis.

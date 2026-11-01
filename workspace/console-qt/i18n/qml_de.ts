@@ -3043,7 +3043,7 @@
   <context>
     <name>LayoutDialog</name>
     <message>
-      <location filename="../qml/LayoutDialog.qml" line="+82" />
+      <location filename="../qml/LayoutDialog.qml" line="+84" />
       <source>Top right quarter</source>
       <translation>Viertel oben rechts</translation>
     </message>
@@ -3108,7 +3108,12 @@
       <translation>Layout hinzufügen</translation>
     </message>
     <message>
-      <location line="+155" />
+      <location line="+167" />
+      <source>This layout was removed while the dialog was open. It can no longer be saved.</source>
+      <translation>Das Layout wurde entfernt, während der Dialog offen war. Es lässt sich nicht mehr speichern.</translation>
+    </message>
+    <message>
+      <location line="+2" />
       <source>This layout was changed elsewhere while the dialog was open. Saving replaces it with what is shown here.</source>
       <translation>Das Layout wurde anderswo geändert, während der Dialog offen war. Speichern ersetzt es durch das hier Gezeigte.</translation>
     </message>
@@ -3118,7 +3123,7 @@
       <translation>Das Layout wurde geändert, während der Dialog offen war. Speichern behält diese Änderungen überall dort, wo hier nichts geändert wurde.</translation>
     </message>
     <message>
-      <location line="+2" />
+      <location line="+3" />
       <source>Reload</source>
       <translation>Neu laden</translation>
     </message>
@@ -3263,12 +3268,12 @@
       <translation>+ Box</translation>
     </message>
     <message>
-      <location line="-661" />
+      <location line="-676" />
       <source>Empty</source>
       <translation>Leer</translation>
     </message>
     <message>
-      <location line="+553" />
+      <location line="+568" />
       <source>Select box %1</source>
       <translation>Box %1 wählen</translation>
     </message>

@@ -255,7 +255,7 @@ KanteDialog {
     // size itself to this one.
     contentHeight: column.implicitHeight
 
-    acceptEnabled: dialog.valid
+    acceptEnabled: dialog.valid && !dialog.gone
 
     onOpened: {
         nameField.text = ""
@@ -273,8 +273,11 @@ KanteDialog {
     /** The live layout has other boxes or a background than when it was
      *  taken (a cue, shortcut or another console changed it). */
     readonly property bool changedMeanwhile: live !== null && !sameLayout(live, base)
-    /** Boxes were added or removed meanwhile: they cannot be told apart, Save replaces them. */
-    readonly property bool boxesChangedMeanwhile: changedMeanwhile && live.boxes.length !== base.boxes.length
+    /** Changed meanwhile so that the edits cannot be laid over it (see
+     *  `mix`): Save replaces it with what the dialog shows. */
+    readonly property bool replacesLive: changedMeanwhile && mix(chosenBackground()) === null
+    /** Removed meanwhile (another console, an undo): nothing to save to. */
+    readonly property bool gone: visible && base !== null && live === null
 
     /** Takes `l` (null: a new layout) into the dialog, dropping what was changed here. */
     function load(l) {
@@ -311,18 +314,22 @@ KanteDialog {
         })
     }
 
+    function chosenBackground() {
+        return background.currentIndex > 0 ? pictures[background.currentIndex - 1].id : null
+    }
+
     /** The working copy over the live layout: a part of a box changed here
-     *  wins, every other part is taken as it is now. Boxes added or removed
-     *  elsewhere, or a mix that would show an input twice (lmix-core
-     *  refuses that): the working copy as it is. */
-    function merged(bg) {
+     *  wins, every other part is taken as it is now. Boxes are matched by
+     *  their place in the list. Null when that cannot be done: boxes added
+     *  or removed elsewhere, or a mix that would show an input twice
+     *  (lmix-core refuses that). */
+    function mix(bg) {
         const current = liveNow()
-        const own = { background: bg, boxes: boxes }
         if (!current || current.boxes.length !== base.boxes.length)
-            return own
+            return null
         const was = base.boxes.map(fromSpec), now = current.boxes.map(fromSpec)
         const wasBg = base.background || null
-        const mix = {
+        const result = {
             background: bg === wasBg ? current.background || null : bg,
             boxes: boxes.map(b => {
                 if (b.origin < 0)
@@ -335,8 +342,12 @@ KanteDialog {
                 return out
             })
         }
-        const used = mix.boxes.map(b => b.input).concat(mix.background ? [mix.background] : [])
-        return used.every((id, i) => used.indexOf(id) === i) ? mix : own
+        const used = result.boxes.map(b => b.input).concat([result.background]).filter(id => id !== null)
+        return used.every((id, i) => used.indexOf(id) === i) ? result : null
+    }
+    /** What Save sends: the mix, else the working copy as it is. */
+    function merged(bg) {
+        return mix(bg) || { background: bg, boxes: boxes }
     }
 
     /** A box of a layout as the dialog holds it. */
@@ -377,7 +388,7 @@ KanteDialog {
     }
 
     onAccepted: {
-        var bg = background.currentIndex > 0 ? pictures[background.currentIndex - 1].id : null
+        var bg = chosenBackground()
         var result = merged(bg)
         var specs = result.boxes.map(b => ({
             rect: b.rect,
@@ -388,7 +399,9 @@ KanteDialog {
             hidden: b.hidden
         }))
         if (layout)
-            act({ action: "set_layout", layout: layout.number, background: result.background, boxes: specs })
+            // By id: a number would hit another layout once one before it
+            // is removed while the dialog is open.
+            act({ action: "set_layout", layout: String(base.id), background: result.background, boxes: specs })
         else
             act({ action: "add_layout", name: nameField.text.trim() || null, background: bg, boxes: specs })
     }
@@ -402,12 +415,14 @@ KanteDialog {
         KanteCallout {
             objectName: "changedHint"
             Layout.fillWidth: true
-            visible: dialog.changedMeanwhile
-            kind: dialog.boxesChangedMeanwhile ? KanteCallout.Kind.Warn : KanteCallout.Kind.Info
-            text: dialog.boxesChangedMeanwhile
+            visible: dialog.changedMeanwhile || dialog.gone
+            kind: dialog.gone || dialog.replacesLive ? KanteCallout.Kind.Warn : KanteCallout.Kind.Info
+            text: dialog.gone ? qsTr("This layout was removed while the dialog was open. It can no longer be saved.")
+                : dialog.replacesLive
                 ? qsTr("This layout was changed elsewhere while the dialog was open. Saving replaces it with what is shown here.")
                 : qsTr("This layout was changed while the dialog was open. Saving keeps those changes wherever you changed nothing here.")
             KanteButton {
+                visible: !dialog.gone
                 text: qsTr("Reload")
                 onClicked: dialog.reload()
             }
