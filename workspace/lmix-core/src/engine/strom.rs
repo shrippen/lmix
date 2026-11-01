@@ -640,6 +640,36 @@ impl StromEngine {
         check(resp).await.map(|_| ())
     }
 
+    /// Close the gates of a delayed stream's flow `id` (STR.5) before it
+    /// stops: the waiting seconds are dropped and the stop's EOS reaches
+    /// the sink at once (RTMP unpublishes). The flow says whether it has
+    /// gates, also one a restarted core took over. Best effort: if this
+    /// fails the stop still ends, strom bounds its drain.
+    async fn close_send_gates(&self, id: FlowId) {
+        let flow = match self.get_flow(id).await {
+            Ok(Some(flow)) if flow.running => flow,
+            // Nothing runs, nothing waits: strom drains only a playing flow.
+            Ok(_) => return,
+            Err(e) => {
+                tracing::warn!(%id, error = %e, "send gates unknown, stop drains through the delay");
+                return;
+            }
+        };
+        for gate in flows::send_gates(&flow) {
+            let path = format!("/flows/{id}/elements/{gate}/properties");
+            let body =
+                serde_json::json!({ "property_name": "drop", "value": PropertyValue::Bool(true) });
+            let sent = self.http.patch(self.url(&path)).json(&body).send().await;
+            let closed = match sent {
+                Ok(resp) => check(resp).await.map(|_| ()),
+                Err(e) => Err(net(e)),
+            };
+            if let Err(e) = closed {
+                tracing::warn!(%id, gate, error = %e, "send gate not closed, stop drains through the delay");
+            }
+        }
+    }
+
     // ---- Vision mixer ----
 
     async fn mixer_call<T: Serialize>(&self, action: &str, body: &T) -> Result<(), EngineError> {
@@ -2106,7 +2136,9 @@ impl Engine for StromEngine {
             }
             Command::StopOutput { id } => {
                 self.forget_recording(*id);
-                self.drop_flow(flows::output_flow_id(*id)).await
+                let flow = flows::output_flow_id(*id);
+                self.close_send_gates(flow).await;
+                self.drop_flow(flow).await
             }
             Command::SetOutputSound { id, feed, bus } => {
                 // The switcher sends it only for an output with sound before
@@ -3549,6 +3581,77 @@ mod tests {
         for _ in 0..3 {
             assert_eq!(engine.output_stats(id, &spec).await, None);
             tokio::time::sleep(Duration::from_millis(50)).await;
+        }
+    }
+
+    /// STR.5: stopping a delayed stream first closes its gates, so the
+    /// waiting seconds are dropped and the stop's EOS reaches the sink at
+    /// once (RTMP unpublishes); a live stream goes without, and so does a
+    /// flow that no longer runs (strom would refuse the gates).
+    #[tokio::test]
+    async fn a_delayed_stream_closes_its_gates_before_it_stops() {
+        type Calls = std::sync::Arc<std::sync::Mutex<Vec<String>>>;
+        for (delay_s, running, gates) in [(5, true, 2), (0, true, 0), (5, false, 0)] {
+            let id = OutputId::new();
+            let spec = OutputSpec::Rtmp {
+                url: "rtmp://192.0.2.1/live".into(),
+                key: "key".into(),
+                video_kbps: 6000,
+                encoding: Default::default(),
+                delay_s,
+            };
+            let flow = flows::output_flow(
+                id,
+                &spec,
+                crate::switcher::Feed::Program,
+                None,
+                MixerBackend::Cpu,
+                Default::default(),
+                flows::LiveMkv::Yes,
+            );
+            let flow = Flow { running, ..flow };
+            let answer = serde_json::json!({ "flow": flow });
+            let calls = Calls::default();
+            let seen = calls.clone();
+            let app = axum::Router::new().fallback(move |request: axum::extract::Request| {
+                let (seen, answer) = (seen.clone(), answer.clone());
+                async move {
+                    let call = format!("{} {}", request.method(), request.uri().path());
+                    let body = axum::body::to_bytes(request.into_body(), 1 << 20)
+                        .await
+                        .unwrap();
+                    let body = String::from_utf8_lossy(&body);
+                    seen.lock()
+                        .unwrap()
+                        .push(format!("{call} {body}").trim().to_string());
+                    axum::Json(answer)
+                }
+            });
+            let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+            let addr = listener.local_addr().unwrap();
+            tokio::spawn(async move { axum::serve(listener, app).await.unwrap() });
+            let engine = StromEngine::new(
+                format!("http://{addr}"),
+                MixerBackend::Cpu,
+                MonitorOut::None,
+            );
+
+            engine.run(&Command::StopOutput { id }).await.unwrap();
+
+            let flow_path = format!("/api/flows/{}", flows::output_flow_id(id));
+            let calls = calls.lock().unwrap().clone();
+            let closed: Vec<_> = calls.iter().filter(|c| c.starts_with("PATCH")).collect();
+            assert_eq!(closed.len(), gates, "{calls:?}");
+            for call in &closed {
+                assert!(call.contains(&format!("{flow_path}/elements/send_gate_")));
+                assert!(call.contains(r#""property_name":"drop""#) && call.contains("true"));
+            }
+            // The gates close before the flow goes.
+            assert_eq!(
+                calls.last(),
+                Some(&format!("DELETE {flow_path}")),
+                "{calls:?}"
+            );
         }
     }
 

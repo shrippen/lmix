@@ -237,6 +237,29 @@ TestCase {
         verify(!p.composing, "another collection ends composing")
     }
 
+    function test_a_list_switched_off_keeps_its_one_shots_in_the_collection() {
+        // "Door" stays in the collection while its list has no pads: not
+        // counted, not shown, kept when composing; back once on again.
+        const off = Object.assign({}, test.padList, { pads: false })
+        const other = { id: "list-more", number: 3, name: "More", pads: true,
+            cues: [{ id: "p-bell", name: "Bell", kind: "sound" }] }
+        fakeShell.show = Object.assign({}, fakeShell.show, { cue_lists: [off, other] })
+        const p = page()
+        compare(findChild(p, "collection:Act 1").subtitle, "1 mood · 0 one-shots")
+        p.collectionId = "c-act1"
+        compare(p.shownPads.length, 0)
+        findChild(p, "compose").clicked()
+        findChild(p, "pad:Bell").clicked()
+        compare(fakeShell.acted[0].moods.collections[0].pads, ["p-door", "p-bell"])
+        fakeShell.show = Object.assign({}, fakeShell.show, { cue_lists: [test.padList, other] })
+        compare(findChild(p, "collection:Act 1").subtitle, "1 mood · 1 one-shot")
+    }
+
+    function test_a_full_collection_says_that_hidden_one_shots_count() {
+        compare(Texts.message(JSON.stringify({ error: { error: "collection_full", collection: "Act 1", max: 256 } })),
+            "Collection Act 1 holds at most 256 entries, one-shots of lists without pads included")
+    }
+
     function test_the_side_bars_fold() {
         const p = page()
         const collections = findChild(p, "collections")

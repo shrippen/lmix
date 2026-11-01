@@ -12,7 +12,7 @@ use std::net::SocketAddr;
 use std::time::Duration;
 
 use lmix_types::TargetKind;
-use tokio::io::{AsyncReadExt, AsyncWriteExt};
+use tokio::io::{AsyncReadExt, AsyncWrite, AsyncWriteExt};
 
 use crate::targets::TargetConfig;
 
@@ -103,14 +103,23 @@ async fn send_tcp(peer: SocketAddr, packet: &[u8]) -> Result<(), String> {
     let mut stream = tokio::net::TcpStream::connect(peer)
         .await
         .map_err(|_| "cannot connect".to_string())?;
+    write_frame(&mut stream, packet).await?;
+    // Sent: the drain holds neither the time limit nor the queue.
+    tokio::spawn(drain(stream));
+    Ok(())
+}
+
+/// `packet` as one SLIP frame, then our side closed: a close that fails
+/// (the peer reset) may lose the frame, so it counts as not sent.
+async fn write_frame<W: AsyncWrite + Unpin>(stream: &mut W, packet: &[u8]) -> Result<(), String> {
     stream
         .write_all(&slip(packet))
         .await
         .map_err(|e| format!("not sent: {e}"))?;
-    let _ = stream.shutdown().await;
-    // Sent: the drain holds neither the time limit nor the queue.
-    tokio::spawn(drain(stream));
-    Ok(())
+    stream
+        .shutdown()
+        .await
+        .map_err(|e| format!("not sent: {e}"))
 }
 
 /// How long a sent frame waits for the peer to close, reading what it
@@ -229,6 +238,43 @@ mod tests {
             send(&target, &address, &packet).await.unwrap();
             assert_eq!(got.recv().await.unwrap(), slip(&packet));
         }
+    }
+
+    /// Takes every byte, fails to close: what a reset peer does to us.
+    struct ResetOnClose(Vec<u8>);
+
+    impl AsyncWrite for ResetOnClose {
+        fn poll_write(
+            mut self: std::pin::Pin<&mut Self>,
+            _: &mut std::task::Context<'_>,
+            buf: &[u8],
+        ) -> std::task::Poll<std::io::Result<usize>> {
+            self.0.extend_from_slice(buf);
+            std::task::Poll::Ready(Ok(buf.len()))
+        }
+
+        fn poll_flush(
+            self: std::pin::Pin<&mut Self>,
+            _: &mut std::task::Context<'_>,
+        ) -> std::task::Poll<std::io::Result<()>> {
+            std::task::Poll::Ready(Ok(()))
+        }
+
+        fn poll_shutdown(
+            self: std::pin::Pin<&mut Self>,
+            _: &mut std::task::Context<'_>,
+        ) -> std::task::Poll<std::io::Result<()>> {
+            let reset = std::io::Error::from(std::io::ErrorKind::ConnectionReset);
+            std::task::Poll::Ready(Err(reset))
+        }
+    }
+
+    #[tokio::test]
+    async fn a_failed_close_is_not_sent() {
+        let mut stream = ResetOnClose(Vec::new());
+        let reason = write_frame(&mut stream, b"x").await.unwrap_err();
+        assert_eq!(reason, "not sent: connection reset");
+        assert_eq!(stream.0, slip(b"x"));
     }
 
     #[tokio::test]
