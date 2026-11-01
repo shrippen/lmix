@@ -114,7 +114,7 @@ async fn device(
         {
             Ok(_) => failing = false,
             Err(error) if !failing => {
-                tracing::warn!(%url, error = %error.without_url(), "HTTP tally not delivered");
+                tracing::warn!(url = %lmix_types::srt::redact_url(&url), error = %error.without_url(), "HTTP tally not delivered");
                 failing = true;
             }
             Err(_) => {}

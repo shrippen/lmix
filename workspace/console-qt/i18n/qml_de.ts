@@ -434,12 +434,12 @@
     <message>
       <location line="+1" />
       <location line="+72" />
-      <location line="+104" />
+      <location line="+107" />
       <source>Address</source>
       <translation>Adresse</translation>
     </message>
     <message>
-      <location line="-162" />
+      <location line="-165" />
       <source>device id</source>
       <translation>Geräte-ID</translation>
     </message>
@@ -474,7 +474,7 @@
       <translation>Host oder IP, oder srt://… einfügen</translation>
     </message>
     <message>
-      <location line="+23" />
+      <location line="+26" />
       <source>Port</source>
       <translation>Port</translation>
     </message>
@@ -570,12 +570,12 @@
       <translation>Name</translation>
     </message>
     <message>
-      <location line="-621" />
+      <location line="-624" />
       <source>This address does not read: %1</source>
       <translation>Diese Adresse liest sich nicht: %1</translation>
     </message>
     <message>
-      <location line="+628" />
+      <location line="+631" />
       <source>optional</source>
       <translation>optional</translation>
     </message>

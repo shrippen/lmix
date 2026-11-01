@@ -165,7 +165,7 @@ KanteDialog {
         srtPasteProblem = null
         srtModeIndex = Math.max(0, srtModes.findIndex(m => m.value === a.mode))
         srtHost.text = a.host || ""
-        srtHost.lastLength = srtHost.text.length
+        srtHost.lastText = srtHost.text
         srtPort.text = a.port ? String(a.port) : ""
         srtLatencyKept = a.latency_ms || 0
         srtLatency.value = a.latency_ms !== undefined ? a.latency_ms : srtLimits.latency_ms
@@ -188,7 +188,7 @@ KanteDialog {
         srtLatencyKept = 0
         srtDelayKept = 0
         srtPasteProblem = null
-        srtHost.lastLength = 0
+        srtHost.lastText = ""
     }
 
     readonly property var patterns: Texts.choices("patterns", core.choices("patterns"))
@@ -594,26 +594,29 @@ KanteDialog {
                         Layout.fillWidth: true
                         placeholderText: dialog.srtMode === "listener" ? qsTr("all") : qsTr("host or IP, or paste srt://…")
                         invalid: !!dialog.srtPasteProblem || (!!dialog.srtRefusal && dialog.srtRefusal.problem === "bad_host")
-                        // A pasted srt:// address fills the fields: on a paste
-                        // (more than one character at once) or when the field
-                        // is left, not on each key, or typing one by hand
-                        // would fill the port after its first digit.
-                        property int lastLength: 0
-                        function takeAddress(pasted) {
-                            if (pasted && /^srt:\/\//i.test(text.trim()))
+                        // A pasted srt:// address fills the fields at once; one
+                        // typed by hand only when the field is left, or the
+                        // fields would fill after the port's first digit.
+                        // Pasted: the text grew by two or more characters, or
+                        // it is an srt:// address now and was none before
+                        // (a paste over a selection). Typing over a selected
+                        // character inside an address is neither.
+                        property string lastText: ""
+                        function looksPasted(before, now) {
+                            const address = /^srt:\/\/./i
+                            return address.test(now.trim())
+                                && (now.length - before.length >= 2 || !/^srt:\/\//i.test(before.trim()))
+                        }
+                        onTextEdited: {
+                            const pasted = looksPasted(lastText, text)
+                            lastText = text
+                            if (pasted)
                                 dialog.applySrt(text.trim())
                             else
                                 dialog.srtPasteProblem = null
                         }
-                        onTextEdited: {
-                            // One key adds or removes one character; a paste
-                            // (also over a selection of any length) does not.
-                            const pasted = Math.abs(text.length - lastLength) !== 1
-                            lastLength = text.length
-                            takeAddress(pasted)
-                        }
                         onEditingFinished: if (/^srt:\/\//i.test(text.trim())) dialog.applySrt(text.trim())
-                        onTextChanged: if (!activeFocus) lastLength = text.length
+                        onTextChanged: if (!activeFocus) lastText = text
                     }
                     QQC2.Label { text: qsTr("Port") }
                     KanteTextField {

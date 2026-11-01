@@ -305,8 +305,25 @@ TestCase {
         compare(named(dialog.contentItem, "srtPort").text, "9000")
     }
 
+    function test_typing_over_a_selected_character_fills_nothing() {
+        var dialog = openSrt()
+        var host = named(dialog.contentItem, "srtHost")
+        host.forceActiveFocus()
+        var typed = "srt://cam:9001"
+        for (var i = 0; i < typed.length; i++)
+            keyClick(typed[i])
+        compare(host.text, "srt://cam:9001")
+        // A typo fixed by selecting it and typing over it: same length, and
+        // the result reads as an address (the stand-in knows srt://cam:9000).
+        host.select(host.text.length - 1, host.text.length)
+        keyClick(Qt.Key_0)
+        compare(host.text, "srt://cam:9000", "nothing taken apart while typing")
+        compare(named(dialog.contentItem, "srtPort").text, "")
+    }
+
     function test_a_core_refusal_names_the_srt_problem() {
         compare(Texts.message(JSON.stringify({ error: { error: "bad_srt",
-            problem: { problem: "passphrase_length", bytes: 8, min: 10, max: 79 } } })).indexOf("8") >= 0, true)
+            problem: { problem: "passphrase_length", bytes: 8, min: 10, max: 79 } } })),
+            "SRT: A passphrase has 10 to 79 bytes, this one 8; umlauts and other special characters count twice or more.")
     }
 }

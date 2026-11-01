@@ -255,6 +255,7 @@ impl SourceSpec {
         match &mut source {
             Self::Srt { uri, .. } => *uri = redact_url(uri),
             Self::Url { url } | Self::Web { url, .. } => *url = redact_url(url),
+            Self::Whip { endpoint } => *endpoint = redact_url(endpoint),
             _ => {}
         }
         source
@@ -265,7 +266,9 @@ impl SourceSpec {
         match self {
             Self::Pattern { pattern } => format!("Pattern {pattern:?}"),
             Self::File { path } => file_stem(path),
-            Self::Url { url } => url.clone(),
+            // Names show in the multiview, tally and remote panels: no
+            // `user:password@`, no token.
+            Self::Url { url } => crate::srt::redact_url(url),
             // Without the query: it can hold a passphrase.
             Self::Srt { uri, .. } => crate::srt::public_uri(uri),
             Self::Device { id, .. } | Self::AudioDevice { id } => id.clone(),
@@ -277,7 +280,7 @@ impl SourceSpec {
             },
             Self::Ndi { name } => name.clone(),
             Self::Whip { endpoint } => format!("WHIP {endpoint}"),
-            Self::Web { url, .. } => url.clone(),
+            Self::Web { url, .. } => crate::srt::redact_url(url),
             Self::Graphics { graphics } => format!("Graphics {graphics}"),
             Self::Card { device, .. } => format!("Card {}", u64::from(*device) + 1),
         }
@@ -884,5 +887,39 @@ mod tests {
         };
         assert!(!format!("{:?}", out.without_secrets()).contains("0123456789"));
         assert_eq!(out.default_name(), "SRT srt://cdn:9000");
+        let whole = crate::OutputSpec::Rtmp {
+            url: "rtmp://ingest.example/live/SECRETKEY".into(),
+            key: String::new(),
+            video_kbps: 6000,
+            encoding: Default::default(),
+            delay_s: 0,
+        };
+        let shown = format!("{:?}", whole.without_secrets());
+        assert!(!shown.contains("SECRETKEY"), "{shown}");
+        assert!(shown.contains("rtmp://ingest.example/live/…"), "{shown}");
+        let app_only = crate::OutputSpec::Rtmp {
+            url: "rtmp://ingest.example/live".into(),
+            key: String::new(),
+            video_kbps: 6000,
+            encoding: Default::default(),
+            delay_s: 0,
+        };
+        assert!(
+            format!("{:?}", app_only.without_secrets()).contains("rtmp://ingest.example/live\"")
+        );
+        let whip = SourceSpec::Whip {
+            endpoint: "stage?token=abc".into(),
+        };
+        assert!(!format!("{:?}", whip.without_secrets()).contains("abc"));
+        // Names of new inputs leave a password and tokens out.
+        assert_eq!(rtsp.default_name(), "rtsp://…@cam/live");
+        let page = SourceSpec::Web {
+            url: "https://grafana.local/d/x?token=abc&theme=dark".into(),
+            css: String::new(),
+        };
+        assert_eq!(
+            page.default_name(),
+            "https://grafana.local/d/x?token=…&theme=dark"
+        );
     }
 }

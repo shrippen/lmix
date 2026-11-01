@@ -304,6 +304,28 @@ pub enum DisplayMode {
     Drm { connector: u32 },
 }
 
+/// `rtmp://host/app/KEY` as `rtmp://host/app/…`; an address with no
+/// part after the application stays.
+fn without_last_part(url: &str) -> String {
+    let (base, query) = url
+        .split_once('?')
+        .map_or((url, None), |(b, q)| (b, Some(q)));
+    let after_host = base.find("://").map_or(0, |at| at + 3);
+    let path_parts = base[after_host..]
+        .trim_end_matches('/')
+        .matches('/')
+        .count();
+    let mut out = match base.trim_end_matches('/').rsplit_once('/') {
+        Some((head, _)) if path_parts >= 2 => format!("{head}/…"),
+        _ => base.to_string(),
+    };
+    if let Some(query) = query {
+        out.push('?');
+        out.push_str(query);
+    }
+    out
+}
+
 impl OutputSpec {
     /// Its video encoding; `None` for outputs that send raw picture.
     pub fn encoding(&self) -> Option<&VideoEncoding> {
@@ -416,7 +438,11 @@ impl OutputSpec {
             Self::Srt { uri, .. } => *uri = redact_url(uri),
             Self::Rtmp { url, key, .. } => {
                 *url = redact_url(url);
-                if !key.is_empty() {
+                if key.is_empty() {
+                    // The whole ingest address with the key as its last
+                    // part (`rtmp://host/app/KEY`).
+                    *url = without_last_part(url);
+                } else {
                     *key = "…".into();
                 }
             }

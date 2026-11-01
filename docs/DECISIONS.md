@@ -7191,22 +7191,41 @@ Slot nimmt eine Spur).
 
 Nachtrag zu „SRT-Input mit Feldern statt URI“, aus dem Abschluss-Review
 von #217:
-- **Hosts in anderen Schriften**: `kamera-büro.local` gilt wieder als Host
-  (Buchstaben nach Unicode). Geprüft mit GStreamer 1.28: `srtsrc` dekodiert
-  den prozentkodierten Host (`kamera-b%C3%BCro.local`) und löst über GLib
-  auf, das ihn in Punycode wandelt (`xn--kamera-bro-heb.local`); ob der Name
-  dann gefunden wird, ist Sache von DNS bzw. mDNS. Abgelehnt bleiben `:`
-  außer in IPv6, `@`, `/`, `?`, `#`, Leerraum.
+- **Hosts in anderen Schriften**: Buchstaben jeder Schrift gelten wieder
+  (`char::is_alphabetic`, Ziffern nur ASCII, also kein `x²`). Geprüft mit
+  GStreamer 1.28: `srtsrc` dekodiert den prozentkodierten Host und löst über
+  GLib auf, das ihn in Punycode wandelt (`bücher.example` →
+  `xn--bcher-kva.example`). Das trägt im DNS. Ein mDNS-Name wie
+  `kamera-büro.local` löst so wahrscheinlich **nicht** auf: Avahi
+  veröffentlicht `.local`-Namen in UTF-8 (RFC 6762), gefragt wird nach
+  `xn--…`. lmix nimmt ihn trotzdem an (die Prüfung kennt das Netz nicht);
+  wer so einen Namen hat, nimmt die IP-Adresse. Abgelehnt bleiben `:`
+  außer in IPv6, `@`, `/`, `?`, `#`, Leerraum. `[]` gilt als kein Host.
 - **IPv6 in Klammern** (`[fd00::5]` im Feld „Adresse“) gilt wie ohne; die
   Zone nach `%` nur aus `A–Z a–z 0–9 _ . -` (ein Schnittstellenname), sonst
   stünde ein rohes Leerzeichen in der URI.
 - **Geheimnisse im Log nach Struktur**: Statt den Text eines Befehls nach
   `passphrase=` zu durchsuchen (endete bei `"` oder Leerzeichen, der Rest
-  einer Passphrase stand im Log), ersetzt `Command::without_secrets` vor dem
-  Loggen die Felder: SRT-Passphrase (bis zum nächsten `&`, gleich welche
-  Zeichen; `srt::redact_url`), RTMP-Schlüssel, `user:passwort@` in Adressen
-  von Inputs und Ausgängen. Der vorgeschlagene Name eines neuen
-  SRT-Ausgangs zeigt die Adresse ebenfalls ohne Abfrage.
+  einer Passphrase stand im Log), ersetzen `Command::without_secrets` (Kern,
+  gescheiterter Engine-Befehl) und `Action::without_secrets` (Console,
+  abgelehnte oder nicht zustellbare Aktion) vor dem Loggen die Felder:
+  - in Adressen (`srt::redact_url`): `user:passwort@` und die Werte von
+    `passphrase`, `password`, `pass`, `pwd`, `token`, `access_token`,
+    `auth`, `key`, `api_key`, `secret`, `sig` … (bis zum nächsten `&`,
+    gleich welche Zeichen); gilt für SRT-, URL-, Web- und WHIP-Inputs,
+    SRT- und RTMP-Ausgänge, Adressen von Ausgabezielen und den Pfad von
+    `http_request`;
+  - der RTMP-Schlüssel; ohne eigenen Schlüssel der letzte Teil der Adresse
+    (`rtmp://host/app/…`);
+  - das Geheimnis eines Ausgabeziels und die Werte aller Header von
+    `http_request` (`Authorization` …).
+  Ungültiges JSON aus QML loggt die Console nur mit seiner Länge. Die
+  HTTP-Tally-Ziele loggen ihre Adresse ebenso geschwärzt. Vorgeschlagene
+  Namen neuer Inputs (URL, Web) und SRT-Ausgänge zeigen die Adresse ohne
+  Passwort und Tokens; sie stehen im Multiview, bei Tally und Fernbedienung.
+  **Offen**: Meldet strom einen Fehler mit dem Text seiner Antwort
+  (`EngineError::Refused`), steht darin, was strom zurückgibt; ob das
+  Property-Werte samt URI sein können, ist nicht geprüft.
 - **Ablehnungen übersetzt**: `ActionError::BadSrt` trägt das `SrtProblem`
   (`{"error":"bad_srt","problem":{"problem":"…",…}}` statt `reason`); die
   Console nennt es in ihren Worten, auch wenn es über API, OSC oder Skript
@@ -7214,6 +7233,7 @@ von #217:
   außer der Console liest sie.
 - **Leeres Formular**: Ohne Host und Port sperrt der Dialog nur den Knopf,
   statt gleich „braucht die Adresse der Gegenseite“ in Rot zu zeigen.
-- **Einfügen über eine Auswahl**: Als Einfügen gilt jede Änderung, die
-  nicht genau ein Zeichen dazu- oder wegnimmt, auch eine gleich lange über
-  eine Auswahl.
+- **Einfügen**: Als Einfügen gilt, wenn der Text um zwei oder mehr Zeichen
+  wächst oder jetzt eine `srt://`-Adresse ist und vorher keine war (Einfügen
+  über eine Auswahl). Ein Zeichen über eine markierte Stelle getippt oder
+  gelöscht füllt nichts; die Felder füllen sich dann beim Verlassen.

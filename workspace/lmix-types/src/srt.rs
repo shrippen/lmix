@@ -205,7 +205,7 @@ impl SrtAddress {
     /// without host says so: without `mode` it would read as a listener.
     pub fn uri(&self) -> String {
         let mut query: Vec<(String, String)> = Vec::new();
-        if self.mode != SrtMode::Caller || self.host.is_empty() {
+        if self.mode != SrtMode::Caller || self.bare_host().is_empty() {
             query.push(("mode".into(), self.mode.word().into()));
         }
         if let Some(latency) = self.latency_ms {
@@ -236,10 +236,10 @@ impl SrtAddress {
     /// What strom cannot use, or what SRT refuses: a host that is no name
     /// or address, a passphrase outside 10–79 bytes (SRT counts bytes).
     pub fn check(&self) -> Result<(), SrtProblem> {
-        if self.host.is_empty() && self.mode != SrtMode::Listener {
+        if self.bare_host().is_empty() && self.mode != SrtMode::Listener {
             return Err(SrtProblem::NeedsHost { mode: self.mode });
         }
-        if !self.host.is_empty() && !is_host(self.bare_host()) {
+        if !self.bare_host().is_empty() && !is_host(self.bare_host()) {
             return Err(SrtProblem::BadHost {
                 host: self.host.clone(),
             });
@@ -297,8 +297,9 @@ pub fn check_srt(uri: &str, decoder_delay_ms: Option<u32>) -> Result<SrtAddress,
     }
 }
 
-/// A host name (letters of any script, digits, `-`, `_`, `.`: `srtsrc`
-/// resolves through GLib, which turns `kamera-büro.local` into Punycode),
+/// A host name (letters of any script, ASCII digits, `-`, `_`, `.`:
+/// `srtsrc` resolves through GLib, which turns `bücher.example` into
+/// Punycode; no `²` and the like),
 /// an IPv4 address or an IPv6 address, with a zone after `%` of
 /// `A–Z a–z 0–9 _ . -` (an interface name). Not `user@host`, a path, a
 /// port or blanks.
@@ -316,7 +317,7 @@ fn is_host(host: &str) -> bool {
         return zone_ok && address.parse::<std::net::Ipv6Addr>().is_ok();
     }
     host.chars()
-        .all(|c| c.is_alphanumeric() || "-_.".contains(c))
+        .all(|c| c.is_alphabetic() || c.is_ascii_digit() || "-_.".contains(c))
         && !host.starts_with(['.', '-'])
 }
 
@@ -329,9 +330,29 @@ pub fn public_uri(uri: &str) -> String {
     }
 }
 
-/// `url` without its secrets, for logs: the value of a `passphrase`
-/// parameter (whatever characters it has, up to the next `&`) and a
-/// `user:password@` before the host become `…`.
+/// Query parameters whose values are secrets (`SECRET_KEYS`, any case).
+const SECRET_KEYS: [&str; 15] = [
+    "passphrase",
+    "password",
+    "passwd",
+    "pass",
+    "pwd",
+    "token",
+    "access_token",
+    "auth",
+    "authorization",
+    "key",
+    "api_key",
+    "apikey",
+    "secret",
+    "sig",
+    "signature",
+];
+
+/// `url` without its secrets, for logs and names: the value of a
+/// `passphrase`, `password`, `token`, `key` … parameter (whatever
+/// characters it has, up to the next `&`) and a `user:password@` before
+/// the host become `…`.
 pub fn redact_url(url: &str) -> String {
     let (base, query) = match url.split_once('?') {
         Some((base, query)) => (base, Some(query)),
@@ -354,7 +375,11 @@ pub fn redact_url(url: &str) -> String {
         .split('&')
         .map(|pair| {
             let key = pair.split_once('=').map_or(pair, |(k, _)| k);
-            if decode(key).eq_ignore_ascii_case("passphrase") {
+            let key_text = decode(key);
+            if SECRET_KEYS
+                .iter()
+                .any(|secret| key_text.eq_ignore_ascii_case(secret))
+            {
                 format!("{key}=…")
             } else {
                 pair.to_string()
@@ -616,6 +641,15 @@ mod tests {
             ("srt://:1?pass%70hrase=x", "srt://:1?pass%70hrase=…"),
             ("rtsp://user:pw@cam/stream", "rtsp://…@cam/stream"),
             ("rtmp://live.example/app", "rtmp://live.example/app"),
+            (
+                "rtmp://h/app?username=u&password=p w&Token=t",
+                "rtmp://h/app?username=u&password=…&Token=…",
+            ),
+            (
+                "https://ha.local/?access_token=abc",
+                "https://ha.local/?access_token=…",
+            ),
+            ("srt://h:1?pbkeylen=16", "srt://h:1?pbkeylen=16"),
             ("http://host/a@b", "http://host/a@b"),
             ("no secret", "no secret"),
         ] {
@@ -631,6 +665,17 @@ mod tests {
             ..Default::default()
         };
         assert_eq!(host("kamera-büro.local").check(), Ok(()));
+        assert!(matches!(
+            host("x²").check(),
+            Err(SrtProblem::BadHost { .. })
+        ));
+        // Brackets around nothing are no host: a caller needs one, and the
+        // URI keeps the caller's mode (it would read as a listener).
+        let mut empty = host("[]");
+        assert!(matches!(empty.check(), Err(SrtProblem::NeedsHost { .. })));
+        assert_eq!(empty.uri(), "srt://:9000?mode=caller");
+        empty.mode = SrtMode::Listener;
+        assert_eq!(empty.check(), Ok(()));
         assert_eq!(
             host("kamera-büro.local").uri(),
             "srt://kamera-b%C3%BCro.local:9000"

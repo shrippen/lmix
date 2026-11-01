@@ -1554,6 +1554,38 @@ pub enum Action {
     },
 }
 
+impl Action {
+    /// The action with its secrets as `…`, for logs: an SRT passphrase,
+    /// an RTMP stream key, `user:password@` and tokens in addresses
+    /// (sources, outputs, targets), a target's secret, the values of HTTP
+    /// request headers (`Authorization` …).
+    pub fn without_secrets(&self) -> Action {
+        let mut action = self.clone();
+        match &mut action {
+            Action::AddInput { source, .. } | Action::ReplaceSource { source, .. } => {
+                *source = source.without_secrets()
+            }
+            Action::AddOutput { spec, .. } | Action::UpdateOutput { spec, .. } => {
+                *spec = spec.without_secrets()
+            }
+            Action::SetTarget { target } => {
+                if target.secret.as_deref().is_some_and(|s| !s.is_empty()) {
+                    target.secret = Some("…".into());
+                }
+                for address in &mut target.addresses {
+                    *address = crate::srt::redact_url(address);
+                }
+            }
+            Action::HttpRequest { path, headers, .. } => {
+                *path = crate::srt::redact_url(path);
+                headers.values_mut().for_each(|value| *value = "…".into());
+            }
+            _ => {}
+        }
+        action
+    }
+}
+
 /// Default FTB fade.
 pub const DEFAULT_FTB_MS: u32 = 1000;
 
@@ -1751,4 +1783,30 @@ pub enum ActionError {
     ShowFile { message: String },
     #[error("engine: {message}")]
     Engine { message: String },
+}
+
+#[cfg(test)]
+mod secret_tests {
+    use super::*;
+
+    #[test]
+    fn logged_actions_keep_no_secrets() {
+        let actions: Vec<Action> = serde_json::from_value(serde_json::json!([
+            {"action": "add_input", "source": {"kind": "srt", "uri": "srt://cam:9000?passphrase=geheim\" x&pbkeylen=16"}},
+            {"action": "replace_source", "input": 1, "source": {"kind": "url", "url": "rtsp://admin:geheim@cam/live"}},
+            {"action": "add_output", "spec": {"kind": "rtmp", "url": "rtmp://live.example/app", "key": "geheim-key"}},
+            {"action": "update_output", "output": 1, "spec": {"kind": "srt", "uri": "srt://cdn:9000?passphrase=geheim0123"}},
+            {"action": "set_target", "target": {"name": "ha", "kind": "http", "addresses": ["http://u:geheim@ha.local"], "secret": "geheim-token"}},
+            {"action": "http_request", "target": "ha", "path": "/api?token=geheim", "headers": {"Authorization": "Bearer geheim"}},
+        ]))
+        .unwrap();
+        for action in actions {
+            let shown = format!("{:?}", action.without_secrets());
+            assert!(!shown.contains("geheim"), "{shown}");
+            assert!(shown.contains('…'), "{shown}");
+        }
+        // Others stay as they are.
+        let cut = Action::Cut;
+        assert_eq!(cut.without_secrets(), Action::Cut);
+    }
 }
