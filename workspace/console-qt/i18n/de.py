@@ -1011,6 +1011,7 @@ DE = {
     'Stage: %1': 'Bühne: %1',
     'Cue list: %1': 'Cue-Liste: %1',
     'Mood: %1': 'Stimmung: %1',
+    'Collection %1 holds at most %2 entries, one-shots of lists without pads included': 'Sammlung %1 fasst höchstens %2 Einträge, Oneshots von Listen ohne Pads mitgezählt',
     'Triggers: %1': 'Auslöser: %1',
     'The show is locked: unlock it first': 'Die Show ist gesperrt: erst entsperren',
     'No removed input to bring back': 'Kein entfernter Input zum Zurückholen',

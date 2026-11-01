@@ -394,6 +394,7 @@ QtObject {
         case "bad_stage": return qsTr("Stage: %1").arg(e.reason)
         case "bad_cue_list": return qsTr("Cue list: %1").arg(e.reason)
         case "bad_mood": return qsTr("Mood: %1").arg(e.reason)
+        case "collection_full": return qsTr("Collection %1 holds at most %2 entries, one-shots of lists without pads included").arg(e.collection).arg(e.max)
         case "bad_triggers": return qsTr("Triggers: %1").arg(e.reason)
         case "locked": return qsTr("The show is locked: unlock it first")
         case "io_locked": return qsTr("%1 is locked").arg(ioClass(e["class"]))

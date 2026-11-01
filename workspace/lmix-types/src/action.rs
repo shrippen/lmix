@@ -1724,6 +1724,10 @@ pub enum ActionError {
     BadCueList { reason: String },
     #[error("mood: {reason}")]
     BadMood { reason: String },
+    /// A collection over its limit; pads of lists without pads count
+    /// (they wait there for their list to get pads again).
+    #[error("collection {collection}: at most {max} entries, pads of lists without pads included")]
+    CollectionFull { collection: String, max: usize },
     #[error("triggers: {reason}")]
     BadTriggers { reason: String },
     #[error("locked: unlock first")]
