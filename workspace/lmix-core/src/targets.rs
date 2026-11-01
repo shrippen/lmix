@@ -234,7 +234,7 @@ pub async fn send_one(
     let response = builder
         .send()
         .await
-        .map_err(|e| format!("{}: {}", redact_url(&url), reason(&e)))?;
+        .map_err(|e| format!("{}: {}", redact_url(&url), reason(e)))?;
     let status = response.status();
     if status.is_success() || status.is_redirection() {
         return Ok(());
@@ -245,19 +245,15 @@ pub async fn send_one(
 }
 
 /// Short reason of a failed request (reqwest's chain is long).
-fn reason(e: &reqwest::Error) -> String {
+fn reason(e: reqwest::Error) -> String {
     if e.is_timeout() {
         return "no answer in time".into();
     }
     if e.is_connect() {
         return "cannot connect".into();
     }
-    // reqwest's text names the address: without it.
-    let text = e.to_string();
-    match e.url() {
-        Some(url) => text.replace(url.as_str(), "…"),
-        None => text,
-    }
+    // reqwest's text names the address: without it, whatever the error.
+    e.without_url().to_string()
 }
 
 /// A probe of `target` (EXT.5): `GET` of its first address.
@@ -558,6 +554,10 @@ mod tests {
             spec("Gone", &["http://u:geheim@127.0.0.1:9"], None),
         )
         .unwrap();
+        // Neither timeout nor refused connection: an answer not HTTP.
+        let (garbled, _seen) = server("kaputt").await;
+        let garbled = garbled.replace("http://", "http://u:geheim@");
+        set(&mut targets, spec("Garbled", &[&garbled], None)).unwrap();
         for target in &targets {
             let TargetResult::Failed { reason } = send(&http, target, &request).await else {
                 panic!("no success");

@@ -7259,8 +7259,16 @@ Geheimnis weiter: in Ausgangsliste, Multiview, Fernbedienung, Tally, API.
   `RTMP …` mit dem Zusatz seiner Quelle (`(Multiview)`, `(Preview)`, beim
   ISO-Ausgang der Name des Inputs vor der Umbenennung, am neuen Namen der
   danach). Eindeutig, weil nur der unveränderte Vorschlag zählt; von Hand
-  umbenannte Namen bleiben. Hätte ein anderer Input bzw. Ausgang den neuen
-  Namen schon (ohne Groß-/Kleinschreibung), bleibt der alte (INP.2). Jede
+  umbenannte Namen bleiben. Hat ein anderer Input den neuen Namen schon
+  (ohne Groß-/Kleinschreibung, INP.2), bekommt er wie beim Anlegen die
+  nächste freie Nummer (`srt://relay:9000 (2)`): häufig, denn der neue Name
+  lässt genau weg, was zwei Inputs eines Relays unterscheidet (Passphrase,
+  `streamid`). Den alten Namen zu behalten, ließe gerade dort das Geheimnis
+  stehen. Ausgänge dürfen gleich heißen (auch `add_output` prüft das nicht):
+  zwei Streams zu einem Dienst heißen danach beide
+  `RTMP rtmp://a.example/live2/…`. Ein ISO-Ausgang, dessen Input nach dem Anlegen
+  des Ausgangs umbenannt wurde, behält seinen alten Namen samt Geheimnis:
+  er trägt den früheren Input-Namen, den der Kern nicht mehr kennt. Jede
   Umbenennung steht im Log (`info`, Id und Art, ohne Namen). Die Datei
   ändert sich erst beim nächsten Speichern.
   - Was einen solchen Input oder Ausgang **über den Namen** anspricht, trifft
@@ -7276,7 +7284,7 @@ Geheimnis weiter: in Ausgangsliste, Multiview, Fernbedienung, Tally, API.
     der Anwendung, wo der Schlüssel steht.
 - **Fehlertexte**: `bad_web_url` und die Lesefehler der Datenquellen
   (`{Adresse}: {Fehler}`) nennen die Adresse über `redact_url`, die Fehler
-  von reqwest ohne ihre URL. Ebenso die Ziele von Home Assistant, Companion
+  von reqwest ohne ihre URL (`without_url`, bei jedem Fehler). Ebenso die Ziele von Home Assistant, Companion
   und HTTP (ungültige Adresse, Sendefehler, HTTP-Status) und das Verwerfen
   einer zu lange wartenden Anfrage. Sie gehen an alle Clients und ins Log.
 - **Logs**: `Action::without_secrets` schwärzt auch die Adresse von

@@ -553,7 +553,9 @@ fn send_delays_in_range(show: &mut Show) {
 /// number a second one of the address got (`… (2)`), an output's with
 /// its source (`… (Multiview)`, `… (Preview)`, `… (<input>)` with the
 /// input's name then; new: the input's name now). One renamed by hand
-/// stays, and so does one whose new name another input or output has.
+/// stays. An input whose new name another has gets the next free number
+/// (two of one relay differing only in passphrase); outputs may share a
+/// name, as on adding.
 fn names_without_secrets(show: &mut Show) {
     use crate::switcher::same_input_name;
     use std::collections::HashMap;
@@ -599,8 +601,14 @@ fn names_without_secrets(show: &mut Show) {
         let Some(number) = numbered(&input.name, &old) else {
             continue;
         };
-        let new = format!("{}{number}", input.source.default_name());
-        if new != input.name && !taken(&names, &new, at) {
+        // Two of one relay may differ only in what the new name drops
+        // (passphrase, `streamid`): the second gets a number, as on adding.
+        let base = input.source.default_name();
+        let new = std::iter::once(format!("{base}{number}"))
+            .chain((2..).map(|n| format!("{base} ({n})")))
+            .find(|n| !taken(&names, n, at))
+            .expect("a free name");
+        if new != input.name {
             tracing::info!(input = %input.id, kind = "input", "name without the secrets of its address");
             names[at] = new.clone();
             input.name = new;
@@ -608,8 +616,9 @@ fn names_without_secrets(show: &mut Show) {
     }
     let now: HashMap<InputId, String> =
         show.inputs.iter().map(|i| (i.id, i.name.clone())).collect();
-    let mut names: Vec<String> = show.outputs.iter().map(|o| o.name.clone()).collect();
-    for (at, output) in show.outputs.iter_mut().enumerate() {
+    // Output names need not differ (as on adding): two to one relay may
+    // both be `SRT srt://relay:9000`.
+    for output in &mut show.outputs {
         let Some(old) = old_output_name(&output.spec) else {
             continue;
         };
@@ -623,9 +632,8 @@ fn names_without_secrets(show: &mut Show) {
                 format!("{new} ({})", now.get(&id).map_or("", String::as_str)),
             ),
         };
-        if output.name == old && new != old && !taken(&names, &new, at) {
+        if output.name == old && new != old {
             tracing::info!(output = %output.id, kind = "output", "name without the secrets of its address");
-            names[at] = new.clone();
             output.name = new;
         }
     }
@@ -1385,7 +1393,7 @@ mod tests {
                 "srt://x:1?passphrase=geheim0123",
                 2
             ),
-            // The new name is another input's: stays as it is.
+            // The new name is another input's: the first gets a number.
             serde_json::json!({ "id": InputId::new(), "name": "srt://cam:9000",
                 "source": { "kind": "pattern", "pattern": "bars" }, "slot": 3 }),
             input(far, far, 4),
@@ -1393,6 +1401,17 @@ mod tests {
             input(&format!("{far} (2)"), far, 5),
             // A "number" that is none: renamed by hand.
             input(&format!("{far} (B)"), far, 6),
+            // One relay, two passphrases: one name without them.
+            input(
+                "srt://relay:9000?passphrase=geheim0123",
+                "srt://relay:9000?passphrase=geheim0123",
+                7
+            ),
+            input(
+                "srt://relay:9000?passphrase=anders4567",
+                "srt://relay:9000?passphrase=anders4567",
+                8
+            ),
         ]);
         let far_id = value["inputs"][4]["id"].clone();
         let output = |name: &str, spec: serde_json::Value, source: serde_json::Value| serde_json::json!({ "id": OutputId::new(), "name": name, "spec": spec, "source": source });
@@ -1428,6 +1447,18 @@ mod tests {
             output(
                 "RTMP rtmp://server/live",
                 serde_json::json!({ "kind": "rtmp", "url": "rtmp://server/live", "key": "k" }),
+                program.clone()
+            ),
+            // Two streams to one service, the key at the address's end:
+            // both lose it, both have one name.
+            output(
+                "RTMP rtmp://a.example/live2/GEHEIM1",
+                serde_json::json!({ "kind": "rtmp", "url": "rtmp://a.example/live2/GEHEIM1" }),
+                program.clone()
+            ),
+            output(
+                "RTMP rtmp://a.example/live2/GEHEIM2",
+                serde_json::json!({ "kind": "rtmp", "url": "rtmp://a.example/live2/GEHEIM2" }),
                 program
             ),
         ]);
@@ -1438,15 +1469,16 @@ mod tests {
         assert_eq!(
             inputs,
             [
-                cam,
+                "srt://cam:9000 (2)",
                 "rtsp://…@cam/live",
                 "Bühne srt://x:1?passphrase=geheim0123",
                 "srt://cam:9000",
                 "srt://far:7001",
                 "srt://far:7001 (2)",
                 "srt://far:7001?passphrase=geheim0123 (B)",
-            ],
-            "the first would clash with the fourth"
+                "srt://relay:9000",
+                "srt://relay:9000 (2)",
+            ]
         );
         let outputs: Vec<&str> = show.outputs.iter().map(|o| o.name.as_str()).collect();
         assert_eq!(
@@ -1458,6 +1490,8 @@ mod tests {
                 "SRT srt://cdn:9001 (Multiview)",
                 "SRT srt://iso:9000 (srt://far:7001)",
                 "RTMP rtmp://server/live",
+                "RTMP rtmp://a.example/live2/…",
+                "RTMP rtmp://a.example/live2/…",
             ]
         );
     }
