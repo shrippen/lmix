@@ -155,6 +155,7 @@ fn main() {
                 "qml/MoodsPage.qml",
                 "qml/ShowInspector.qml",
                 "qml/DurationField.qml",
+                "qml/LimitedField.qml",
                 "qml/CueTime.qml",
                 "qml/CueAddBar.qml",
                 "qml/PathField.qml",

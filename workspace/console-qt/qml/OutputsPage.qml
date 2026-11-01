@@ -121,7 +121,7 @@ AppPage {
             enabled: root.backend.connected
             onClicked: all ? root.stopGroup("recordings") : root.act({ action: "start_outputs", group: "recordings" })
         },
-        KanteTextField {
+        LimitedField {
             id: markText
             objectName: "markText"
             visible: root.recording
@@ -131,7 +131,7 @@ AppPage {
             Component.onCompleted: {
                 const limits = JSON.parse(root.backend.choices("record_limits"))
                 if (limits.mark_text_max) {
-                    maximumLength = limits.mark_text_max
+                    limit = limits.mark_text_max
                 }
             }
         },

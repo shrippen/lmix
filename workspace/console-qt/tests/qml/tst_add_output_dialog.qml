@@ -228,6 +228,9 @@ TestCase {
         compare(field.maximumLength, 100)
         compare(example.text, "First file: Hall Slides_20261101_143000_00000.mp4")
         compare(JSON.parse(dialog.form()).file_name, "{output} {source}")
+        // Cut on whole characters, not inside an emoji.
+        field.text = "F".repeat(99) + "\u{1F600}"
+        compare(field.text, "F".repeat(99))
         field.text = "Talk"
         dialog.accept()
         compare(updates[0].action.form.file_name, "Talk")

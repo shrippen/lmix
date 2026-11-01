@@ -7649,6 +7649,42 @@ die HTTP-API.
 
 **Offen**: Animation (Boxen gleiten an den neuen Platz), PRC.12.
 
+## 2026-11-01 — Felder mit Längengrenze: `LimitedField`
+
+**Kontext**: `Texts.whole` (MOOD Stufe 7d) wirft die übrige Hälfte eines
+Emojis weg, wenn `maximumLength` es entzweischneidet; der `onTextChanged`-Block
+dafür stand dreimal kopiert (`MoodsDialog` NameField, `BusPanel`,
+`NarrowMixer`). Das Review fand zwei weitere Felder mit Grenze ohne ihn:
+Dateiname der Aufnahme (`AddOutputDialog`, `file_name_max`) und Notiz der
+Marke (`OutputsPage`, `mark_text_max`). Weitere `maximumLength` gibt es in der
+Console nicht.
+
+**Optionen**: den Block ein viertes und fünftes Mal kopieren; oder ein
+Baustein, der ihn einmal hält.
+
+**Entscheidung**: `qml/LimitedField.qml`, ein `KanteTextField` mit `limit`
+(0: Qts eigene Grenze, wie bisher `Binding on maximumLength` im NameField)
+und dem Schnitt auf ganze Zeichen. Alle fünf Stellen nehmen ihn; ihre
+eigenen `onEditingFinished`, Escape und das Wiederherstellen der Bindung
+bleiben wie sie waren (der Schnitt setzt `text` und hebt damit eine Bindung
+auf, die Stellen binden beim Fertigstellen neu). Kein Kante-Baustein: der
+Schnitt hängt an `Texts` der Console.
+Qt kürzt den eingefügten Teil, nicht das Ende: ein Emoji, mitten im Text
+getippt oder eingefügt, kann dort halb stehen bleiben. `Texts.whole` wirft
+darum jede einzelne Hälfte weg, wo sie auch steht (erste ohne zweite und
+zweite ohne erste), und das Feld lässt den Cursor an seiner Stelle, abzüglich
+der Einheiten, die davor wegfielen. Das Feld zählt UTF-16-Einheiten,
+lmix-core Zeichen: es ist höchstens strenger als der Kern.
+
+**Bricht**: nichts.
+
+**Geprüft**: `tst_limited_field.qml` (63 Zeichen plus Emoji, Einfügen in
+der Mitte samt Cursor, einzelne Hälften überall, ohne Grenze, Bindung nach
+dem Schnitt), `tst_add_output_dialog.qml`
+(`test_a_recording_keeps_its_file_name`), `tst_outputs_page.qml`
+(`test_mark_writes_the_note_once`); die bisherigen Tests der Mood-, Bus- und
+Mixer-Felder unverändert grün.
+
 ## 2026-11-01 — Layout-Editor bei Änderungen im Betrieb (Review LAY.7)
 
 **Kontext**: Der Layout-Dialog hält eine Arbeitskopie. Tauschte währenddessen
@@ -7703,3 +7739,6 @@ Teil gewinnt, entfernte Box, doppelter Input fällt auf das Gezeigte
 zurück, unverändert ohne Hinweis, Boxen anderswo hinzugefügt mit Hinweis
 und „Neu laden“, neues Layout unverändert, Speichern über die Id nach
 Entfernen des Layouts davor, entferntes Layout gesperrt mit Hinweis.
+Switcher-Test `set_layout_by_id_hits_its_layout_after_one_before_is_gone`
+(Id als Text wie aus der Console, nach Entfernen des Layouts davor; ein
+Layout, das wie die Id heißt, gewinnt nicht).
