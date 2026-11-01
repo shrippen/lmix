@@ -625,8 +625,9 @@ impl StromEngine {
     /// fails the stop still ends, strom bounds its drain.
     async fn close_send_gates(&self, id: FlowId) {
         let flow = match self.get_flow(id).await {
-            Ok(Some(flow)) => flow,
-            Ok(None) => return,
+            Ok(Some(flow)) if flow.running => flow,
+            // Nothing runs, nothing waits: strom drains only a playing flow.
+            Ok(_) => return,
             Err(e) => {
                 tracing::warn!(%id, error = %e, "send gates unknown, stop drains through the delay");
                 return;
@@ -3473,11 +3474,12 @@ mod tests {
 
     /// STR.5: stopping a delayed stream first closes its gates, so the
     /// waiting seconds are dropped and the stop's EOS reaches the sink at
-    /// once (RTMP unpublishes); a live stream goes without.
+    /// once (RTMP unpublishes); a live stream goes without, and so does a
+    /// flow that no longer runs (strom would refuse the gates).
     #[tokio::test]
     async fn a_delayed_stream_closes_its_gates_before_it_stops() {
         type Calls = std::sync::Arc<std::sync::Mutex<Vec<String>>>;
-        for (delay_s, gates) in [(5, 2), (0, 0)] {
+        for (delay_s, running, gates) in [(5, true, 2), (0, true, 0), (5, false, 0)] {
             let id = OutputId::new();
             let spec = OutputSpec::Rtmp {
                 url: "rtmp://192.0.2.1/live".into(),
@@ -3495,6 +3497,7 @@ mod tests {
                 Default::default(),
                 flows::LiveMkv::Yes,
             );
+            let flow = Flow { running, ..flow };
             let answer = serde_json::json!({ "flow": flow });
             let calls = Calls::default();
             let seen = calls.clone();

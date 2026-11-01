@@ -519,22 +519,34 @@ wait "$rtmp_receiver" || true
 act '{"action":"stop_output","output":"RTMP"}' >/dev/null
 act '{"action":"remove_output","output":"RTMP"}' >/dev/null
 pass "outputs: RTMP stream received with H.264 and AAC"
-# A delayed RTMP stream (STR.5) stops at once and still unpublishes: the
-# relay reports the publisher's deleteStream (a dropped connection has none).
-timeout 60 ffmpeg -loglevel error -listen 1 -i rtmp://127.0.0.1:19351/live/late -c copy -f null - &
-PIDS+=($!)
-node "$ROOT/scripts/rtmp-unpublish.cjs" 19352 19351 >"$WORK/rtmp-late.txt" &
-PIDS+=($!)
-sleep 1
-act '{"action":"add_output","spec":{"kind":"rtmp","url":"rtmp://127.0.0.1:19352/live","key":"late","video_kbps":2000,"delay_s":2},"name":"Late"}' >/dev/null
-act '{"action":"start_output","output":"Late"}' >/dev/null
-wait_for "$SETTLE_S" grep -qx publish "$WORK/rtmp-late.txt" || fail "delayed RTMP output never published"
-sleep 2
-act '{"action":"stop_output","output":"Late"}' >/dev/null
-wait_for "$SETTLE_S" is output_state Late stopped || fail "delayed RTMP output did not stop"
-wait_for "$SETTLE_S" grep -qx unpublish "$WORK/rtmp-late.txt" || fail "delayed RTMP stop sent no unpublish"
-act '{"action":"remove_output","output":"Late"}' >/dev/null
-pass "outputs: delayed RTMP stream stopped with unpublish"
+# A delayed RTMP stream (STR.5) stops at once and still unpublishes, on
+# air and in its countdown (nothing sent yet): the relay reports the
+# publisher's deleteStream (a dropped connection has none). Without it the
+# stop would wait out strom's 5 s drain.
+# late_stream <name> <delay_s> <wait line>: start, wait for the line, stop.
+late_stream() {
+    local name="$1" delay_s="$2" until="$3" log="$WORK/rtmp-$1.txt"
+    timeout 90 ffmpeg -loglevel error -listen 1 -i "rtmp://127.0.0.1:19351/live/$name" -c copy -f null - &
+    local receiver=$!
+    PIDS+=("$receiver")
+    node "$ROOT/scripts/rtmp-unpublish.cjs" 19352 19351 >"$log" &
+    local relay=$!
+    PIDS+=("$relay")
+    sleep 1
+    act "{\"action\":\"add_output\",\"spec\":{\"kind\":\"rtmp\",\"url\":\"rtmp://127.0.0.1:19352/live\",\"key\":\"$name\",\"video_kbps\":2000,\"delay_s\":$delay_s},\"name\":\"$name\"}" >/dev/null
+    act "{\"action\":\"start_output\",\"output\":\"$name\"}" >/dev/null
+    wait_for "$SETTLE_S" grep -qx "$until" "$log" || fail "delayed RTMP output $name: no $until"
+    act "{\"action\":\"stop_output\",\"output\":\"$name\"}" >/dev/null
+    wait_for "$SETTLE_S" is output_state "$name" stopped || fail "delayed RTMP output $name did not stop"
+    wait_for "$SETTLE_S" grep -qx unpublish "$log" || fail "delayed RTMP output $name: stop sent no unpublish"
+    act "{\"action\":\"remove_output\",\"output\":\"$name\"}" >/dev/null
+    kill "$relay" "$receiver" 2>/dev/null || true
+}
+late_stream onair 2 data
+pass "outputs: delayed RTMP stream stopped on air with unpublish"
+late_stream countdown 30 publish
+grep -qx data "$WORK/rtmp-countdown.txt" && fail "delayed RTMP output sent data in its countdown"
+pass "outputs: delayed RTMP stream stopped in its countdown with unpublish, nothing sent"
 # Encoding (STR.3): H.265 at a constant bitrate lands as HEVC.
 act '{"action":"add_output","spec":{"kind":"record","folder":"hevc","container":"mkv","encoding":{"codec":"h265","rate":"cbr","keyframe_ms":1000}},"name":"HEVC"}' >/dev/null
 act '{"action":"start_output","output":"HEVC"}' >/dev/null

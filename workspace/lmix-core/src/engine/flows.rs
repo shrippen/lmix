@@ -1051,7 +1051,9 @@ pub fn send_gates(flow: &Flow) -> Vec<&str> {
 /// anything out, with room for `SEND_DELAY_HEADROOM_S` more; no limit in
 /// buffers or bytes (the time is the limit). Behind it the valve `gate`:
 /// closed on stop it drops the waiting seconds but passes EOS (a sticky
-/// event), which the queue lets out at once.
+/// event), which the queue lets out at once. Dropped buffers become gap
+/// events: a muxer that never got a buffer (a stop in the countdown) may
+/// hold EOS back until it saw time pass on every pad (`flvmux`, 1.28).
 ///
 /// ```text
 ///   from ─► queue `id` ─► valve `gate` ─►
@@ -1074,7 +1076,7 @@ fn add_delay_queue(flow: &mut Flow, id: &str, gate: &str, from: String, delay_s:
         "valve",
         vec![(
             "drop-mode",
-            PropertyValue::String("forward-sticky-events".into()),
+            PropertyValue::String("transform-to-gap".into()),
         )],
     ));
     flow.links.push(link(id.into(), gate.into()));
@@ -3341,12 +3343,12 @@ mod tests {
                 for limit in ["max-size-buffers", "max-size-bytes"] {
                     assert_eq!(uint(q, limit), Some(0));
                 }
-                // Open while it runs; closed it drops data but passes EOS.
+                // Open while it runs; closed it drops data (as gaps) but passes EOS.
                 let g = flow.elements.iter().find(|e| e.id == gate).unwrap();
                 assert_eq!(g.element_type, "valve");
                 assert!(matches!(
                     g.properties.get("drop-mode"),
-                    Some(PropertyValue::String(m)) if m == "forward-sticky-events"
+                    Some(PropertyValue::String(m)) if m == "transform-to-gap"
                 ));
                 assert!(!g.properties.contains_key("drop"));
                 for (a, b) in [(from, queue), (queue, gate), (gate, to)] {

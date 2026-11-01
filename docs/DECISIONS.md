@@ -7781,10 +7781,10 @@ auf und bräuchte einen eigenen Status. Verworfen.
    Braucht eine neue Stopp-Art in strom (Upstream-Thema) und kennt die
    Queues nicht, die lmix baut. Verworfen.
 3. **Ein `valve` hinter jeder Verzögerungs-Queue** (`send_gate_video`,
-   `send_gate_sound`, `drop-mode=forward-sticky-events`). Beim Stopp
+   `send_gate_sound`, `drop-mode=transform-to-gap`). Beim Stopp
    schließt `lmix-core` die Ventile (`drop=true`, Element-Eigenschaft über
    die strom-API), dann löscht es den Flow wie bisher. Das Ventil verwirft
-   alle Puffer, lässt EOS (ein „sticky“ Event) aber durch; die Queue gibt
+   alle Puffer (als Lücken-Events), lässt EOS aber durch; die Queue gibt
    nach EOS alles heraus, das Ventil wirft es weg, EOS erreicht `flvmux`
    und `rtmp2sink` sofort, RTMP meldet sich ab.
 
@@ -7798,6 +7798,19 @@ abgedeckt: `put_flow` ersetzt einen noch laufenden Ausgangs-Flow ohne die
 Ventile zu schließen (nur bei einem Start über einen laufenden Ausgang).
 `drop-mode` gibt es ab GStreamer 1.24 (Mindestversion laut BUILD.md).
 
+**Stopp im Countdown** (Review #231): Hat das Ventil noch nichts
+durchgelassen, gibt `flvmux` EOS unter Umständen nicht weiter, solange auf
+keinem Pad Zeit vergangen ist (gemessen mit einer nachgebauten Pipeline
+und GStreamer 1.28: mit `forward-sticky-events` kein EOS, 5 s bis zum
+Abbruch, kein Abmelden; im lmix-Flow selbst trat es nicht auf). Mit
+`transform-to-gap` werden verworfene Puffer zu Lücken-Events; damit kommt
+EOS in beiden Fällen sofort durch, RTMP meldet sich auch im Countdown ab,
+ohne dass ein Bild hinausgeht. Ein Flow, der nicht mehr läuft, bekommt
+keine Ventil-Befehle (strom lehnt sie ab, leert ihn aber auch nicht).
+Offen, nicht geändert: `Service::execute` hält den Switcher während
+`engine.run`; ein Stopp, der strom 5 s warten lässt (Schließen der Ventile
+gescheitert), hält so lange auch Schnitte auf (gilt für jeden Stopp mit EOS).
+
 **Geprüft**: `scripts/test-m2b-vm.sh` (CI) startet einen RTMP-Ausgang mit
 2 s Verzögerung über ein Relais (`scripts/rtmp-unpublish.cjs`, meldet
 `publish` und `deleteStream` des Senders) zu ffmpeg und verlangt nach dem
@@ -7810,3 +7823,9 @@ wartenden Sekunden sind verworfen). Tests in `lmix-core`:
 `a_delayed_stream_waits_in_memory` (Ventile, EOS an),
 `a_delayed_stream_closes_its_gates_before_it_stops` (Ventile zu vor dem
 Löschen, ein Live-Stream ohne).
+Countdown (Nachtrag Review #231), lokal: RTMP mit 30 s Verzögerung, Stopp
+gleich nach dem Anmelden und 4 s danach: Aktion 0,19 s bzw. 0,06 s, der
+nächste Schnitt 0,02 s, Abmelden gesendet, keine Daten hinaus; SRT mit
+30 s im Countdown: Stopp 1,09 s (wie live), mit EOS geleert. Der VM-Check
+prüft beide Fälle (`late_stream`: auf Sendung erst nach der Zeile `data`
+des Relais, Countdown nach `publish` und ohne `data`).
