@@ -8051,7 +8051,7 @@ sichtbar ist nur, was einer kurzen Liste schlichter Formen entspricht.
   ganzen Text, darin URLs abwechselnd in einem inneren Paar und ohne, suchte
   den äußeren Partner je URL erneut bis Textende (quadratisch, 1 MB 11 s;
   viele URLs in Anführungszeichen in einem langen Wort bis 124 s, jetzt
-  höchstens 68 ms). strom maskiert in `api/gst_launch.rs` Request-Bodys
+  unter 0,1 s). strom maskiert in `api/gst_launch.rs` Request-Bodys
   beliebiger Größe.
 - Kein Panic, kein Leck bei einem Fehler (seit 10893ce): strom `text()`
   und lmix `redact_text` laufen unter `catch_unwind` und maskieren bei
