@@ -6670,7 +6670,8 @@ gesperrt blieb und `set_moods` Unstimmiges annahm.
   von Sammlungen je einmal und nicht die einer Stimmung (eine Id für
   Stimmungen und Sammlungen); in einer Sammlung nur Stimmungen und Pads,
   die es gibt, jede einmal. Pads, die es nicht mehr gibt (Cue entfernt,
-  Liste entfernt oder keine Pads mehr), fallen still aus den Sammlungen:
+  Liste entfernt; „keine Pads mehr“ aufgehoben, siehe „Pads einer Liste
+  ohne Pads bleiben in Sammlungen“), fallen still aus den Sammlungen:
   beim Bearbeiten der Listen, beim Öffnen einer Show, beim Wiederherstellen
   und in `set_moods` selbst (der Dialog kann ein Pad noch haben, das
   inzwischen anderswo gelöscht wurde; abgelehnt würde sein Speichern).
@@ -7589,8 +7590,9 @@ nicht mit (die unterste von 16 Ebenen ging nicht in einem Zug nach oben).
   weggescrollte: die Markierung ist immer zu sehen.
   Nicht in der Liste der Gruppen und Varianten: deren `ListView` gibt
   eine weit aus dem Bild gescrollte Zeile samt ihrem Ziehen auf.
-- **Nicht geändert**: Pads, deren Liste keine Pads mehr ist, fallen weiter
-  aus den Sammlungen und kommen beim Wiedereinschalten nicht zurück
+- **Nicht geändert** (aufgehoben, siehe „Pads einer Liste ohne Pads
+  bleiben in Sammlungen“): Pads, deren Liste keine Pads mehr ist, fallen
+  weiter aus den Sammlungen und kommen beim Wiedereinschalten nicht zurück
   (Stufe 7a). Sie zu behalten hieße, Sammlungen Einträge zu lassen, die
   keine Pads sind (Prüfung, Zählung, Seite); ein Rückgängig über
   `Removed::Moods` ist ein eigenes Thema.
@@ -7742,3 +7744,40 @@ Entfernen des Layouts davor, entferntes Layout gesperrt mit Hinweis.
 Switcher-Test `set_layout_by_id_hits_its_layout_after_one_before_is_gone`
 (Id als Text wie aus der Console, nach Entfernen des Layouts davor; ein
 Layout, das wie die Id heißt, gewinnt nicht).
+
+## 2026-11-01 — Pads einer Liste ohne Pads bleiben in Sammlungen
+
+**Kontext**: Schaltete man bei einer Liste „Pads“ aus, fielen ihre Cues aus
+allen Sammlungen (Stufe 7a, in 7d nicht geändert); wieder eingeschaltet,
+fehlten sie, die Sammlungen waren von Hand neu zu füllen. Der User will
+das nicht (1.11.2026).
+
+**Optionen**: (a) Einträge behalten, solange der Cue in einer Liste steht;
+Seite und Zählung nehmen nur die von Listen mit Pads. (b) Beim Ausschalten
+merken, was entfiel, und beim Einschalten zurücklegen: zweiter Speicher in
+der Show-Datei, der mit jedem Bearbeiten der Sammlungen veralten kann.
+
+**Entscheidung**: (a).
+- `pads` einer Sammlung nennt Cues der Show (oberste Ebene einer Liste);
+  Pads sind sie, solange ihre Liste Pads hat. Aus den Sammlungen fallen
+  sie nur, wenn der Cue oder seine Liste entfernt ist (`prune_pads`);
+  `set_cue_list_pads` ändert die Sammlungen nicht mehr.
+- `set_moods` und das Öffnen einer Show nehmen solche Einträge an; die
+  Grenze von 256 Einträgen je Sammlung zählt sie mit (sie stehen in der
+  Datei).
+- Die Seite Stimmungen zeigt und zählt nur Pads von Listen mit Pads
+  (`padIds`, ein `Set`, Nachschlagen ohne Suche je Eintrag);
+  „Zusammenstellen“ ändert die Sammlung als Ganzes und behält die übrigen.
+- Der Kern nutzt `pads` einer Sammlung nur zum Prüfen; zur Laufzeit
+  ändert sich nichts.
+
+**Bricht**: nichts; das Format bleibt. Einträge, die frühere Stände beim
+Ausschalten entfernten, kommen nicht zurück.
+
+**Geprüft**: `switcher::tests::a_pad_switched_off_and_on_keeps_its_collections`
+(vorher: Sammlung nach dem Ausschalten leer),
+`moods_need_distinct_names_ids_and_entries_that_are_there` (ausgeschaltet
+gültig, Liste entfernt fällt weg); QML `tst_moods_page.qml`
+`test_a_list_switched_off_keeps_its_one_shots_in_the_collection` (vorher
+„1 one-shot“ statt „0 one-shots“). Alle Tests von lmix-core (585) und QML
+(359).
