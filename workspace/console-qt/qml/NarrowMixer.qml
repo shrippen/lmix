@@ -413,18 +413,11 @@ KanteCard {
                 Layout.fillWidth: true
                 // A bus: its name. In the menu, not the strip: a field there
                 // kept the focus and took the shortcut keys.
-                KanteTextField {
+                LimitedField {
                     id: nameField
                     visible: menu.bus !== null
                     Layout.fillWidth: true
-                    maximumLength: mixer.limits.name_max
-                    // Cut on whole characters, not inside an emoji.
-                    onTextChanged: {
-                        const whole = Texts.whole(text)
-                        if (whole !== text) {
-                            text = whole
-                        }
-                    }
+                    limit: mixer.limits.name_max
                     Accessible.name: qsTr("Name of the bus")
                     placeholderText: qsTr("Name")
                     /** The bus being renamed. Only closing renames (Enter closes):

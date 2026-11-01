@@ -383,12 +383,12 @@ KanteDialog {
                 visible: dialog.kind === "record"
                 Layout.fillWidth: true
                 KanteSectionLabel { text: qsTr("File name") }
-                KanteTextField {
+                LimitedField {
                     id: fileNameField
                     objectName: "fileName"
                     Layout.fillWidth: true
                     placeholderText: qsTr("e.g. {output} {source}")
-                    maximumLength: dialog.recordLimits.file_name_max || 100
+                    limit: dialog.recordLimits.file_name_max || 100
                 }
                 KanteInfoTip {
                     term: qsTr("File name")

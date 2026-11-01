@@ -77,6 +77,9 @@ TestCase {
         fakeShell.show = { outputs: outputs.slice(), buses: [] }
         tryVerify(() => button.visible)
         compare(note.maximumLength, 200)
+        // Cut on whole characters, not inside an emoji.
+        note.text = "Q".repeat(199) + "\u{1F600}"
+        compare(note.text, "Q".repeat(199))
         note.text = " Q&A "
         button.clicked()
         compare(sent, [{ action: "mark_recording", text: "Q&A" }])

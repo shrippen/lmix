@@ -1451,7 +1451,7 @@
       <translation>Kopfhörer</translation>
     </message>
     <message>
-      <location line="+36" />
+      <location line="+29" />
       <source>Name of the bus</source>
       <translation>Name des Busses</translation>
     </message>
@@ -3694,18 +3694,18 @@
   <context>
     <name>MoodsDialog</name>
     <message>
-      <location filename="../qml/MoodsDialog.qml" line="+585" />
+      <location filename="../qml/MoodsDialog.qml" line="+571" />
       <source>Moods</source>
       <translation>Stimmungen</translation>
     </message>
     <message>
-      <location line="-380" />
-      <location line="+1024" />
+      <location line="-366" />
+      <location line="+1010" />
       <source>Off</source>
       <translation>Aus</translation>
     </message>
     <message>
-      <location line="-1024" />
+      <location line="-1010" />
       <source>Sound</source>
       <translation>Ton</translation>
     </message>
@@ -3716,17 +3716,17 @@
     </message>
     <message>
       <location line="+2" />
-      <location line="+1019" />
+      <location line="+1005" />
       <source>Actions</source>
       <translation>Aktionen</translation>
     </message>
     <message>
-      <location line="-1018" />
+      <location line="-1004" />
       <source>From the base</source>
       <translation>Aus der Basis</translation>
     </message>
     <message>
-      <location line="+352" />
+      <location line="+338" />
       <source>Actions of the layer</source>
       <translation>Aktionen der Ebene</translation>
     </message>
@@ -3823,12 +3823,12 @@
       <translation>Zum Verschieben ziehen</translation>
     </message>
     <message>
-      <location line="-212" />
+      <location line="-198" />
       <source>Edit moods</source>
       <translation>Stimmungen bearbeiten</translation>
     </message>
     <message>
-      <location line="+342" />
+      <location line="+328" />
       <source>Layer %1</source>
       <translation>Ebene %1</translation>
     </message>
@@ -4346,12 +4346,12 @@
     </message>
     <message>
       <location line="+31" />
-      <location line="+293" />
+      <location line="+286" />
       <source>Audio page ›</source>
       <translation>Ton-Seite ›</translation>
     </message>
     <message>
-      <location line="-292" />
+      <location line="-285" />
       <source>Open the Audio page</source>
       <translation>Ton-Seite öffnen</translation>
     </message>
@@ -4462,7 +4462,7 @@
       <translation>Input %1 %2</translation>
     </message>
     <message>
-      <location line="+136" />
+      <location line="+129" />
       <source>No bus yet. “+ Bus” below adds one.</source>
       <translation>Noch kein Bus. „+ Bus“ unten legt einen an.</translation>
     </message>
