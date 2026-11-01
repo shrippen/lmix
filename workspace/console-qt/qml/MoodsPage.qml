@@ -418,12 +418,15 @@ AppPage {
                         KanteProgressBar {
                             objectName: "fade"
                             Layout.fillWidth: true
+                            // Unseen while nothing fades: not read out either.
+                            Accessible.ignored: !root.fading
                             segments: 20
                             value: root.fadeProgress
                         }
                         QQC2.Label {
                             objectName: "fadeLeft"
                             Layout.fillWidth: true
+                            Accessible.ignored: !root.fading
                             text: root.now.fading ? root.secondsLeft(root.now.fading.duration_ms * (1 - root.fadeProgress)) : ""
                             color: KanteStyle.mutedTextColor
                         }

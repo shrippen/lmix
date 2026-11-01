@@ -236,6 +236,9 @@ TestCase {
                 show: fakeShow
                 column: windowToasts.column
             }
+            property alias toasts: windowToasts
+            property alias area: ownUndo
+            property int ownUndos: 0
             KanteDialog {
                 id: modalDialog
                 parent: QQC2.Overlay.overlay
@@ -245,6 +248,20 @@ TestCase {
                 width: 300
                 height: 200
                 standardButtons: QQC2.Dialog.Close
+                // A dialog with an undo of its own (as the layout area).
+                Item {
+                    id: ownUndo
+                    width: 100
+                    height: 50
+                    activeFocusOnTab: true
+                    Keys.onShortcutOverride: event => event.accepted = event.matches(StandardKey.Undo)
+                    Keys.onPressed: event => {
+                        if (event.matches(StandardKey.Undo)) {
+                            inWindow.ownUndos++
+                            event.accepted = true
+                        }
+                    }
+                }
             }
         }
     }
@@ -258,7 +275,7 @@ TestCase {
         tryCompare(toast, "shown", true)
         // In from the right: click once it is there, laid out in the window.
         tryCompare(toast.transform[0], "x", 0)
-        tryVerify(() => toast.mapToItem(null, toast.width, 0).x <= test.Window.width)
+        tryVerify(() => toast.Window.window !== null && toast.mapToItem(null, toast.width, 0).x <= test.Window.width)
         return toast
     }
     function toastIn(removals) {
@@ -299,6 +316,37 @@ TestCase {
         keyClick(Qt.Key_Z, Qt.ControlModifier)
         compare(sent[sent.length - 1], { action: "restore" })
         verify(win.modal.opened)
+        win.modal.close()
+    }
+
+    // The toasts rise above the window only while a modal dialog dims it;
+    // else they stay in the content, under menus and in the Tab order.
+    function test_the_toasts_rise_only_over_a_modal_dialog() {
+        const win = createTemporaryObject(windowComponent, test.Window.contentItem)
+        const layer = findChild(win, "toastLayer")
+        compare(win.toasts.column.parent, win.toasts)
+        verify(!layer.visible)
+        win.modal.open()
+        tryCompare(win.modal, "opened", true)
+        tryVerify(() => layer.opened)
+        verify(win.toasts.column.parent !== win.toasts)
+        win.modal.close()
+        tryCompare(win.modal, "visible", false)
+        tryCompare(win.toasts.column, "parent", win.toasts)
+        tryVerify(() => !layer.visible)
+    }
+
+    // A dialog's own undo keeps Ctrl+Z while a removal's toast shows.
+    function test_a_dialogs_own_undo_keeps_ctrl_z() {
+        const win = createTemporaryObject(windowComponent, test.Window.contentItem)
+        win.modal.open()
+        tryCompare(win.modal, "opened", true)
+        removedBus(win.removals, "Stream")
+        win.area.forceActiveFocus()
+        sent = []
+        keyClick(Qt.Key_Z, Qt.ControlModifier)
+        compare(win.ownUndos, 1)
+        compare(sent, [], "no restore")
         win.modal.close()
     }
 }

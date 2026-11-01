@@ -642,6 +642,10 @@ TestCase {
         keyClick(Qt.Key_Escape)
         compare(layer.text, "Light")
         compare(acted.length, 0)
+        // Once more, with nothing to take back: Escape closes the dialog.
+        keyClick(Qt.Key_Escape)
+        tryVerify(() => !d.visible)
+        compare(acted.length, 0)
     }
 
     // The layers' own fade has a head over its column.

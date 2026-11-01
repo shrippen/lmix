@@ -164,6 +164,7 @@ TestCase {
         const nameWidth = name.width
         const fadeWidth = fade.width
         compare(fade.opacity, 0)
+        verify(findChild(p, "fade").Accessible.ignored, "not read out while hidden")
         fakeShell.show = Object.assign({}, fakeShell.show, { mood: {
             mood: "v-fight", fading: { since_ms: Date.now(), duration_ms: 2000 }
         } })

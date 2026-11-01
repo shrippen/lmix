@@ -6628,16 +6628,28 @@ springender Kopf „Jetzt“ beim Überblenden, Escape speicherte eine
 Umbenennung, die Spalte der Ebenen-Blende hatte keinen Kopf.
 
 **Entscheidung**:
-- Die Toasts eines Fensters (`MessageToasts`) liegen in einem eigenen,
-  nicht modalen Popup über allen Dialogen, so groß wie die Toasts und ohne
-  Fokus. Damit stehen Ablehnungen und das Rückgängig nach einem Entfernen
-  auch über einem modalen Dialog, und der Klick auf „Rückgängig“ wirkt
-  sofort (Regel 1 in `DESIGN-DIALOGE.md`), für jeden Dialog, der
-  `askRemove`/`askRemoveWith` nutzt (auch den Bus-Dialog). Erwogen: den
-  Toast in jeden Dialog legen; das hätte jeder Dialog selbst tun müssen.
+- Die Toasts eines Fensters (`MessageToasts`) bleiben im Fensterinhalt,
+  unter Menüs, Listen und Tooltips und in der Tab-Folge (ein Fehler-Toast
+  lässt sich mit der Tastatur schließen). Nur solange ein modaler Dialog
+  das Fenster abdunkelt, wandern sie in ein eigenes, nicht modales Popup
+  ohne Fokus, das nach dem Dialog geöffnet wird und darum über ihm und
+  seinem abgedunkelten Grund liegt; Listen und Menüs, die der Dialog danach
+  öffnet, liegen wieder darüber. So stehen Ablehnungen und das Rückgängig
+  nach einem Entfernen auch über einem modalen Dialog, und der Klick auf
+  „Rückgängig“ wirkt sofort (Regel 1 in `DESIGN-DIALOGE.md`), für jeden
+  Dialog, der `askRemove`/`askRemoveWith` nutzt (auch den Bus-Dialog).
+  Ob ein Dialog abdunkelt, zeigt sein Grund im Overlay (die einzigen
+  Elemente dort außer den Popups selbst). Erwogen: die Ebene immer offen
+  und ganz oben (verdeckte Menüs und Tooltips unten rechts, Toasts nicht
+  mehr per Tab erreichbar), den Toast in jeden Dialog legen (jeder Dialog
+  hätte es selbst tun müssen), ein Zähler in `KanteDialog` (deckt nicht
+  jedes modale Popup und gehört nach Kante).
 - Strg+Z des Toasts ist ein Kurzbefehl der Anwendung, aktiv nur im
   aktiven Fenster: Ein Kurzbefehl des Fensters wird von einem modalen Dialog
-  gesperrt. Ein Textfeld mit Fokus behält sein eigenes Strg+Z.
+  gesperrt. Wer Strg+Z selbst behandelt, nimmt es vorher im
+  `ShortcutOverride`: ein Textfeld (macht Qt selbst), die Fläche des
+  Layout-Dialogs (Rückgängig und Wiederholen der Boxen, LAY.6) und der
+  Knopf, der im Kurzbefehl-Dialog eine Taste aufnimmt.
 - Der Dialog hat die Größe L (48 Rastereinheiten, höchstens 90 % des
   Fensters), der Pegel-Dialog M. Ebenen, Sammlungen und Panik-Stimmung
   scrollen zwischen festem Kopf und „+ Ebene“/„+ Sammlung“; ist das Fenster
@@ -6683,7 +6695,11 @@ breites Dateifeld; „Deckkraft…“; Escape bricht ab; Kopf der Blende),
 `tst_moods_page.qml` (Panik-Stimmung als Jetzt, entfernte Stimmung,
 Einzahl und Mehrzahl, Zahlenformat, Kopf springt nicht, Mitglieder und
 Köpfe, ganzer Name im Tooltip), `tst_removals.qml` (Rückgängig per Klick
-und Strg+Z über einem modalen Dialog); alle QML-Tests (270). Sichtprüfung
+und Strg+Z über einem modalen Dialog, Toasts nur dann gehoben, ein eigenes
+Rückgängig im Dialog behält Strg+Z), `tst_message_toasts.qml` (ein Menü
+liegt über den Toasts, Tab erreicht „Schließen“); alle QML-Tests (274). Sichtprüfung
 mit der Demo auf Xvfb (deutsch, dunkel): Dialog in Größe L, Datei lesbar,
 Ebenen scrollen, „+ Ebene“ erreichbar, Toast über dem Dialog, Rückgängig per
 Klick und Strg+Z, Escape im Namen, Mitglieder beim Zusammenstellen.
+Die Sichtprüfung lief mit der ersten Fassung der Toast-Ebene (immer offen);
+das Heben nur bei abgedunkeltem Fenster prüfen die Tests.

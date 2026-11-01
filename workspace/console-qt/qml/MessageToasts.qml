@@ -10,10 +10,12 @@ import Kante
  * twice shows once; at most `limit`, the oldest goes first. Pages put
  * their own toasts (Undo after a removal) into `column` too.
  *
- * The toasts float above the window's dialogs (a popup of their own, not
- * modal): a refusal of an edit in a modal dialog, or the Undo of a
- * removal made there, shows over the dialog and its dimmed ground and
- * takes the click (docs/DESIGN-DIALOGE.md rule 1: Undo acts at once).
+ * The toasts are in the window's content, under its menus and lists and
+ * in its Tab order. While a modal dialog dims the window they move into a
+ * popup of their own above it (not modal, no focus): a refusal of an edit
+ * in the dialog, or the Undo of a removal made there, shows over the
+ * dimmed ground and takes the click (docs/DESIGN-DIALOGE.md rule 1: Undo
+ * acts at once).
  */
 Item {
     id: toasts
@@ -66,9 +68,32 @@ Item {
         }
     }
 
-    // Only as large as the toasts (nothing without one): it takes no
-    // clicks beside them and never the keyboard focus. Always open: the
-    // toasts in it are hidden while it is closed, so they could not open it.
+    /** Modal dialogs dim the window now: each has its dimmed ground in the
+     *  overlay, the only items there besides the popups' own. */
+    readonly property int dimmed: {
+        const overlay = QQC2.Overlay.overlay
+        let n = 0
+        for (const item of overlay ? overlay.children : []) {
+            if (item.visible && !String(item).startsWith("QQuickPopupItem")) {
+                n++
+            }
+        }
+        return n
+    }
+    /** The toasts are raised above the dialogs. */
+    readonly property bool raised: dimmed > 0
+    // Opened again for each dialog, after it has opened: of popups at the
+    // same height the one opened last is on top, so a dialog's own lists
+    // and menus opened later still cover the toasts.
+    onDimmedChanged: Qt.callLater(() => {
+        layer.close()
+        if (toasts.raised) {
+            layer.open()
+        }
+    })
+
+    // Only as large as the toasts: it takes no clicks beside them and never
+    // the keyboard focus.
     QQC2.Popup {
         id: layer
         objectName: "toastLayer"
@@ -77,35 +102,41 @@ Item {
         height: column.implicitHeight
         x: toasts.width - width
         y: toasts.height - height
-        // Above every dialog, also one opened after it.
-        z: 1000
         modal: false
         dim: false
         focus: false
         closePolicy: QQC2.Popup.NoAutoClose
         padding: 0
         background: null
-        visible: true
+        enter: null
+        exit: null
+        contentItem: Item {
+            id: holder
+        }
+    }
 
-        contentItem: Column {
-            id: column
-            spacing: Kirigami.Units.smallSpacing
+    Column {
+        id: column
+        // In the content, or above the dialogs (see above).
+        parent: toasts.raised ? holder : toasts
+        x: parent ? parent.width - width : 0
+        y: parent ? parent.height - height : 0
+        spacing: Kirigami.Units.smallSpacing
 
-            Repeater {
-                model: errors
-                KanteToast {
-                    id: toast
-                    required property int index
-                    required text
-                    width: Kirigami.Units.gridUnit * 20
-                    kind: KanteToast.Kind.Danger
-                    life: 0
-                    actionText: qsTr("Close")
-                    onClosed: errors.remove(index)
-                    Component.onCompleted: show()
-                    Accessible.role: Accessible.AlertMessage
-                    Accessible.name: toast.text
-                }
+        Repeater {
+            model: errors
+            KanteToast {
+                id: toast
+                required property int index
+                required text
+                width: Kirigami.Units.gridUnit * 20
+                kind: KanteToast.Kind.Danger
+                life: 0
+                actionText: qsTr("Close")
+                onClosed: errors.remove(index)
+                Component.onCompleted: show()
+                Accessible.role: Accessible.AlertMessage
+                Accessible.name: toast.text
             }
         }
     }
