@@ -315,9 +315,10 @@ pub async fn follow(
                     }
                     Ok(StromEvent::PipelineError { flow_id, error, .. }) => {
                         // Nobody listening is fine.
+                        // Users see it; GStreamer may quote an address with its passphrase.
                         let _ = errors.send(FlowError {
                             flow: flow_id,
-                            message: error,
+                            message: lmix_types::srt::redact_text(&error),
                             kind: FlowFailure::Error,
                         });
                     }

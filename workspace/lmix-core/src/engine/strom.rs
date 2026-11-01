@@ -2624,6 +2624,8 @@ async fn check(resp: reqwest::Response) -> Result<reqwest::Response, EngineError
     }
     let status = resp.status();
     let body = resp.text().await.unwrap_or_default();
+    // Users see this text; strom may quote an address with its passphrase.
+    let body = lmix_types::srt::redact_text(&body);
     Err(EngineError::Refused(format!("{status}: {body}")))
 }
 
@@ -3353,6 +3355,32 @@ mod tests {
         let text = file_text(&media, &format!("{STEM}.marks-2.csv"));
         assert!(text.starts_with(marks::HEADER), "{text:?}");
         assert_eq!(text.lines().count(), 3);
+    }
+
+    /// strom's refusal reaches users as text; an SRT passphrase it quotes
+    /// does not.
+    #[tokio::test]
+    async fn a_refusal_carries_no_passphrase() {
+        let app = axum::Router::new().fallback(|| async {
+            (
+                StatusCode::BAD_REQUEST,
+                "Invalid property srt_uri=srt://192.0.2.1:9000?passphrase=topsecret1",
+            )
+        });
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let addr = listener.local_addr().unwrap();
+        tokio::spawn(async move { axum::serve(listener, app).await.unwrap() });
+
+        let resp = reqwest::get(format!("http://{addr}/")).await.unwrap();
+        let Err(EngineError::Refused(message)) = check(resp).await else {
+            panic!("a 400 is a refusal");
+        };
+        assert!(message.starts_with("400"), "{message}");
+        assert!(!message.contains("topsecret1"), "{message}");
+        assert!(
+            message.contains("srt://192.0.2.1:9000?passphrase=…"),
+            "{message}"
+        );
     }
 
     /// strom out of reach: the mark is an error.

@@ -7977,6 +7977,124 @@ upstream (`main` 4479d8c) vorhanden.
   Abhängen sein Bild verwirft, ist eine Entscheidung für die Console (kurz
   kein Bild statt eines alten), todo.
 
+## 2026-11-01 — Geheimnisse in strom-Logs und -Fehlertexten; Queue-Warnung bei Sendeverzögerung
+
+**Kontext**: strom schrieb die ganze `srt_uri` (mit `passphrase=`,
+`streamid=`) bei jedem Bau eines SRT-Blocks ins Log (`info`), dazu
+Flow-Dumps (`debug`), jede Property-Änderung, gst-launch-Text und
+GStreamer-Fehler (auch als `PipelineError`-Event an Clients). Nur der
+RTMP-Block maskierte. Außerdem warnte der Pipeline-Monitor alle 5 s je
+Queue mit mehr als 2 s Inhalt „Queue level exceeds threshold“, also
+dauernd für die Verzögerungs-Queues von STR.5.
+
+**Optionen**: (a) Maskieren an jeder Stelle mit einem Helfer; (b) ein
+tracing-Layer, der jede Zeile umschreibt (kostet bei jeder Zeile, sieht
+strukturierte Felder nicht sicher). Für die Queue: (a) Verzögerungs-Queues
+nur auf `debug`; (b) Schwelle = 2 s über der eigenen `min-threshold-time`,
+Warnung einmal je Überschreitung.
+
+**Entscheidung**: strom `redact` (strom #59): `url`, `rtmp_url`, `origin`,
+`text`, `value`, `flow`; Passphrase, Stream-Id, Userinfo, RTMP-Stream-Key, Werte von
+Properties wie `auth_token` werden `***`. Vier Review-Runden fanden je neue
+Einzelfälle; darum seit 2bf5674 umgekehrt, fail-closed durch die Bauart:
+sichtbar ist nur, was einer kurzen Liste schlichter Formen entspricht.
+- Ein Wort ist ein Lauf ohne Leerraum; Anführungszeichen beenden es nicht.
+- URL: sichtbar nur Schema, schlichtes `host[:port]`/`[v6%zone][:port]`,
+  Pfadsegmente aus Buchstaben, Ziffern und `.-_~%`, Query-Paare aus
+  Buchstaben, Ziffern und `.-_~`. Der Wert eines geheimen Schlüssels wird
+  maskiert; der erste nicht schlichte Teil samt allem danach ebenfalls.
+  Userinfo bis zum letzten `@` vor der Query; ein `@` in der Query maskiert
+  alles hinter dem Schema. RTMP: Anwendung bleibt, Rest des Pfads und Query
+  weg. HTTP/WebSocket (`http`, `https`, `ws`, `wss`) und `origin()`: nur
+  `scheme://host[:port]`, Pfad und Query weg, denn der Pfad kann der ganze
+  Schlüssel sein (Cloudflare Stream WHIP:
+  `https://customer-<id>.cloudflarestream.com/<key>/webRTC/publish`). Nur
+  Token-artige Segmente zu maskieren wäre Raten über das Schlüsselformat
+  jedes Anbieters; Preis: HTTP-Fehler verlieren Dateinamen. Die vier
+  WHIP/WHEP-Blöcke und Properties auf `endpoint` zeigen nur die Herkunft.
+  Satzzeichen am Ende (`:`, `,`, `)`, Anführungszeichen) gehören nicht
+  zur URL (`srt://h:9000: Connection refused` behält den Host). Steht die
+  URL in einem offenen Anführungszeichen (`uri="srt://…`, `"uri=srt://…`),
+  ist sie der ganze Lauf bis zu dessen Partner, auch über Leerraum, wenn ihr
+  erstes Wort maskiert wird oder ein `@` folgt (`"srt://u:1 2@h"`). Ein anderes Präfix vor `scheme://` (`rtmp?://`,
+  `us@er://`) maskiert das Wort. `value()` maskiert einen String, der eine
+  URL ist, als eine URL.
+- Paare: jedes `name=` und `name:` im Wort, auch nach `&`, `;`, `,`, `?`, `(`
+  und mit Namen in Anführungszeichen. Geheim nach der Endung des Namens
+  (klein, ohne Trenner und Prozent-Kodierung: `streamKey`, `auth-token`,
+  `pass%70hrase`); der Wert läuft bis Wortende, `name:` am Wortende maskiert
+  das nächste Wort, ebenso ein Wert, der genau `Bearer`/`Basic`/`Digest`
+  ist (dann eines mehr). Endungen u. a. `passphrase`, `token`, `key`,
+  `secret`, `sig`, `auth`, `streamid`, `hash`, `hmac`, `md5`.
+  `user:pass@host` ohne `//` wird ganz maskiert.
+- Öffnet in einem maskierten Teil ein Anführungszeichen (`"zwei Wörter"`,
+  `(string)"a b"`, `\"` im `{:?}`-Dump), läuft die Maske bis zum Partner
+  mit gleich vielen Backslashes davor, sonst bis Textende.
+- Anführungszeichen werden vom Textanfang an verfolgt (seit e5b75db, nach
+  drei Runden mit je einer neuen Quote-Stellung: um die URL, um das ganze
+  Argument, um ein geheimes Paar): `"`, `'` oder Backtick am Wortanfang
+  oder hinter einem Nicht-Buchstaben öffnet (das Apostroph in `can't`
+  nicht), dasselbe Zeichen mit gleich vielen Backslashes schließt. Beginnt
+  irgendeine Maske (URL-Teil oder geheimer Wert) in einem offenen
+  Anführungszeichen, läuft sie bis zum Partner des innersten, ohne Partner
+  bis Textende; weiter, wenn ein im Wert geöffnetes Anführungszeichen
+  darüber hinaus läuft, ein Buchstabe folgt (Apostroph im Wert), bis
+  Wortende, wenn etwas anderes als Leerraum oder `,;)]}` folgt
+  (`'a'\''b'`, `"a"'b'`) oder ein `@` im selben Wort folgt; nie vor dem
+  Ende des Worts, das die Maske ohnehin erfasst hat (seit 10893ce). Das deckt `"passphrase=a b"`,
+  `'passphrase=a b'`, `"uri=srt://h?passphrase=a b"` und ein in einem
+  früheren Wort geöffnetes Anführungszeichen. Partner- und `@`-Suche sind
+  zwischengespeichert, die Laufzeit bleibt linear.
+- Kein Panic, kein Leck bei einem Fehler (seit 10893ce): strom `text()`
+  und lmix `redact_text` laufen unter `catch_unwind` und maskieren bei
+  einem Panic den ganzen Text. strom maskiert Bus-Meldungen in einem
+  GLib-Callback, dort bricht ein Panic den Prozess ab (Runde 8 fand einen:
+  ein Anführungszeichen, das in einem übersprungenen Teil schloss, blieb
+  offen und schnitt eine URL rückwärts). Ein Test prüft 100 000
+  deterministische Pseudo-Zufallszeilen gegen die ungeschützte Funktion.
+
+lmix-core maskiert zusätzlich (Verteidigung in der Tiefe) strom-Fehlertexte,
+die es weitergibt (`check()` in `engine/strom.rs`, `PipelineError` in
+`engine/meters.rs`), mit `lmix_types::srt::redact_text`: eine Portierung von
+strom `text()` Zeile für Zeile, nur die Maske ist `…`; beide Testmodule
+führen dieselbe Liste von Angriffs-Eingaben (jede auch als `{:?}`-Dump und
+Dump eines Dumps) und unveränderten Zeilen. `redact_url` bleibt für Namen
+und kurze Hinweise (Pfad bleibt lesbar), mit denselben Namensendungen und
+Userinfo bis zum letzten `@` vor der Query. `streamid` gilt in beiden als
+Geheimnis (manche SRT-Server nehmen sie als Publish-Key).
+
+Bewusst nicht abgedeckt (Prosa nicht unterscheidbar, im Doc-Kommentar von
+`text()` genannt): ein roher Leerraum in einer URL ohne Anführungszeichen
+(`srt://u:a b@h` zeigt `b@h`), ein rohes `&` in einem geheimen Query-Wert
+vor `name=` (`passphrase=a&b=c` zeigt `b=c`), Geheimnisse im Pfad einer
+URL, die weder HTTP noch RTMP ist, Namen ohne geheime Endung oder ohne
+`=`/`:`, ein einzelnes Anführungszeichen vor einem Geheimnis in
+Anführungszeichen (`the '90s … 'passphrase=a b'`: es paart mit dem
+falschen, `b'` bleibt sichtbar). Sonst ist Leerraum in einem Geheimnis in
+Anführungszeichen (wo auch immer sie öffnen) abgedeckt. Kosten: in einem offenen Anführungszeichen
+verliert eine Zeile alles bis zu dessen Partner, sobald darin etwas
+maskiert wird (`"uri=srt://h?passphrase=x&latency=120 refused"` →
+`"uri=srt://h?passphrase=…`).
+Kosten: Werte und URL-Teile mit Sonderzeichen werden samt Rest maskiert,
+ein offenes Anführungszeichen in einem maskierten Teil maskiert bis
+Textende. Queue (strom #60): Variante (b); zurück unter die Schwelle meldet
+`debug`.
+
+**Grenze**: Die STR.5-Queues haben 2 s Luft über der Verzögerung
+(`max-size-time`), erreichen die neue Schwelle also nie; ein volles
+Verzögerungs-Queue (Netz steht) meldet der Monitor nicht mehr, es zeigt
+sich über die SRT-/Ausgangs-Statistik. Flow-JSON und `GET /flows` tragen
+die Geheimnisse weiter (Konfiguration, keine Verschlüsselung).
+
+**Geprüft**: strom `redact::tests::srt_blocks_log_no_passphrase` (vor der
+Änderung rot: `topsecret1` im Log), `pipeline_monitor::tests::a_delay_queue_within_its_delay_is_not_over`
+(vor der Änderung rot), lmix-core `a_refusal_carries_no_passphrase` (vor
+der Änderung rot: `400 Bad Request: Invalid property
+srt_uri=srt://192.0.2.1:9000?passphrase=topsecret1`). Gemeinsame
+Test-Eingaben: strom `redact::tests::shared_vectors_*`, lmix-types
+`srt::tests::shared_vectors_*` (jede Eingabe der Review-Runden, ohne
+Panic, linear auch bei 1 MB), `fuzzed_inputs_do_not_panic` in beiden.
+
 ## 2026-11-01 — Ausgänge: Puffer und Encoder-Last (STR.7)
 
 **Kontext**: STR.7 verlangt im Status eines Streams Puffer, verworfene
