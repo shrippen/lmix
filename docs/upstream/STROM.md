@@ -50,6 +50,7 @@ Abgleich mit upstream: `git fetch https://github.com/Eyevinn/strom main` und
 | Thema | Commits / Gitea-PR | Weg | Stand, Hinweis |
 |---|---|---|---|
 | `--host`/`STROM_HOST` | 4bce876 | PR | offen; klein |
+| `eos_on_stop`: Stopp schickt EOS und wartet begrenzt (5 s), damit Muxer abschließen und RTMP sich abmeldet | 596c10d | PR | offen; lmix nutzt es für alle Ausgänge, verzögerte Streams schließen vorher ihre Ventile (lmix-seitig, keine weitere strom-Änderung) |
 | `STROM_FORCE_SOFTWARE_CONVERT` | bd86930 | Issue | offen |
 | CUDA-Compositor-Backend des Vision Mixers, mit CUDA-Kontext, CUDA/VA-Brücken, GPU-Skalierung und JPEG in Thumbnails, Alpha-Konvertierung, NVDEC-Deinterlace | 63cf137, 8725d4c, 7f367ec, 1079575, 4beaf4d, 77e8f4b, 176a1f2, 7615d6f | Issue | offen; groß, in mehrere PRs teilen |
 | CPU-Mischer: videoconvert und Speicherbrücken | b38ace4 | Issue | offen |

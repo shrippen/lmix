@@ -96,6 +96,10 @@ const CARD_SOUND_DELAY: &str = "card_sound_delay";
 /// its sound.
 const SEND_DELAY_VIDEO: &str = "send_delay_video";
 const SEND_DELAY_SOUND: &str = "send_delay_sound";
+/// Valves behind them: open while the stream runs, closed on stop
+/// (`send_gates`) so the waiting seconds are dropped while EOS passes.
+pub const SEND_GATE_VIDEO: &str = "send_gate_video";
+pub const SEND_GATE_SOUND: &str = "send_gate_sound";
 /// Room in them beyond the delay: a stream block that stalls for a moment
 /// (a slow network) does not hold up the encoder at once.
 const SEND_DELAY_HEADROOM_S: u32 = 2;
@@ -834,14 +838,11 @@ pub fn output_flow(
     let mut flow = Flow::new(format!("lmix output {id}"));
     flow.id = output_flow_id(id);
     share_timing(&mut flow);
-    // Stopping drains with EOS: recordings get their trailer (MP4 needs it).
-    // Not a delayed stream (STR.5): strom gives the drain 5 s, the syncing
-    // sink would play the waiting seconds out in real time and be cut off
-    // in the middle, and the stop would hang meanwhile. It ends at once;
-    // what still waits is dropped. SRT closes cleanly; RTMP sends its
-    // FCUnpublish/deleteStream only on EOS, so the platform sees the
-    // connection drop rather than the stream end.
-    flow.properties.eos_on_stop = Some(spec.send_delay_s() == 0);
+    // Stopping drains with EOS: recordings get their trailer (MP4 needs it),
+    // RTMP sends its FCUnpublish/deleteStream (a clean end, not a dropped
+    // connection). A delayed stream (STR.5) closes its gates first
+    // (`send_gates`): what still waits is dropped, EOS passes at once.
+    flow.properties.eos_on_stop = Some(true);
 
     // Program, the multiview, the preview, or one slot as it arrives (ISO,
     // MultiCorder). A slot
@@ -1020,8 +1021,8 @@ pub fn output_flow(
 /// stream (0) goes straight on.
 ///
 /// ```text
-///   enc:encoded_out ─► send_delay_video ─► (stream) video
-///   sound ─────────────► send_delay_sound ─► (stream) audio
+///   enc:encoded_out ─► send_delay_video ─► send_gate_video ─► (stream) video
+///   sound ─────────────► send_delay_sound ─► send_gate_sound ─► (stream) audio
 /// ```
 fn add_send_delay(flow: &mut Flow, delay_s: u32, sound: bool) -> (String, Option<String>) {
     let encoded = "enc:encoded_out".to_string();
@@ -1031,15 +1032,33 @@ fn add_send_delay(flow: &mut Flow, delay_s: u32, sound: bool) -> (String, Option
     if delay_s == 0 {
         return (encoded, timed);
     }
-    let video = add_delay_queue(flow, SEND_DELAY_VIDEO, encoded, delay_s);
-    let sound = timed.map(|from| add_delay_queue(flow, SEND_DELAY_SOUND, from, delay_s));
+    let video = add_delay_queue(flow, SEND_DELAY_VIDEO, SEND_GATE_VIDEO, encoded, delay_s);
+    let sound =
+        timed.map(|from| add_delay_queue(flow, SEND_DELAY_SOUND, SEND_GATE_SOUND, from, delay_s));
     (video, sound)
+}
+
+/// The gates of a delayed stream's flow `flow` (STR.5), none for any other.
+pub fn send_gates(flow: &Flow) -> Vec<&str> {
+    flow.elements
+        .iter()
+        .map(|e| e.id.as_str())
+        .filter(|id| [SEND_GATE_VIDEO, SEND_GATE_SOUND].contains(id))
+        .collect()
 }
 
 /// A queue `id` after `from` that holds `delay_s` seconds before it lets
 /// anything out, with room for `SEND_DELAY_HEADROOM_S` more; no limit in
-/// buffers or bytes (the time is the limit).
-fn add_delay_queue(flow: &mut Flow, id: &str, from: String, delay_s: u32) -> String {
+/// buffers or bytes (the time is the limit). Behind it the valve `gate`:
+/// closed on stop it drops the waiting seconds but passes EOS (a sticky
+/// event), which the queue lets out at once. Dropped buffers become gap
+/// events: a muxer that never got a buffer (a stop in the countdown) may
+/// hold EOS back until it saw time pass on every pad (`flvmux`, 1.28).
+///
+/// ```text
+///   from ─► queue `id` ─► valve `gate` ─►
+/// ```
+fn add_delay_queue(flow: &mut Flow, id: &str, gate: &str, from: String, delay_s: u32) -> String {
     let ns = |s: u32| PropertyValue::UInt(u64::from(s) * 1_000_000_000);
     flow.elements.push(element(
         id,
@@ -1052,7 +1071,16 @@ fn add_delay_queue(flow: &mut Flow, id: &str, from: String, delay_s: u32) -> Str
         ],
     ));
     flow.links.push(link(from, id.into()));
-    id.into()
+    flow.elements.push(element(
+        gate,
+        "valve",
+        vec![(
+            "drop-mode",
+            PropertyValue::String("transform-to-gap".into()),
+        )],
+    ));
+    flow.links.push(link(id.into(), gate.into()));
+    gate.into()
 }
 
 /// An output flow's inter input `id` of `channel`, buffering `extra_ms`
@@ -3292,11 +3320,21 @@ mod tests {
         let ns = |s: u64| Some(s * 1_000_000_000);
         for (spec, video_in, audio_in) in streams {
             let flow = flow_of(&spec);
-            // A stop ends at once: a drain would be cut off after 5 s.
-            assert_eq!(flow.properties.eos_on_stop, Some(false));
-            for (queue, from, to) in [
-                (SEND_DELAY_VIDEO, "enc:encoded_out", video_in),
-                (SEND_DELAY_SOUND, OUTPUT_SOUND_TIMED, audio_in),
+            // The stop drains with EOS past the closed gates: RTMP unpublishes.
+            assert_eq!(flow.properties.eos_on_stop, Some(true));
+            for (queue, gate, from, to) in [
+                (
+                    SEND_DELAY_VIDEO,
+                    SEND_GATE_VIDEO,
+                    "enc:encoded_out",
+                    video_in,
+                ),
+                (
+                    SEND_DELAY_SOUND,
+                    SEND_GATE_SOUND,
+                    OUTPUT_SOUND_TIMED,
+                    audio_in,
+                ),
             ] {
                 let q = flow.elements.iter().find(|e| e.id == queue).unwrap();
                 assert_eq!(q.element_type, "queue");
@@ -3305,7 +3343,15 @@ mod tests {
                 for limit in ["max-size-buffers", "max-size-bytes"] {
                     assert_eq!(uint(q, limit), Some(0));
                 }
-                for (a, b) in [(from, queue), (queue, to)] {
+                // Open while it runs; closed it drops data (as gaps) but passes EOS.
+                let g = flow.elements.iter().find(|e| e.id == gate).unwrap();
+                assert_eq!(g.element_type, "valve");
+                assert!(matches!(
+                    g.properties.get("drop-mode"),
+                    Some(PropertyValue::String(m)) if m == "transform-to-gap"
+                ));
+                assert!(!g.properties.contains_key("drop"));
+                for (a, b) in [(from, queue), (queue, gate), (gate, to)] {
                     assert!(
                         flow.links.iter().any(|l| l.from == a && l.to == b),
                         "{a} -> {b}"
@@ -3314,6 +3360,7 @@ mod tests {
                 // Nothing goes around the queue.
                 assert!(!flow.links.iter().any(|l| l.from == from && l.to == to));
             }
+            assert_eq!(send_gates(&flow), [SEND_GATE_VIDEO, SEND_GATE_SOUND]);
 
             let mut live = spec.clone();
             if let OutputSpec::Srt { delay_s, .. } | OutputSpec::Rtmp { delay_s, .. } = &mut live {
@@ -3325,6 +3372,7 @@ mod tests {
                 .iter()
                 .all(|e| e.id != SEND_DELAY_VIDEO && e.id != SEND_DELAY_SOUND));
             assert_eq!(flow.properties.eos_on_stop, Some(true), "live drains");
+            assert!(send_gates(&flow).is_empty());
             assert!(flow
                 .links
                 .iter()
