@@ -44,6 +44,7 @@ ColumnLayout {
         { kind: "stop_output", label: qsTr("Stop output"), param: "output" },
         { kind: "start_streams", label: qsTr("Start all streams"), param: "" },
         { kind: "stop_streams", label: qsTr("Stop all streams"), param: "" },
+        { kind: "mark_recording", label: qsTr("Mark in recordings"), param: "" },
         { kind: "audio_on", label: qsTr("Sound of input on"), param: "input" },
         { kind: "audio_off", label: qsTr("Sound of input off"), param: "input" },
         { kind: "json", label: qsTr("Other (JSON)"), param: "json" }
@@ -79,6 +80,7 @@ ColumnLayout {
         case "stop_output": return { action: "stop_output", output: n }
         case "start_streams": return { action: "start_outputs", group: "streams" }
         case "stop_streams": return { action: "stop_outputs", group: "streams" }
+        case "mark_recording": return { action: "mark_recording" }
         case "audio_on": return { action: "set_audio", input: n, on: true }
         case "audio_off": return { action: "set_audio", input: n, on: false }
         default: return JSON.parse(json)
@@ -109,6 +111,7 @@ ColumnLayout {
             return { kind: a.action, index: number(a.output) }
         if ((a.action === "start_outputs" || a.action === "stop_outputs") && a.group === "streams" && plain === 2)
             return { kind: a.action === "start_outputs" ? "start_streams" : "stop_streams", index: 0 }
+        if (a.action === "mark_recording" && !a.text) return { kind: "mark_recording", index: 0 }
         if (a.action === "set_audio" && typeof a.input === "number")
             return { kind: a.on ? "audio_on" : "audio_off", index: number(a.input) }
         return { kind: "json", index: 0, json: JSON.stringify(a) }

@@ -320,6 +320,7 @@ pub fn right_of(action: &Action) -> Right {
         | Action::StopOutput { .. }
         | Action::StartOutputs { .. }
         | Action::StopOutputs { .. }
+        | Action::MarkRecording { .. }
         | Action::SetAudio { .. }
         | Action::SetAudioFollow { .. }
         | Action::SetVolume { .. }

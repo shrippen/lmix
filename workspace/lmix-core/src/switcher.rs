@@ -17,6 +17,7 @@ use lmix_types::cue::{
 };
 use lmix_types::input::{color_rgb, REF_DYNAMIC, REF_PREVIEW, REF_PROGRAM, VOLUME_MAX};
 use lmix_types::layout::{BORDER_MAX_PX, LAYOUTS, LAYOUT_BOXES, LAYOUT_TEMPLATES};
+use lmix_types::output::MARK_TEXT_MAX;
 use lmix_types::shortcut::SHORTCUT_ACTIONS;
 use lmix_types::state::API_VERSION;
 use lmix_types::{
@@ -30,6 +31,7 @@ use lmix_types::{
 use lmix_types::{Cue, CueList, MidiKind, MidiMessage, Trigger, TriggerOn};
 
 use crate::cues::{Guard, Hold, Out, Runner};
+use crate::engine::marks::RecordingMark;
 use std::collections::{BTreeMap, HashMap, HashSet};
 use std::time::{Duration, Instant};
 use uuid::Uuid;
@@ -2165,6 +2167,10 @@ impl Switcher {
                 self.stop_output(&output)
             }
             Action::StartOutputs { group } => self.start_outputs(group),
+            // The engine writes it: through the service.
+            Action::MarkRecording { .. } => Err(ActionError::BadRecording {
+                reason: "run through the service".into(),
+            }),
             Action::StopOutputs { group } => {
                 self.check_unlocked()?;
                 Ok(self.stop_outputs(group))
@@ -5781,6 +5787,12 @@ impl Switcher {
         if let Some(reason) = spec.card_problem() {
             return Err(ActionError::BadCard { reason });
         }
+        if let Some(reason) = spec.split_problem() {
+            return Err(ActionError::BadRecording { reason });
+        }
+        let spec = spec
+            .with_normal_folder()
+            .map_err(|reason| ActionError::BadRecording { reason })?;
         if let Some(bus) = pair_buses(&spec).find(|b| !self.show.buses.iter().any(|s| s.id == *b)) {
             return Err(ActionError::UnknownBus {
                 reference: bus.to_string(),
@@ -6137,6 +6149,44 @@ impl Switcher {
     pub fn output_start_command(&self, id: OutputId) -> Option<Command> {
         let output = self.show.outputs.iter().find(|o| o.id == id)?;
         self.start_command(output).ok()
+    }
+
+    /// A mark at `at_ms` for each running recording (REC.8).
+    pub fn recording_marks(
+        &self,
+        at_ms: u64,
+        text: Option<&str>,
+    ) -> Result<Vec<RecordingMark>, ActionError> {
+        let text = text.unwrap_or_default().trim();
+        if text.chars().count() > MARK_TEXT_MAX {
+            return Err(ActionError::BadRecording {
+                reason: format!("a mark has at most {MARK_TEXT_MAX} characters"),
+            });
+        }
+        let marks: Vec<RecordingMark> = self
+            .show
+            .outputs
+            .iter()
+            .filter_map(|o| {
+                let OutputSpec::Record { folder, .. } = &o.spec else {
+                    return None;
+                };
+                let Some(OutputStatus::Running { since_ms }) = self.output_status.get(&o.id) else {
+                    return None;
+                };
+                Some(RecordingMark {
+                    output: o.id,
+                    folder: folder.clone(),
+                    since_ms: *since_ms,
+                    at_ms,
+                    text: text.to_string(),
+                })
+            })
+            .collect();
+        if marks.is_empty() {
+            return Err(ActionError::NoRecording);
+        }
+        Ok(marks)
     }
 
     pub fn output_is_running(&self, id: OutputId) -> bool {
@@ -12712,6 +12762,8 @@ mod tests {
                 keyframe_ms,
                 ..Default::default()
             },
+            split_minutes: 0,
+            split_mb: 0,
         };
         let add = |spec| Action::AddOutput {
             spec,
@@ -12738,6 +12790,37 @@ mod tests {
         );
     }
 
+    // REC.8: a recording's folder is kept one way written, the way the
+    // engine names its files; outside the media directory it is refused.
+    #[test]
+    fn a_recording_folder_is_kept_in_its_normal_form() {
+        let mut sw = Switcher::new(SLOTS);
+        let add = |folder: &str| Action::AddOutput {
+            spec: OutputSpec::Record {
+                folder: folder.into(),
+                container: Default::default(),
+                video_kbps: 8000,
+                encoding: Default::default(),
+                split_minutes: 0,
+                split_mb: 0,
+            },
+            source: OutputSource::Program,
+            name: None,
+            bus: None,
+        };
+        sw.apply(add("./show//day 1/")).unwrap();
+        let OutputSpec::Record { folder, .. } = &sw.state().outputs[0].spec else {
+            panic!("a recording");
+        };
+        assert_eq!(folder, "show/day 1");
+        for folder in ["../elsewhere", "/", ""] {
+            assert!(
+                matches!(sw.apply(add(folder)), Err(ActionError::BadRecording { .. })),
+                "{folder}"
+            );
+        }
+    }
+
     #[test]
     fn output_groups_start_and_stop_together() {
         let mut sw = Switcher::new(SLOTS);
@@ -12751,6 +12834,8 @@ mod tests {
             container: Default::default(),
             video_kbps: 8000,
             encoding: Default::default(),
+            split_minutes: 0,
+            split_mb: 0,
         };
         for spec in [srt(9000), record, srt(9001)] {
             sw.apply(Action::AddOutput {
@@ -12837,6 +12922,8 @@ mod tests {
             container: lmix_types::Container::Mkv,
             video_kbps: 8000,
             encoding: Default::default(),
+            split_minutes: 0,
+            split_mb: 0,
         };
         sw.apply(Action::AddOutput {
             spec: rec,

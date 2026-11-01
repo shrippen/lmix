@@ -69,6 +69,9 @@ pub struct NullEngine {
     /// Every output fails right after its start, as one on a busy card.
     #[cfg(test)]
     failing_outputs: std::sync::atomic::AtomicBool,
+    /// Recording marks so far (REC.8).
+    #[cfg(test)]
+    marks: Mutex<Vec<super::marks::RecordingMark>>,
 }
 
 impl NullEngine {
@@ -221,6 +224,12 @@ impl NullEngine {
     pub fn log(&self) -> Vec<Command> {
         self.log.lock().expect("log lock").clone()
     }
+
+    /// Recording marks so far.
+    #[cfg(test)]
+    pub fn marks(&self) -> Vec<super::marks::RecordingMark> {
+        self.marks.lock().expect("marks lock").clone()
+    }
 }
 
 /// How long after its start a failing output fails (`fail_outputs`).
@@ -314,6 +323,18 @@ impl Engine for NullEngine {
     #[cfg(test)]
     async fn instance(&self) -> Option<String> {
         self.instance.lock().expect("instance lock").clone()
+    }
+
+    #[cfg(test)]
+    async fn mark_recordings(
+        &self,
+        marks: &[super::marks::RecordingMark],
+    ) -> Result<(), EngineError> {
+        self.marks
+            .lock()
+            .expect("marks lock")
+            .extend_from_slice(marks);
+        Ok(())
     }
 
     async fn run(&self, command: &Command) -> Result<(), EngineError> {

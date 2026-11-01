@@ -73,7 +73,7 @@ case "$MIXER" in
     *) ENGINE_ENV=() ;;
 esac
 (cd "$WORK" && exec env "${ENGINE_ENV[@]}" "$STROM_BIN" --host 127.0.0.1 --port "$STROM_PORT" --no-auto-restart \
-    --data-dir "$WORK/strom-data" >"$WORK/strom.log" 2>&1) &
+    --data-dir "$WORK/strom-data" --media-path "$WORK" >"$WORK/strom.log" 2>&1) &
 PIDS+=($!)
 wait_up "http://127.0.0.1:${STROM_PORT}/health" strom
 "$CORE_BIN" --strom "http://127.0.0.1:${STROM_PORT}" --listen "127.0.0.1:${CORE_PORT}" \
@@ -89,7 +89,7 @@ act '{"action":"set_send","input":1,"bus":"Stream","level":100}'
 sleep 4
 case "$OUTPUT" in
     record)
-        act "{\"action\":\"add_output\",\"spec\":{\"kind\":\"record\",\"folder\":\"$WORK/rec\",\"container\":\"mkv\"},\"name\":\"Rec\"}" ;;
+        act "{\"action\":\"add_output\",\"spec\":{\"kind\":\"record\",\"folder\":\"rec\",\"container\":\"mkv\"},\"name\":\"Rec\"}" ;;
     srt)
         act "{\"action\":\"add_output\",\"spec\":{\"kind\":\"srt\",\"uri\":\"srt://:$SRT_PORT?mode=listener\"},\"name\":\"Rec\"}" ;;
     *) echo "OUTPUT is record or srt, not $OUTPUT" >&2; exit 2 ;;

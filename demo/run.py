@@ -229,12 +229,11 @@ def stage(lang, work):
     act({"action": "cut_direct", "input": ids[STREAM["on"]["program"]]})
     act({"action": "preview_input", "input": ids[STREAM["on"]["preview"]]})
 
-    (work / "rec").mkdir()
     for n, out in enumerate(STREAM["outputs"]):
         if out["kind"] == "srt":
             spec = {"kind": "srt", "uri": f"srt://:{SRT_PORT + n}?mode=listener"}
         else:
-            spec = {"kind": "record", "folder": str(work / "rec"), "container": "mkv"}
+            spec = {"kind": "record", "folder": "rec", "container": "mkv"}
         action = {"action": "add_output", "spec": spec, "name": text(out["name"], lang)}
         if out.get("input"):
             action["source"] = {"from": "input", "input": ids[out["input"]]}

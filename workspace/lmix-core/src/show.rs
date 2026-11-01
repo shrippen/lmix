@@ -475,7 +475,9 @@ pub fn read_bytes(bytes: &[u8], name: &str) -> Result<Loaded, ShowFileError> {
         }
         rename_actions(show);
     }
-    let file: ShowFile = serde_json::from_value(value).map_err(|e| format_err(e.to_string()))?;
+    let mut file: ShowFile =
+        serde_json::from_value(value).map_err(|e| format_err(e.to_string()))?;
+    normal_recording_folders(&mut file.show);
     Ok(Loaded {
         show: file.show,
         older: (version < FILE_VERSION).then_some(version),
@@ -493,6 +495,37 @@ pub async fn backup(path: &Path, version: u32) -> std::io::Result<()> {
     }
     tokio::fs::copy(path, &to).await.map(|_| ())
 }
+
+/// Recording folders in the form the core keeps (`normal_folder`, REC.8),
+/// whatever the file's version: shows saved before that rule may hold
+/// `show/` or an absolute folder. `..` is dropped, the folder stays in
+/// strom's media directory; nothing left: `RESCUED_FOLDER`.
+fn normal_recording_folders(show: &mut Show) {
+    for output in &mut show.outputs {
+        let OutputSpec::Record { folder, .. } = &mut output.spec else {
+            continue;
+        };
+        let normal = lmix_types::normal_folder(folder).unwrap_or_else(|_| {
+            let parts: Vec<&str> = folder
+                .split('/')
+                .filter(|part| !matches!(*part, "" | "." | ".."))
+                .collect();
+            if parts.is_empty() {
+                RESCUED_FOLDER.to_string()
+            } else {
+                parts.join("/")
+            }
+        });
+        if normal != *folder {
+            tracing::info!(from = %folder, to = %normal, "recording folder in its normal form");
+            *folder = normal;
+        }
+    }
+}
+
+/// Folder of a loaded recording whose folder held nothing in the media
+/// directory (empty, or only `..`).
+const RESCUED_FOLDER: &str = "recordings";
 
 /// Version 1 to 2: a cue's `label` is its `name`; the rest of a cue of
 /// then (`actions`) is an actions cue now (CUE.21).
@@ -1124,6 +1157,43 @@ mod tests {
         assert_eq!(actions[0], Action::Restore);
         let json = serde_json::to_string(actions).unwrap();
         assert!(!json.contains("restore_input"), "{json}");
+    }
+
+    // REC.8: a show saved before recording folders had one form loads
+    // with the folder the core gives strom, in the media directory.
+    #[test]
+    fn recording_folders_load_in_their_normal_form() {
+        let mut value = serde_json::to_value(sample()).unwrap();
+        let record = |folder: &str| {
+            serde_json::json!({ "id": OutputId::new(), "name": "",
+                "spec": { "kind": "record", "folder": folder, "container": "mkv" },
+                "source": { "from": "program" } })
+        };
+        let folders = [
+            "show/",
+            "/home/me/Videos",
+            "./a//b",
+            "../../x",
+            "..",
+            "show",
+        ];
+        value["outputs"] = folders.iter().map(|f| record(f)).collect();
+        let file =
+            serde_json::json!({ "format": FILE_FORMAT, "version": FILE_VERSION, "show": value });
+        let show = from_bytes(&serde_json::to_vec(&file).unwrap(), "old").unwrap();
+
+        let loaded: Vec<&str> = show
+            .outputs
+            .iter()
+            .map(|o| match &o.spec {
+                OutputSpec::Record { folder, .. } => folder.as_str(),
+                other => panic!("{other:?}"),
+            })
+            .collect();
+        assert_eq!(
+            loaded,
+            ["show", "home/me/Videos", "a/b", "x", RESCUED_FOLDER, "show"]
+        );
     }
 
     #[test]

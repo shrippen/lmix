@@ -80,6 +80,18 @@ TestCase {
         compare(sent, ["start_output", "stop_output", "stop_output"])
     }
 
+    // REC.8: Mark shows while a recording runs and sends one mark.
+    function test_mark_shows_while_a_recording_runs() {
+        const recording = state => ({ outputs: [{ id: "o2", spec: { kind: "record", folder: "show" }, status: { state: state } }] })
+        const bar = createTemporaryObject(barComponent, test.Window.contentItem, { show: recording("stopped") })
+        const mark = findChild(bar, "markButton")
+        verify(!mark.visible)
+        bar.show = recording("running")
+        verify(mark.visible)
+        mark.clicked()
+        compare(sent, ["mark_recording"])
+    }
+
     function test_settings_names_the_output() {
         const bar = createTemporaryObject(barComponent, test.Window.contentItem)
         menuOf(bar).settingsRequested()

@@ -2037,6 +2037,22 @@ impl Service {
                 self.send_to_target(config, request, out);
                 return Ok(self.state().await);
             }
+            // REC.8: written by the engine, without the switcher locked
+            // (an upload must not hold up switching).
+            Action::MarkRecording { text } => {
+                let marks = self
+                    .switcher
+                    .lock()
+                    .await
+                    .recording_marks(now_ms(), text.as_deref())?;
+                self.engine
+                    .mark_recordings(&marks)
+                    .await
+                    .map_err(|e| ActionError::Engine {
+                        message: e.to_string(),
+                    })?;
+                return Ok(self.state().await);
+            }
             Action::TestTarget { name } => {
                 let (config, out) = self.target_and_out(name).await?;
                 if out == Outbound::Locked {
@@ -5426,6 +5442,76 @@ mod tests {
             state.outputs[0].status,
             lmix_types::OutputStatus::Running { .. }
         ));
+    }
+
+    /// REC.8: a mark reaches the engine for each running recording only,
+    /// with its folder, start and text; without one it is refused. REC.4:
+    /// a split out of range is refused.
+    #[tokio::test]
+    async fn marks_go_to_running_recordings() {
+        use lmix_types::{OutputRef, OutputSpec, OutputStatus};
+        let engine = Arc::new(NullEngine::default());
+        let service = Service::new(4, engine.clone(), None);
+        let record = |folder: &str, split_minutes| OutputSpec::Record {
+            folder: folder.into(),
+            container: Default::default(),
+            video_kbps: 6000,
+            encoding: Default::default(),
+            split_minutes,
+            split_mb: 0,
+        };
+        let refused = service
+            .handle(Action::AddOutput {
+                spec: record("show", lmix_types::output::SPLIT_MINUTES_MAX + 1),
+                source: lmix_types::OutputSource::Program,
+                bus: None,
+                name: None,
+            })
+            .await;
+        assert!(matches!(refused, Err(ActionError::BadRecording { .. })));
+        for folder in ["show", "spare"] {
+            service
+                .handle(Action::AddOutput {
+                    spec: record(folder, 30),
+                    source: lmix_types::OutputSource::Program,
+                    bus: None,
+                    name: None,
+                })
+                .await
+                .unwrap();
+        }
+        let mark = |text: Option<&str>| Action::MarkRecording {
+            text: text.map(str::to_string),
+        };
+        assert_eq!(
+            service.handle(mark(None)).await,
+            Err(ActionError::NoRecording)
+        );
+
+        service
+            .handle(Action::StartOutput {
+                output: OutputRef::Number(1),
+            })
+            .await
+            .unwrap();
+        service.handle(mark(Some(" Q&A "))).await.unwrap();
+        let too_long = "x".repeat(lmix_types::output::MARK_TEXT_MAX + 1);
+        let refused = service.handle(mark(Some(&too_long))).await;
+        assert!(matches!(refused, Err(ActionError::BadRecording { .. })));
+
+        let state = service.state().await;
+        let OutputStatus::Running { since_ms } = state.outputs[0].status else {
+            panic!("{:?}", state.outputs[0].status);
+        };
+        let marks = engine.marks();
+        assert_eq!(marks.len(), 1, "{marks:?}");
+        assert_eq!(marks[0].output, state.outputs[0].id);
+        assert_eq!(
+            (marks[0].folder.as_str(), marks[0].text.as_str()),
+            ("show", "Q&A")
+        );
+        assert_eq!(marks[0].since_ms, since_ms);
+        assert!(marks[0].at_ms >= since_ms);
     }
 
     /// The cards start off: a card input shows black with a banner and a

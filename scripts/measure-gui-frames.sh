@@ -99,7 +99,7 @@ if [[ "${DETACH:-}" == 1 ]]; then
 fi
 
 (cd "$WORK" && exec "$STROM_BIN" --host 127.0.0.1 --port "$STROM_PORT" --no-auto-restart \
-    --data-dir "$WORK/strom-data" >"$WORK/strom.log" 2>&1) &
+    --data-dir "$WORK/strom-data" --media-path "$WORK" >"$WORK/strom.log" 2>&1) &
 PIDS+=($!)
 wait_up "http://127.0.0.1:${STROM_PORT}/health" strom
 "$CORE_BIN" --strom "http://127.0.0.1:${STROM_PORT}" --listen "127.0.0.1:${CORE_PORT}" --mixer "$MIXER" \
@@ -113,7 +113,7 @@ for i in $(seq 1 "$INPUTS"); do
     act "{\"action\":\"add_input\",\"source\":{\"kind\":\"pattern\",\"pattern\":\"$pattern\"},\"name\":\"${pattern^} $i\"}"
 done
 act '{"action":"cut_direct","input":1}'
-act "{\"action\":\"add_output\",\"spec\":{\"kind\":\"record\",\"folder\":\"$WORK/rec\",\"container\":\"mkv\"},\"name\":\"Rec\"}"
+act "{\"action\":\"add_output\",\"spec\":{\"kind\":\"record\",\"folder\":\"rec\",\"container\":\"mkv\"},\"name\":\"Rec\"}"
 act '{"action":"start_output","output":"Rec"}'
 # The recording's first frame is about when its file gets data. Right
 # after adding 31 inputs, while they still start, that came 6 s after

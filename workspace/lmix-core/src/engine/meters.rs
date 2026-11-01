@@ -270,6 +270,7 @@ pub async fn follow(
     players: broadcast::Sender<crate::clips::PlayerProgress>,
     stingers: Arc<Stingers>,
     buses: Arc<std::sync::Mutex<Option<super::flows::BuiltBuses>>>,
+    recorder_files: Arc<Mutex<HashMap<FlowId, super::marks::RecorderFile>>>,
 ) {
     // Last state each player reported, added to its position reports.
     let mut player_states = HashMap::new();
@@ -356,6 +357,17 @@ pub async fn follow(
                         qos.behind += u64::from(is_falling_behind);
                         qos.proportion = avg_proportion;
                     }
+                    // REC.8: the protocol names the file written now.
+                    Ok(StromEvent::RecorderFileChanged {
+                        flow_id, filename, ..
+                    }) => {
+                        let file = super::marks::RecorderFile {
+                            path: super::marks::normal_path(&filename),
+                            opened_ms: Some(unix_ms()),
+                        };
+                        let mut files = recorder_files.lock().expect("recorder files lock");
+                        files.insert(flow_id, file);
+                    }
                     Ok(StromEvent::FlowStopped { flow_id }) => {
                         let _ = errors.send(FlowError {
                             flow: flow_id,
@@ -369,6 +381,12 @@ pub async fn follow(
         }
         tokio::time::sleep(RECONNECT).await;
     }
+}
+
+fn unix_ms() -> u64 {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map_or(0, |d| d.as_millis() as u64)
 }
 
 fn record_meter(

@@ -184,6 +184,34 @@ impl VideoEncoding {
     }
 }
 
+/// Longest file of a split recording (REC.4): a day.
+pub const SPLIT_MINUTES_MAX: u32 = 24 * 60;
+/// Smallest file of a split recording: below, a few seconds per file.
+pub const SPLIT_MB_MIN: u32 = 10;
+/// Largest file of a split recording: 1 TiB.
+pub const SPLIT_MB_MAX: u32 = 1024 * 1024;
+
+/// A recording's folder below the engine's media directory, one way
+/// written: `./show//day 1/` → `show/day 1`. Refused: empty, or leaving
+/// the media directory (`..`). A leading `/` counts as the media
+/// directory's root, not the machine's.
+pub fn normal_folder(folder: &str) -> Result<String, String> {
+    let parts: Vec<&str> = folder
+        .split('/')
+        .filter(|part| !part.is_empty() && *part != ".")
+        .collect();
+    if parts.contains(&"..") {
+        return Err(format!("folder {folder}: .. leaves the media directory"));
+    }
+    if parts.is_empty() {
+        return Err("a folder in the media directory, not empty".into());
+    }
+    Ok(parts.join("/"))
+}
+
+/// Longest text of a recording mark (REC.8).
+pub const MARK_TEXT_MAX: usize = 200;
+
 /// What an output does with program.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
 #[serde(tag = "kind", rename_all = "snake_case")]
@@ -209,6 +237,12 @@ pub enum OutputSpec {
         /// Codec, rate control and keyframe interval (STR.3).
         #[serde(default, skip_serializing_if = "VideoEncoding::is_default")]
         encoding: VideoEncoding,
+        /// A new file every so many minutes (REC.4); 0: one file.
+        #[serde(default, skip_serializing_if = "is_zero")]
+        split_minutes: u32,
+        /// A new file once one holds so many MB (REC.4); 0: no limit.
+        #[serde(default, skip_serializing_if = "is_zero")]
+        split_mb: u32,
     },
     /// FLV over RTMP or RTMPS to a platform (STR.2): H.264 + AAC.
     /// `url` is the server, e.g. `rtmp://a.rtmp.youtube.com/live2`; the
@@ -283,6 +317,35 @@ impl OutputSpec {
             }
         }
         self.encoding().and_then(VideoEncoding::problem)
+    }
+
+    /// The spec with a recording's folder in its normal form
+    /// (`normal_folder`); other outputs as they are.
+    pub fn with_normal_folder(mut self) -> Result<Self, String> {
+        if let Self::Record { folder, .. } = &mut self {
+            *folder = normal_folder(folder)?;
+        }
+        Ok(self)
+    }
+
+    /// What is wrong with a recording's splitting (REC.4).
+    pub fn split_problem(&self) -> Option<String> {
+        let Self::Record {
+            split_minutes,
+            split_mb,
+            ..
+        } = self
+        else {
+            return None;
+        };
+        if *split_minutes > SPLIT_MINUTES_MAX {
+            return Some(format!(
+                "a new file every {split_minutes} minutes, at most {SPLIT_MINUTES_MAX}"
+            ));
+        }
+        let mb_range = SPLIT_MB_MIN..=SPLIT_MB_MAX;
+        (*split_mb != 0 && !mb_range.contains(split_mb))
+            .then(|| format!("a new file at {split_mb} MB, {SPLIT_MB_MIN}–{SPLIT_MB_MAX} MB or 0"))
     }
 
     /// What is wrong with a card output's sound: more pairs than its
@@ -536,5 +599,73 @@ mod tests {
             sound_delay_ms: 0,
         };
         assert_eq!(card.default_name(), "Card 4294967296 720p50");
+    }
+
+    fn record(split_minutes: u32, split_mb: u32) -> OutputSpec {
+        OutputSpec::Record {
+            folder: "show".into(),
+            container: Container::Mkv,
+            video_kbps: DEFAULT_VIDEO_KBPS,
+            encoding: VideoEncoding::default(),
+            split_minutes,
+            split_mb,
+        }
+    }
+
+    // REC.4: shows from before splitting read as one file, and one file
+    // writes nothing new.
+    #[test]
+    fn a_recording_splits_only_when_asked() {
+        let old: OutputSpec = serde_json::from_str(r#"{"kind":"record","folder":"show"}"#).unwrap();
+        assert_eq!(old, record(0, 0));
+        let json = serde_json::to_string(&old).unwrap();
+        assert!(!json.contains("split"), "{json}");
+
+        let json = serde_json::to_value(record(30, 2048)).unwrap();
+        assert_eq!(json["split_minutes"], 30);
+        assert_eq!(json["split_mb"], 2048);
+    }
+
+    // One folder, one way written: the engine's file names and the
+    // protocol beside them agree (REC.8).
+    #[test]
+    fn a_recording_folder_has_one_form() {
+        assert_eq!(normal_folder("show"), Ok("show".into()));
+        assert_eq!(normal_folder("./show//day 1/"), Ok("show/day 1".into()));
+        assert_eq!(normal_folder("/show/"), Ok("show".into()));
+        assert!(normal_folder("show/../..").is_err());
+        assert!(normal_folder("./").is_err());
+        assert!(normal_folder("").is_err());
+        let spec = OutputSpec::Record {
+            folder: "show/".into(),
+            container: Container::Mkv,
+            video_kbps: DEFAULT_VIDEO_KBPS,
+            encoding: VideoEncoding::default(),
+            split_minutes: 0,
+            split_mb: 0,
+        };
+        let OutputSpec::Record { folder, .. } = spec.with_normal_folder().unwrap() else {
+            panic!("a recording");
+        };
+        assert_eq!(folder, "show");
+    }
+
+    #[test]
+    fn splitting_stays_in_sane_ranges() {
+        assert_eq!(record(0, 0).split_problem(), None);
+        assert_eq!(
+            record(SPLIT_MINUTES_MAX, SPLIT_MB_MAX).split_problem(),
+            None
+        );
+        assert_eq!(record(1, SPLIT_MB_MIN).split_problem(), None);
+        assert!(record(SPLIT_MINUTES_MAX + 1, 0).split_problem().is_some());
+        assert!(record(0, SPLIT_MB_MIN - 1).split_problem().is_some());
+        assert!(record(0, SPLIT_MB_MAX + 1).split_problem().is_some());
+        let srt = OutputSpec::Srt {
+            uri: "srt://x:1".into(),
+            video_kbps: 1,
+            encoding: VideoEncoding::default(),
+        };
+        assert_eq!(srt.split_problem(), None);
     }
 }

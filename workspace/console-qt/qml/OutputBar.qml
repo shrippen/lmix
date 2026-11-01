@@ -35,6 +35,9 @@ RowLayout {
     /** SRT outputs, started and stopped together with one button (STR.1). */
     readonly property var streams: (show && show.outputs ? show.outputs : []).filter(o => o.spec && o.spec.kind === "srt")
     readonly property bool allStreaming: streams.every(o => o.status.state === "running")
+    /** A recording runs: Mark writes into its protocol (REC.8). */
+    readonly property bool recording: (show && show.outputs ? show.outputs : [])
+        .some(o => o.spec && o.spec.kind === "record" && o.status.state === "running")
 
     spacing: Kirigami.Units.smallSpacing
 
@@ -127,6 +130,16 @@ RowLayout {
                 bar.act({ action: "stop_outputs", group: "streams" })
             }
         }
+    }
+
+    KanteButton {
+        objectName: "markButton"
+        visible: bar.recording
+        text: qsTr("Mark")
+        enabled: bar.core.connected
+        onClicked: bar.act({ action: "mark_recording" })
+        QQC2.ToolTip.visible: hovered
+        QQC2.ToolTip.text: qsTr("Write the time into the protocol beside each running recording")
     }
 
     KanteButton {

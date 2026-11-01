@@ -26,6 +26,7 @@
 //! | `/lmix/cue/release` | none | the GO button is let go (RUN.6) |
 //! | `/lmix/panic` | time in ms (int) or s (float), or none | `cue_panic` (twice: hard stop) |
 //! | `/lmix/stop/hard` | – | `cue_hard_stop` |
+//! | `/lmix/mark` | text, or none | `mark_recording` (REC.8) |
 //! | `/lmix/subscribe` | none, or topic and fields (`osc_subs`, CTL.3) | the sender gets tally and state, or that topic, from now on |
 //! | `/lmix/unsubscribe` | none, or a topic | stops it, or that topic |
 //! | `/lmix/ping` | – | answers `/lmix/pong`; keeps a subscription |
@@ -364,6 +365,12 @@ pub fn request(message: &Message) -> Result<Request, String> {
             },
         },
         ["stop", "hard"] => Action::CueHardStop,
+        ["mark"] => Action::MarkRecording {
+            text: match arg(0) {
+                Some(Arg::Str(text)) => Some(text.clone()),
+                _ => None,
+            },
+        },
         // A mood by id, group or "group / variant", with an optional fade
         // in ms (MOOD.11).
         ["mood"] => Action::SetMood {
@@ -719,6 +726,16 @@ mod tests {
         assert_eq!(
             req("/lmix/stop/hard", vec![]),
             Ok(Request::Action(Action::CueHardStop))
+        );
+        assert_eq!(
+            req("/lmix/mark", vec![Arg::Str("Q&A".into())]),
+            Ok(Request::Action(Action::MarkRecording {
+                text: Some("Q&A".into())
+            }))
+        );
+        assert_eq!(
+            req("/lmix/mark", vec![]),
+            Ok(Request::Action(Action::MarkRecording { text: None }))
         );
         assert_eq!(
             req("/lmix/panic", vec![Arg::Int(3000)]),
