@@ -7457,10 +7457,11 @@ Auslösern und Stimmungs-Ebenen; keine eigene Cue-Art (wie DECISIONS
   je Nachricht eine Verbindung (verbinden, Rahmen schreiben, schließen).
   Eine dauerhafte Verbindung spart im LAN eine Rundreise, braucht aber
   Wiederaufbau und Zustand; erst, wenn ein Pult es verlangt. Nach dem
-  Rahmen schließt lmix seine Seite und liest bis zu 200 ms, was das Pult
-  noch schickt (ein Pult, das seinen Clients selbst sendet): Schließen mit
-  ungelesenen Daten schickte ein Reset, und das Pult könnte den Rahmen
-  verwerfen. Pulte, die nur
+  Rahmen schließt lmix seine Seite; gesendet ist die Nachricht dann. Danach
+  liest lmix im Hintergrund bis zu 200 ms, was das Pult noch schickt (ein
+  Pult, das seinen Clients selbst sendet): Schließen mit ungelesenen Daten
+  schickte ein Reset, und das Pult könnte den Rahmen verwerfen. Dieses
+  Lesen zählt nicht zum Zeitlimit und hält die nächste Nachricht nicht auf. Pulte, die nur
   den Längen-Präfix von OSC 1.0 lesen, gehen über UDP.
 - **Falsches Protokoll**: `http_request` an ein OSC-Ziel oder `osc_send` an
   ein HTTP-Ziel scheitert als Ereignis (`… speaks OSC: use osc_send`), nie

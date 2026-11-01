@@ -144,6 +144,21 @@ TestCase {
         compare(box.currentText, "Pult")
     }
 
+    // The "needs a target" error follows the target list both ways.
+    function test_osc_error_follows_the_target_list() {
+        const rows = createTemporaryObject(rowsComponent, test)
+        rows.load([])
+        const row = findChild(rows, "actionRowRepeater").itemAt(0)
+        row.kindIndex = rows.kinds.findIndex(k => k.kind === "osc")
+        row.setOsc({ target: "", address: "/go", args: "" })
+        verify(rows.error.indexOf("target") >= 0, rows.error)
+        rows.targets = [{ name: "Pult", kind: "osc_udp" }]
+        compare(rows.error, "", "a target came")
+        compare(row.osc().target, "Pult")
+        rows.targets = []
+        verify(rows.error.indexOf("target") >= 0, "and went: " + rows.error)
+    }
+
     // Without OSC targets the row cannot be saved.
     function test_osc_needs_a_target() {
         const rows = createTemporaryObject(rowsComponent, test)

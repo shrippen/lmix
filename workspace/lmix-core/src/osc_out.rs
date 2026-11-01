@@ -108,7 +108,8 @@ async fn send_tcp(peer: SocketAddr, packet: &[u8]) -> Result<(), String> {
         .await
         .map_err(|e| format!("not sent: {e}"))?;
     let _ = stream.shutdown().await;
-    drain(&mut stream).await;
+    // Sent: the drain holds neither the time limit nor the queue.
+    tokio::spawn(drain(stream));
     Ok(())
 }
 
@@ -119,7 +120,7 @@ const DRAIN: Duration = Duration::from_millis(200);
 /// Read and drop what the peer sent until it closes (or `DRAIN` passed):
 /// closing with unread data sends a reset, and the peer may drop the
 /// frame it has not read yet (a desk that talks to its clients).
-async fn drain(stream: &mut tokio::net::TcpStream) {
+async fn drain(mut stream: tokio::net::TcpStream) {
     let mut buf = [0u8; 1024];
     let read_all = async { while matches!(stream.read(&mut buf).await, Ok(n) if n > 0) {} };
     let _ = tokio::time::timeout(DRAIN, read_all).await;
@@ -201,6 +202,33 @@ mod tests {
         });
         send(&target, &address, &packet).await.unwrap();
         assert_eq!(read.await.unwrap(), slip(&packet));
+    }
+
+    /// A desk that keeps its side open after the frame: sent counts at
+    /// once, within a short limit, and the next message does not wait.
+    #[tokio::test]
+    async fn tcp_does_not_wait_for_the_peer_to_close() {
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let address = listener.local_addr().unwrap().to_string();
+        let mut target = target(TargetKind::OscTcp, std::slice::from_ref(&address));
+        target.timeout_ms = 100;
+        let packet = encode_args("/eos/go", &[]);
+        let (got_tx, mut got) = tokio::sync::mpsc::unbounded_channel();
+        tokio::spawn(async move {
+            while let Ok((mut stream, _)) = listener.accept().await {
+                let got_tx = got_tx.clone();
+                tokio::spawn(async move {
+                    let mut frame = Vec::new();
+                    stream.read_to_end(&mut frame).await.unwrap();
+                    let _ = got_tx.send(frame);
+                    tokio::time::sleep(Duration::from_millis(500)).await;
+                });
+            }
+        });
+        for _ in 0..2 {
+            send(&target, &address, &packet).await.unwrap();
+            assert_eq!(got.recv().await.unwrap(), slip(&packet));
+        }
     }
 
     #[tokio::test]

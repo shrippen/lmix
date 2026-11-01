@@ -17,7 +17,7 @@
   <context>
     <name>ActionRows</name>
     <message>
-      <location filename="../qml/ActionRows.qml" line="+36" />
+      <location filename="../qml/ActionRows.qml" line="+38" />
       <source>—</source>
       <translation>—</translation>
     </message>
@@ -128,8 +128,8 @@
     </message>
     <message>
       <location line="+4" />
-      <source>Action %1: the OSC address starts with / and has no spaces</source>
-      <translation>Aktion %1: Die OSC-Adresse beginnt mit / und hat keine Leerzeichen</translation>
+      <source>Action %1: the OSC address starts with / and holds only letters, digits and signs of plain ASCII, no space, # or ,</source>
+      <translation>Aktion %1: Die OSC-Adresse beginnt mit / und enthält nur Buchstaben, Ziffern und Zeichen aus einfachem ASCII, kein Leerzeichen, # oder ,</translation>
     </message>
     <message>
       <location line="+10" />

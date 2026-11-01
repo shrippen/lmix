@@ -31,6 +31,8 @@ ColumnLayout {
     readonly property int shown: Math.max(8, Math.min(rows, lastUsed + 2))
     /** Names of the targets that speak OSC. */
     readonly property var oscTargets: (targets || []).filter(t => t.kind !== "http").map(t => t.name)
+    // A target added or removed while open: the "needs a target" error follows.
+    onOscTargetsChanged: validate()
     /** Preset kinds; `param` says what the second field picks. */
     readonly property var kinds: [
         { kind: "", label: qsTr("—"), param: "" },
@@ -183,7 +185,7 @@ ColumnLayout {
                     return
                 }
                 if (!oscAddressOk(osc.address.trim())) {
-                    error = qsTr("Action %1: the OSC address starts with / and has no spaces").arg(i + 1)
+                    error = qsTr("Action %1: the OSC address starts with / and holds only letters, digits and signs of plain ASCII, no space, # or ,").arg(i + 1)
                     return
                 }
                 continue
@@ -224,7 +226,7 @@ ColumnLayout {
             readonly property var oscChoices: oscChosen !== "" && editor.oscTargets.indexOf(oscChosen) < 0 ? [oscChosen].concat(editor.oscTargets) : editor.oscTargets
 
             function osc() {
-                return { target: oscChosen !== "" ? oscChosen : (oscChoices[0] || ""), address: oscAddress.text, args: oscArgs.text }
+                return { target: oscChosen !== "" ? oscChosen : (editor.oscTargets[0] || ""), address: oscAddress.text, args: oscArgs.text }
             }
             function setOsc(o) {
                 oscChosen = o.target

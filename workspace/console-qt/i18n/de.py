@@ -1484,7 +1484,7 @@ DE = {
     ('%1 %', 'a safe-area frame: its share of the picture'): '%1 %',
     'OSC message': 'OSC-Nachricht',
     'Action %1 needs an OSC target (Output targets)': 'Aktion %1 braucht ein OSC-Ziel (Ausgabeziele)',
-    'Action %1: the OSC address starts with / and has no spaces': 'Aktion %1: Die OSC-Adresse beginnt mit / und hat keine Leerzeichen',
+    'Action %1: the OSC address starts with / and holds only letters, digits and signs of plain ASCII, no space, # or ,': 'Aktion %1: Die OSC-Adresse beginnt mit / und enthält nur Buchstaben, Ziffern und Zeichen aus einfachem ASCII, kein Leerzeichen, # oder ,',
     'OSC target of action %1': 'OSC-Ziel von Aktion %1',
     'OSC address of action %1': 'OSC-Adresse von Aktion %1',
     'OSC arguments of action %1': 'OSC-Argumente von Aktion %1',
