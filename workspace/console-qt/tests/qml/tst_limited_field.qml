@@ -50,12 +50,24 @@ TestCase {
         field.insert(2, "\u{1F600}")
         compare(field.text, "abcdefghi", "the half emoji goes")
         compare(field.cursorPosition, 2, "the cursor stays")
-        // Pasted: a whole one, then one cut in half.
-        field.text = "abcdefg"
+        // Pasted: a whole one, then one cut in half (four units left).
+        field.text = "abcdef"
         field.cursorPosition = 3
         field.insert(3, "X\u{1F600}\u{1F601}")
-        compare(field.text, "abcX\u{1F600}defg")
+        compare(field.text, "abcX\u{1F600}def")
         compare(field.cursorPosition, 6, "after what was kept")
+    }
+
+    // Dropping the half keeps the undo history: Ctrl+Z takes back the paste.
+    function test_a_cut_paste_can_be_undone() {
+        const field = createTemporaryObject(fieldComponent, test, { limit: 10 })
+        field.text = "abcdef"
+        field.cursorPosition = 3
+        field.insert(3, "X\u{1F600}\u{1F601}")
+        compare(field.text, "abcX\u{1F600}def")
+        verify(field.canUndo, "the paste is in the history")
+        field.undo()
+        compare(field.text, "abcdef", "back to before the paste")
     }
 
     function test_whole_drops_lone_halves_anywhere() {
