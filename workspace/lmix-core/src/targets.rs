@@ -10,6 +10,7 @@
 //!                                            └─► POST http://ha:8123/api/services/light/turn_on
 //! ```
 
+use lmix_types::srt::redact_url;
 use std::collections::BTreeMap;
 use std::time::Duration;
 
@@ -75,6 +76,7 @@ pub fn set(targets: &mut Vec<TargetConfig>, spec: TargetSpec) -> Result<(), Acti
                 TargetKind::Http => "an http:// or https:// URL",
                 _ => "host:port",
             };
+            let address = lmix_types::srt::redact_url(address);
             return Err(bad(format!("{address} is not {want}")));
         }
     }
@@ -258,23 +260,26 @@ pub async fn send_one(
     let response = builder
         .send()
         .await
-        .map_err(|e| format!("{url}: {}", reason(&e)))?;
+        .map_err(|e| format!("{}: {}", redact_url(&url), reason(e)))?;
     let status = response.status();
     if status.is_success() || status.is_redirection() {
         return Ok(());
     }
-    Err(format!("{url}: HTTP {status}"))
+    // The answer goes to the client and the log: no `user:password@`, no
+    // token in the path.
+    Err(format!("{}: HTTP {status}", redact_url(&url)))
 }
 
 /// Short reason of a failed request (reqwest's chain is long).
-fn reason(e: &reqwest::Error) -> String {
+fn reason(e: reqwest::Error) -> String {
     if e.is_timeout() {
         return "no answer in time".into();
     }
     if e.is_connect() {
         return "cannot connect".into();
     }
-    e.to_string()
+    // reqwest's text names the address: without it, whatever the error.
+    e.without_url().to_string()
 }
 
 /// A probe of `target` (EXT.5): `GET` of its first address.
@@ -558,5 +563,43 @@ mod tests {
         };
         assert!(reason.contains("401"), "{reason}");
         assert!(probe(&http, &targets[1]).await.is_err());
+    }
+
+    #[tokio::test]
+    async fn failures_name_the_address_without_its_secrets() {
+        let (refusing, _seen) = server("401 Unauthorized").await;
+        let http = crate::datasource::client();
+        let request = Request {
+            method: HttpMethod::Get,
+            path: "/x?token=geheim".into(),
+            headers: BTreeMap::new(),
+            body: None,
+        };
+        let with_user = refusing.replace("http://", "http://u:geheim@");
+        let mut targets = Vec::new();
+        set(&mut targets, spec("Bad", &[&with_user], None)).unwrap();
+        set(
+            &mut targets,
+            spec("Gone", &["http://u:geheim@127.0.0.1:9"], None),
+        )
+        .unwrap();
+        // Neither timeout nor refused connection: an answer not HTTP.
+        let (garbled, _seen) = server("kaputt").await;
+        let garbled = garbled.replace("http://", "http://u:geheim@");
+        set(&mut targets, spec("Garbled", &[&garbled], None)).unwrap();
+        for target in &targets {
+            let TargetResult::Failed { reason } = send(&http, target, &request).await else {
+                panic!("no success");
+            };
+            assert!(!reason.contains("geheim"), "{reason}");
+            assert!(reason.contains("…"), "{reason}");
+        }
+        let Err(ActionError::BadTarget { reason }) = set(
+            &mut targets,
+            spec("A", &["ha.local:8123?token=geheim"], None),
+        ) else {
+            panic!("no http address")
+        };
+        assert!(!reason.contains("geheim"), "{reason}");
     }
 }

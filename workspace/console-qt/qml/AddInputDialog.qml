@@ -597,15 +597,22 @@ KanteDialog {
                         // A pasted srt:// address fills the fields at once; one
                         // typed by hand only when the field is left, or the
                         // fields would fill after the port's first digit.
-                        // Pasted: the text grew by two or more characters, or
-                        // it is an srt:// address now and was none before
-                        // (a paste over a selection). Typing over a selected
-                        // character inside an address is neither.
+                        // Pasted: two or more characters came in at once (what
+                        // differs between before and now once their common
+                        // start and end are taken off), also over a selection.
+                        // A key, also over a selected character, brings one.
                         property string lastText: ""
                         function looksPasted(before, now) {
-                            const address = /^srt:\/\/./i
-                            return address.test(now.trim())
-                                && (now.length - before.length >= 2 || !/^srt:\/\//i.test(before.trim()))
+                            if (!/^srt:\/\/./i.test(now.trim()))
+                                return false
+                            let start = 0
+                            while (start < before.length && start < now.length && before[start] === now[start])
+                                start++
+                            let end = 0
+                            while (end < before.length - start && end < now.length - start
+                                   && before[before.length - 1 - end] === now[now.length - 1 - end])
+                                end++
+                            return now.length - start - end >= 2
                         }
                         onTextEdited: {
                             const pasted = looksPasted(lastText, text)

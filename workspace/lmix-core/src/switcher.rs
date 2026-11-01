@@ -6765,7 +6765,10 @@ fn check_source(source: &SourceSpec) -> Result<(), ActionError> {
             color: color.clone(),
         }),
         SourceSpec::Web { url, .. } if !is_web_address(url) => {
-            Err(ActionError::BadWebUrl { url: url.clone() })
+            // The refusal goes to logs and every client: no secrets.
+            Err(ActionError::BadWebUrl {
+                url: lmix_types::srt::redact_url(url),
+            })
         }
         SourceSpec::Srt {
             uri,
@@ -13527,6 +13530,13 @@ mod tests {
             );
         }
         assert!(sw.apply(add(web("https://example.com/score"))).is_ok());
+        // The refusal names the address without its secrets.
+        assert_eq!(
+            sw.apply(add(web("ftp://u:geheim@host/?token=geheim"))),
+            Err(ActionError::BadWebUrl {
+                url: "ftp://…@host/?token=…".into()
+            })
+        );
 
         assert!(matches!(
             sw.apply(add(graphics("1"))),
