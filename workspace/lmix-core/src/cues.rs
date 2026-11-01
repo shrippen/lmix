@@ -57,6 +57,8 @@ pub enum Out {
         list: InputId,
         cue: CueId,
         layer: lmix_types::LayerId,
+        /// A run a panic started ([`Run::panic`]).
+        panic: bool,
     },
 }
 
@@ -85,6 +87,9 @@ struct Run {
     fade_out_ms: u32,
     /// Since when it is paused (RUN.5); its times stand still.
     paused_at: Option<Instant>,
+    /// Started by a panic: the emergency list's cue, a child, follow or
+    /// start of one (MOOD.9: it takes no layer of the panic mood).
+    panic: bool,
 }
 
 impl Run {
@@ -127,6 +132,8 @@ pub struct Runner {
     next_id: u64,
     /// A panic runs until then; another panic before is a hard stop.
     panic_until: Option<Instant>,
+    /// Runs spawned now come from a panic ([`Run::panic`]).
+    by_panic: bool,
     late: Lateness,
     /// Cues that started since the show was opened or reset (SUI.12).
     ran: BTreeSet<CueId>,
@@ -177,6 +184,15 @@ fn bad(reason: impl Into<String>) -> ActionError {
 
 fn ms(ms: u32) -> Duration {
     Duration::from_millis(u64::from(ms))
+}
+
+/// The cue with `id` below `cues`, in groups too.
+pub(crate) fn cue_by_id(cues: &[Cue], id: CueId) -> Option<&Cue> {
+    cues.iter().find_map(|c| {
+        (c.id == id)
+            .then_some(c)
+            .or_else(|| cue_by_id(&c.children, id))
+    })
 }
 
 /// Path of the cue with `id` below `cues` (indices per level).
@@ -622,9 +638,11 @@ impl Runner {
         // before (a hard stop cuts what still fades out).
         out.push(Out::StopPlayback { fade_ms });
         if let Some(list) = emergency.and_then(|l| lists.get(l)) {
+            self.by_panic = true;
             for cue in &list.cues {
                 self.spawn(list.id, cue, None, now, Follow::None, &mut out);
             }
+            self.by_panic = false;
         }
         out.extend(self.tick(lists, now));
         out
@@ -661,20 +679,30 @@ impl Runner {
     }
 
     /// After a list changed: standby at most one past its end; runs of
-    /// cues that are gone are dropped, and a group left without a running
-    /// child ends at `now` (its follow goes on).
-    pub fn list_changed(&mut self, lists: &[ShowCueList], now: Instant) {
+    /// cues that are gone stop as a stop would stop them (their sounds and
+    /// pictures fade out, each says it stopped), and a group left without
+    /// a running child ends at `now` (its follow goes on).
+    pub fn list_changed(&mut self, lists: &[ShowCueList], now: Instant) -> Vec<Out> {
         for entry in lists {
             if let Some(standby) = self.standby.get_mut(&entry.id) {
                 *standby = (*standby).min(entry.cues.len());
             }
         }
-        self.runs.retain(|r| {
-            lists
-                .iter()
-                .find(|l| l.id == r.list)
-                .is_some_and(|l| path_of(&l.cues, r.cue).is_some())
-        });
+        let gone: Vec<u64> = self
+            .runs
+            .iter()
+            .filter(|r| {
+                !lists
+                    .iter()
+                    .find(|l| l.id == r.list)
+                    .is_some_and(|l| path_of(&l.cues, r.cue).is_some())
+            })
+            .map(|r| r.id)
+            .collect();
+        let mut out = Vec::new();
+        if !gone.is_empty() {
+            self.stop_runs(&gone, now, SoundEnd::Own, &mut out);
+        }
         self.standby
             .retain(|id, _| lists.iter().any(|l| l.id == *id));
         let groups: Vec<u64> = self
@@ -686,6 +714,7 @@ impl Runner {
         for group in groups {
             self.parent_check(Some(group), now);
         }
+        out
     }
 
     /// How late the steps ran so far.
@@ -760,6 +789,8 @@ impl Runner {
         out: &mut Vec<Out>,
     ) {
         self.next_id += 1;
+        let panic =
+            self.by_panic || parent.is_some_and(|p| self.runs.iter().any(|r| r.id == p && r.panic));
         let pre = ms(cue.pre_wait_ms);
         let total = match cue.kind {
             CueKind::Group => None,
@@ -790,6 +821,7 @@ impl Runner {
                 _ => 0,
             },
             paused_at: None,
+            panic,
         });
         self.ran.insert(cue.id);
         out.push(Out::Event {
@@ -831,6 +863,7 @@ impl Runner {
                 list: run.list,
                 cue: cue.id,
                 layer,
+                panic: run.panic,
             });
         }
         let mut end_at = Some(t);
@@ -845,7 +878,12 @@ impl Runner {
             }
             CueKind::Note => {}
             CueKind::Wait => end_at = Some(t + ms(cue.duration_ms.unwrap_or(0))),
-            CueKind::Start => self.fire_start(lists, list, &cue, t, out),
+            CueKind::Start => {
+                // What a cue of a panic starts is the panic's too.
+                self.by_panic = run.panic;
+                self.fire_start(lists, list, &cue, t, out);
+                self.by_panic = false;
+            }
             // As `set_mood` from the API: the service sets it under the
             // switcher's lock and runs what the layers do (MOOD.6).
             CueKind::Mood => match cue.mood.clone() {
@@ -1079,7 +1117,9 @@ impl Runner {
         let Some(next) = siblings(&entry.cues, &path).and_then(|s| s.get(index + 1)) else {
             return;
         };
+        self.by_panic = run.panic;
         self.spawn(run.list, next, run.parent, t, next.follow, out);
+        self.by_panic = false;
     }
 
     /// A group ends when none of its children is live any more.
@@ -2189,7 +2229,7 @@ mod tests {
 
         let old = std::mem::replace(&mut lists[0].cues, vec![cut("New"), a, b]);
         runner.keep_standby(&lists[0], &old);
-        runner.list_changed(&lists, Instant::now());
+        let _ = runner.list_changed(&lists, Instant::now());
 
         assert_eq!(runner.standby(lists[0].id), 2, "still on B");
     }
@@ -2210,7 +2250,7 @@ mod tests {
 
         // A reload takes the child out while it runs.
         lists[0].cues[0].children = vec![cut("Flash")];
-        runner.list_changed(&lists, after(t, 5));
+        let _ = runner.list_changed(&lists, after(t, 5));
         let out = runner.tick(&lists, after(t, 10));
 
         assert_eq!(
@@ -2232,7 +2272,7 @@ mod tests {
         runner.go(&lists, 0, t, Guard::time(0)).unwrap();
 
         lists[0].cues.truncate(1);
-        runner.list_changed(&lists, Instant::now());
+        let _ = runner.list_changed(&lists, Instant::now());
 
         assert_eq!(runner.standby(lists[0].id), 1);
         assert!(

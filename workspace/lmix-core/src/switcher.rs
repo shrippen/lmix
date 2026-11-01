@@ -641,10 +641,13 @@ fn check_cue(cue: &Cue, depth: usize) -> Result<(), ActionError> {
 }
 
 /// Moods of a show (MOOD): limits, names to find them by, layers that
-/// are there, contents a cue could have, a panic mood of actions only.
-fn check_moods(moods: &lmix_types::Moods) -> Result<(), ActionError> {
-    use lmix_types::mood::{MOOD_COLLECTIONS, MOOD_GROUPS, MOOD_LAYERS};
+/// are there, contents a cue could have, a panic mood of actions only,
+/// collections of moods and pads (cues of `lists` with pads) that are
+/// there, each once.
+fn check_moods(moods: &lmix_types::Moods, lists: &[ShowCueList]) -> Result<(), ActionError> {
+    use lmix_types::mood::{name_key, MOOD_COLLECTIONS, MOOD_GROUPS, MOOD_LAYERS, MOOD_NAME_MAX};
     use lmix_types::{LayerContent, LayerId};
+    use std::collections::HashSet;
     let bad = |reason: String| Err(ActionError::BadMood { reason });
     if moods.layers.len() > MOOD_LAYERS
         || moods.groups.len() > MOOD_GROUPS
@@ -665,13 +668,27 @@ fn check_moods(moods: &lmix_types::Moods) -> Result<(), ActionError> {
     {
         crate::playback::check_fade_time(ms)?;
     }
-    let mut layer_ids = std::collections::HashSet::new();
-    let mut ids = std::collections::HashSet::new();
-    let unnamed = |name: &str| name.trim().is_empty() || name.contains('/');
-    for layer in &moods.layers {
-        if unnamed(&layer.name) || !layer_ids.insert(layer.id) {
+    // A name to tell it by and to find it by: on one line, not too long,
+    // no "/" (it parts group and variant).
+    let named = |what: &str, name: &str| {
+        if name.trim().is_empty()
+            || name.contains('/')
+            || name.chars().any(char::is_control)
+            || name.chars().count() > MOOD_NAME_MAX
+        {
             return bad(format!(
-                "layer {:?}: a name without \"/\" and an id of its own",
+                "{what} {name:?}: a name of one line, at most {MOOD_NAME_MAX} characters, without \"/\""
+            ));
+        }
+        Ok(())
+    };
+    let mut layer_ids = HashSet::new();
+    let mut layer_names = HashSet::new();
+    for layer in &moods.layers {
+        named("layer", &layer.name)?;
+        if !layer_ids.insert(layer.id) || !layer_names.insert(name_key(&layer.name)) {
+            return bad(format!(
+                "layer {:?}: a name and an id of its own",
                 layer.name
             ));
         }
@@ -693,17 +710,23 @@ fn check_moods(moods: &lmix_types::Moods) -> Result<(), ActionError> {
                         "{what}: actions cannot run shortcuts, cues, moods or change automation"
                     ));
                 }
+                // The layer would not know them: they would neither fade
+                // with the next change nor stop (MOOD.4).
+                if actions.iter().any(makes_sound_or_light) {
+                    return bad(format!(
+                        "{what}: actions cannot play or change sounds and pictures; give the layer a sound or a picture"
+                    ));
+                }
                 Ok(())
             }
         }
     };
-    let mut names = std::collections::HashSet::new();
+    let mut ids = HashSet::new();
+    let mut names = HashSet::new();
     for group in &moods.groups {
-        if unnamed(&group.name) || !names.insert(group.name.trim().to_lowercase()) {
-            return bad(format!(
-                "group {:?}: a name of its own without \"/\"",
-                group.name
-            ));
+        named("group", &group.name)?;
+        if !names.insert(name_key(&group.name)) {
+            return bad(format!("group {:?}: a name of its own", group.name));
         }
         if !ids.insert(group.id) {
             return bad(format!("mood id {} twice", group.id));
@@ -711,13 +734,12 @@ fn check_moods(moods: &lmix_types::Moods) -> Result<(), ActionError> {
         for (layer, c) in &group.base {
             content(&group.name, layer, c)?;
         }
-        let mut variants = std::collections::HashSet::new();
+        let mut variants = HashSet::new();
         for variant in &group.variants {
             let what = format!("{} / {}", group.name, variant.name);
-            if unnamed(&variant.name) || !variants.insert(variant.name.trim().to_lowercase()) {
-                return bad(format!(
-                    "{what}: a name of its own in its group without \"/\""
-                ));
+            named("variant", &variant.name)?;
+            if !variants.insert(name_key(&variant.name)) {
+                return bad(format!("{what}: a name of its own in its group"));
             }
             if !ids.insert(variant.id) {
                 return bad(format!("mood id {} twice", variant.id));
@@ -728,25 +750,78 @@ fn check_moods(moods: &lmix_types::Moods) -> Result<(), ActionError> {
         }
     }
     for (layer, c) in &moods.panic {
-        let sounds_or_shows = match c {
-            LayerContent::Sound { .. } | LayerContent::Picture { .. } => true,
-            LayerContent::Actions { actions } => actions.iter().any(makes_sound_or_light),
-            LayerContent::Off => false,
-        };
-        if sounds_or_shows {
+        if matches!(c, LayerContent::Sound { .. } | LayerContent::Picture { .. }) {
             return bad("the panic mood holds actions only: sound and pictures stay off".into());
         }
         content("panic", layer, c)?;
     }
+    let pads: HashSet<lmix_types::CueId> = if moods.collections.iter().any(|c| !c.pads.is_empty()) {
+        pad_cues(lists).collect()
+    } else {
+        HashSet::new()
+    };
+    let mut collections = HashSet::new();
+    let mut collection_names = HashSet::new();
     for collection in &moods.collections {
-        if collection.name.trim().is_empty() {
-            return bad("a collection needs a name".into());
+        named("collection", &collection.name)?;
+        if !collection_names.insert(name_key(&collection.name)) {
+            return bad(format!(
+                "collection {:?}: a name of its own",
+                collection.name
+            ));
         }
-        if let Some(missing) = collection.moods.iter().find(|m| !ids.contains(m)) {
-            return bad(format!("{}: no mood {missing}", collection.name));
+        // One id space with the moods: a collection is no mood.
+        if ids.contains(&collection.id) || !collections.insert(collection.id) {
+            return bad(format!(
+                "collection {:?}: an id of its own",
+                collection.name
+            ));
+        }
+        let mut seen = HashSet::new();
+        for mood in &collection.moods {
+            if !ids.contains(mood) {
+                return bad(format!("{}: no mood {mood}", collection.name));
+            }
+            if !seen.insert(mood.0) {
+                return bad(format!("{}: mood {mood} twice", collection.name));
+            }
+        }
+        for pad in &collection.pads {
+            if !pads.contains(pad) {
+                return bad(format!("{}: no pad {pad}", collection.name));
+            }
+            if !seen.insert(pad.0) {
+                return bad(format!("{}: pad {pad} twice", collection.name));
+            }
         }
     }
     Ok(())
+}
+
+/// The pads of the show: the cues of its lists with pads (RUN.12, MOOD.8).
+fn pad_cues(lists: &[ShowCueList]) -> impl Iterator<Item = lmix_types::CueId> + '_ {
+    lists
+        .iter()
+        .filter(|l| l.pads)
+        .flat_map(|l| l.cues.iter().map(|c| c.id))
+}
+
+/// Collections keep only pads the show still has: a pad cue removed, its
+/// list removed or no longer pads, it leaves them (MOOD.8). Whether one
+/// went.
+fn prune_pads(moods: &mut lmix_types::Moods, lists: &[ShowCueList]) -> bool {
+    // Most shows have no pads in collections: nothing to look up.
+    if moods.collections.iter().all(|c| c.pads.is_empty()) {
+        return false;
+    }
+    let pads: std::collections::HashSet<_> = pad_cues(lists).collect();
+    let mut pruned = false;
+    for collection in &mut moods.collections {
+        let before = collection.pads.len();
+        collection.pads.retain(|p| pads.contains(p));
+        pruned |= collection.pads.len() != before;
+    }
+    pruned
 }
 
 /// Actions that start or raise sound or a stage: never after a panic
@@ -952,6 +1027,9 @@ pub struct Switcher {
     cues: Runner,
     /// The mood set and what runs on each layer (MOOD).
     moods: crate::moods::MoodRunner,
+    /// Cue and mood steps an edit gave (a running cue edited away, a
+    /// layer removed), for the service to run ([`Switcher::take_outs`]).
+    outs: Vec<Out>,
     /// What would go wrong when they run (SUI.5); see `refresh_warnings`.
     cue_warnings: Vec<lmix_types::cue::CueWarning>,
     /// Targets that did not answer their last check or send (SUI.5).
@@ -1050,6 +1128,7 @@ impl Switcher {
             removed: Vec::new(),
             cues: Runner::default(),
             moods: Default::default(),
+            outs: Vec::new(),
             cue_warnings: Vec::new(),
             unreached: Default::default(),
             older_format: None,
@@ -1571,8 +1650,7 @@ impl Switcher {
             Action::RemoveCueList { list } => {
                 let index = self.find_cue_list(&list)?;
                 self.show.cue_lists.remove(index);
-                self.cues
-                    .list_changed(&self.show.cue_lists, tokio::time::Instant::now());
+                self.cue_lists_changed();
                 Ok(Vec::new())
             }
             Action::CueStandby { list, to } => {
@@ -1591,6 +1669,7 @@ impl Switcher {
             Action::SetCueListPads { list, on } => {
                 let index = self.find_cue_list(&list)?;
                 self.show.cue_lists[index].pads = on;
+                prune_pads(&mut self.show.moods, &self.show.cue_lists);
                 Ok(Vec::new())
             }
             Action::SetEmergencyList { list } => {
@@ -1822,10 +1901,13 @@ impl Switcher {
             | Action::CuePanic { .. }
             | Action::CueHardStop
             | Action::SetMood { .. } => Err(bad_cues("run through the service".into())),
-            Action::SetMoods { moods } => {
-                check_moods(&moods)?;
+            Action::SetMoods { mut moods } => {
+                // Pads removed meanwhile (the dialog still had them) leave
+                // it, as they left the show's.
+                prune_pads(&mut moods, &self.show.cue_lists);
+                check_moods(&moods, &self.show.cue_lists)?;
                 let removed = removed_from_moods(&self.show.moods, &moods);
-                let before = std::mem::replace(&mut self.show.moods, moods);
+                let before = self.replace_moods(moods);
                 if let Some(name) = removed {
                     self.keep_removed(Removed::Moods {
                         before: Box::new(before),
@@ -2247,8 +2329,11 @@ impl Switcher {
     ) -> Result<Vec<Command>, ActionError> {
         self.check_no_stinger()?;
         // Its moods as `set_moods` would take them: a file changed by hand
-        // brings no sound into the panic mood (MOOD.9).
-        check_moods(&show.moods)?;
+        // brings no sound into the panic mood (MOOD.9). Pads it no longer
+        // has leave its collections, as they would have when removed.
+        let mut show = show;
+        prune_pads(&mut show.moods, &show.cue_lists);
+        check_moods(&show.moods, &show.cue_lists)?;
         let mut commands: Vec<Command> = self
             .show
             .inputs
@@ -3951,14 +4036,17 @@ impl Switcher {
     }
 
     /// Cue `cue` of `list` takes mood layer `layer` (MOOD.5): the actions
-    /// that fade the mood out there.
+    /// that fade the mood out there. `by_panic`: a run a panic started,
+    /// which leaves a layer of the panic mood the panic's (MOOD.9).
     pub fn mood_take(
         &mut self,
         layer: lmix_types::LayerId,
         list: lmix_types::InputId,
         cue: lmix_types::CueId,
-    ) -> Vec<Action> {
-        self.moods.take(&self.show.moods, layer, list, cue)
+        by_panic: bool,
+    ) -> crate::moods::Take {
+        self.moods
+            .take(&self.show.moods, layer, list, cue, by_panic)
     }
 
     /// Set a mood (MOOD.4): the actions that change its layers.
@@ -3973,6 +4061,42 @@ impl Switcher {
         self.moods
             .set(&self.show.moods, mood, fade_ms, unix_ms())
             .map_err(|reason| ActionError::BadMood { reason })
+    }
+
+    /// Cue and mood steps edits gave since the last call, for the service
+    /// to run after the edit: stops of cues edited away and of layers
+    /// removed.
+    pub fn take_outs(&mut self) -> Vec<Out> {
+        std::mem::take(&mut self.outs)
+    }
+
+    /// The show's moods are `moods` (checked): layers removed fade out,
+    /// a mood removed is no longer set (MOOD.12). The moods before.
+    fn replace_moods(&mut self, moods: lmix_types::Moods) -> lmix_types::Moods {
+        let before = std::mem::replace(&mut self.show.moods, moods);
+        let actions = self.moods.trim(&self.show.moods);
+        if !actions.is_empty() {
+            self.outs.push(Out::Mood { actions });
+        }
+        before
+    }
+
+    /// After cue lists changed: cues edited away stop (their sounds and
+    /// pictures fade out, RUN.4) and give back the layers they held
+    /// (MOOD.5); pads edited away leave the collections (MOOD.8).
+    fn cue_lists_changed(&mut self) {
+        let out = self
+            .cues
+            .list_changed(&self.show.cue_lists, tokio::time::Instant::now());
+        self.outs.extend(out);
+        let lists = &self.show.cue_lists;
+        self.moods.keep_cues(|list, cue| {
+            lists
+                .iter()
+                .find(|l| l.id == list)
+                .is_some_and(|l| crate::cues::cue_by_id(&l.cues, cue).is_some())
+        });
+        prune_pads(&mut self.show.moods, &self.show.cue_lists);
     }
 
     fn emergency_index(&self) -> Option<usize> {
@@ -4087,8 +4211,7 @@ impl Switcher {
         self.show.cue_lists = lists;
         let entry = &self.show.cue_lists[index];
         self.cues.keep_standby(entry, &old);
-        self.cues
-            .list_changed(&self.show.cue_lists, tokio::time::Instant::now());
+        self.cue_lists_changed();
         self.sync_standby();
         Ok(())
     }
@@ -4164,7 +4287,10 @@ impl Switcher {
                     reason: "changed since the removal: it cannot come back".into(),
                 });
             }
-            self.show.moods = *before;
+            let mut moods = *before;
+            // Pads removed since leave it again.
+            prune_pads(&mut moods, &self.show.cue_lists);
+            self.replace_moods(moods);
             return Ok(Vec::new());
         }
         let result = match removed.clone() {
@@ -10487,6 +10613,305 @@ mod tests {
         ));
         assert_eq!(sw.show().moods, renamed);
         assert_eq!(restorable(&sw), None);
+    }
+
+    #[test]
+    fn moods_need_distinct_names_ids_and_entries_that_are_there() {
+        use lmix_types::mood::MOOD_NAME_MAX;
+        use lmix_types::{LayerContent, MoodCollection, MoodId};
+        let mut good: lmix_types::Moods = serde_json::from_value(serde_json::json!({
+            "layers": [{"id": "00000000-0000-4000-8000-000000000001", "name": "Licht"},
+                       {"id": "00000000-0000-4000-8000-000000000005", "name": "Musik"}],
+            "groups": [{"id": "00000000-0000-4000-8000-000000000002", "name": "Ärger",
+                        "variants": [{"id": "00000000-0000-4000-8000-000000000003", "name": "Nacht"}]}],
+        }))
+        .expect("moods");
+        let pad = Cue::actions("Tusch", vec![Action::FadeToBlack { duration_ms: 0 }]);
+        let pad_id = pad.id;
+        let mut lists = vec![ShowCueList {
+            id: InputId::new(),
+            name: "Pads".into(),
+            cues: vec![pad],
+            source: None,
+            standby: None,
+            pads: true,
+        }];
+        let group = good.groups[0].id;
+        let night = good.groups[0].variants[0].id;
+        good.collections.push(MoodCollection {
+            id: MoodId::new(),
+            name: "Akt 1".into(),
+            moods: vec![group, night],
+            pads: vec![pad_id],
+        });
+        check_moods(&good, &lists).expect("good");
+        let licht = good.layers[0].id;
+        fn collection(moods: Vec<MoodId>, pads: Vec<lmix_types::CueId>) -> MoodCollection {
+            MoodCollection {
+                id: MoodId::new(),
+                name: "Akt 2".into(),
+                moods,
+                pads,
+            }
+        }
+        type Change = Box<dyn Fn(&mut lmix_types::Moods)>;
+        let changes: Vec<(&str, Change)> = vec![
+            (
+                "layer names in another case",
+                Box::new(|m| m.layers[1].name = " LICHT".into()),
+            ),
+            (
+                "a name over two lines",
+                Box::new(|m| m.groups[0].name = "Zeile\nzwei".into()),
+            ),
+            (
+                "a tab in a variant",
+                Box::new(|m| m.groups[0].variants[0].name = "a\tb".into()),
+            ),
+            (
+                "a name too long",
+                Box::new(|m| m.layers[0].name = "L".repeat(MOOD_NAME_MAX + 1)),
+            ),
+            (
+                "group names in another script case",
+                Box::new(|m| {
+                    let mut other = m.groups[0].clone();
+                    other.id = MoodId::new();
+                    other.variants.clear();
+                    other.name = "ärger".into();
+                    m.groups.push(other);
+                }),
+            ),
+            (
+                "a collection id twice",
+                Box::new(|m| {
+                    let mut other = m.collections[0].clone();
+                    other.name = "Akt 2".into();
+                    m.collections.push(other);
+                }),
+            ),
+            (
+                "a collection with a group's id",
+                Box::new(move |m| {
+                    let mut other = collection(Vec::new(), Vec::new());
+                    other.id = group;
+                    m.collections.push(other);
+                }),
+            ),
+            (
+                "collection names twice",
+                Box::new(|m| {
+                    let mut other = collection(Vec::new(), Vec::new());
+                    other.name = "akt 1".into();
+                    m.collections.push(other);
+                }),
+            ),
+            (
+                "a mood twice in a collection",
+                Box::new(move |m| {
+                    m.collections
+                        .push(collection(vec![night, night], Vec::new()))
+                }),
+            ),
+            (
+                "a pad twice in a collection",
+                Box::new(move |m| {
+                    m.collections
+                        .push(collection(Vec::new(), vec![pad_id, pad_id]))
+                }),
+            ),
+            (
+                "an unknown mood",
+                Box::new(|m| {
+                    m.collections
+                        .push(collection(vec![MoodId::new()], Vec::new()))
+                }),
+            ),
+            (
+                "a layer that plays a sound by action",
+                Box::new(move |m| {
+                    m.groups[0].base.insert(
+                        licht,
+                        LayerContent::Actions {
+                            actions: vec![Action::PlaySound {
+                                id: "x".into(),
+                                sound: lmix_types::SoundCue {
+                                    file: "/sounds/x.wav".into(),
+                                    ..Default::default()
+                                },
+                            }],
+                        },
+                    );
+                }),
+            ),
+            (
+                "a variant that shows a picture by action",
+                Box::new(move |m| {
+                    m.groups[0].variants[0].layers.insert(
+                        licht,
+                        LayerContent::Actions {
+                            actions: vec![Action::ShowPicture {
+                                id: "x".into(),
+                                picture: serde_json::from_value(serde_json::json!({
+                                    "file": "/pictures/x.png", "stage": "Back"
+                                }))
+                                .expect("a picture"),
+                            }],
+                        },
+                    );
+                }),
+            ),
+        ];
+        for (what, change) in changes {
+            let mut bad = good.clone();
+            change(&mut bad);
+            assert!(
+                matches!(check_moods(&bad, &lists), Err(ActionError::BadMood { .. })),
+                "{what}"
+            );
+        }
+        // A list no longer pads: its cues leave the collections.
+        lists[0].pads = false;
+        assert!(check_moods(&good, &lists).is_err());
+        assert!(prune_pads(&mut good, &lists));
+        assert!(good.collections[0].pads.is_empty());
+        check_moods(&good, &lists).expect("pruned");
+    }
+
+    #[test]
+    fn a_pad_edited_away_leaves_its_collections() {
+        let pad = Cue::actions("Tusch", vec![Action::FadeToBlack { duration_ms: 0 }]);
+        let pad_id = pad.id;
+        let mut sw = Switcher::new(SLOTS);
+        sw.apply(Action::AddCueList {
+            name: "Pads".into(),
+            cues: vec![pad],
+            source: None,
+        })
+        .unwrap();
+        sw.apply(Action::SetCueListPads {
+            list: InputRef::Text("Pads".into()),
+            on: true,
+        })
+        .unwrap();
+        let moods: lmix_types::Moods = serde_json::from_value(serde_json::json!({
+            "collections": [{"name": "Akt 1", "pads": [pad_id]}]
+        }))
+        .expect("moods");
+        // An unknown pad (removed while the dialog was open) leaves it.
+        let mut unknown = moods.clone();
+        unknown.collections[0].pads.push(lmix_types::CueId::new());
+        sw.apply(Action::SetMoods { moods: unknown }).unwrap();
+        assert_eq!(sw.show().moods, moods);
+        sw.apply(Action::SetCueList {
+            list: InputRef::Text("Pads".into()),
+            name: "Pads".into(),
+            cues: Vec::new(),
+            source: None,
+        })
+        .unwrap();
+        assert!(sw.show().moods.collections[0].pads.is_empty());
+    }
+
+    #[test]
+    fn an_emergency_cue_takes_no_layer_of_the_panic_mood() {
+        use lmix_types::{CueKind, Follow, GroupMode, LayerOrigin};
+        let moods: lmix_types::Moods = serde_json::from_value(serde_json::json!({
+            "layers": [{"id": "00000000-0000-4000-8000-000000000001", "name": "Licht"},
+                       {"id": "00000000-0000-4000-8000-000000000002", "name": "Musik"}],
+            "panic": {"00000000-0000-4000-8000-000000000001":
+                {"kind": "actions", "actions": [{"action": "fade_to_black", "duration_ms": 0}]}}
+        }))
+        .expect("moods");
+        let (licht, musik) = (moods.layers[0].id, moods.layers[1].id);
+        let on = |name: &str, layer| Cue {
+            layer: Some(layer),
+            ..Cue::actions(name, vec![Action::FadeToBlack { duration_ms: 0 }])
+        };
+        // At once, after a pre wait, and as the follow in a group.
+        let late = Cue {
+            pre_wait_ms: 100,
+            ..on("Spät", licht)
+        };
+        let first = Cue {
+            name: "Erst".into(),
+            duration_ms: Some(100),
+            follow: Follow::AfterEnd,
+            ..Cue::empty(CueKind::Wait)
+        };
+        let group = Cue {
+            name: "Gruppe".into(),
+            mode: Some(GroupMode::First),
+            children: vec![first, on("Folge", licht)],
+            ..Cue::empty(CueKind::Group)
+        };
+        let mut sw = Switcher::new(SLOTS);
+        sw.apply(Action::SetMoods { moods }).unwrap();
+        for (name, cues) in [
+            (
+                "Notfall",
+                vec![on("Licht", licht), late, group, on("Musik", musik)],
+            ),
+            ("Show", vec![on("Spot", licht)]),
+        ] {
+            sw.apply(Action::AddCueList {
+                name: name.into(),
+                cues,
+                source: None,
+            })
+            .unwrap();
+        }
+        sw.apply(Action::SetEmergencyList {
+            list: Some(InputRef::Text("Notfall".into())),
+        })
+        .unwrap();
+        // As the service runs them: each take in turn.
+        let take = |sw: &mut Switcher, out: Vec<Out>| -> usize {
+            let mut takes = 0;
+            for o in out {
+                if let Out::TakeLayer {
+                    list,
+                    cue,
+                    layer,
+                    panic,
+                } = o
+                {
+                    if matches!(
+                        sw.mood_take(layer, list, cue, panic),
+                        crate::moods::Take::Fade(_)
+                    ) {
+                        takes += 1;
+                    }
+                }
+            }
+            takes
+        };
+        let origin = |sw: &Switcher, layer| {
+            sw.state()
+                .mood
+                .layers
+                .iter()
+                .find(|l| l.layer == layer)
+                .map(|l| l.origin.clone())
+        };
+        let t = tokio::time::Instant::now();
+        let out = sw.cue_panic(t, Some(0)).unwrap();
+        assert!(matches!(out.last(), Some(Out::Mood { .. })), "it runs last");
+        let mut takes = take(&mut sw, out);
+        for after in [150, 250, 350] {
+            let out = sw.cue_tick(t + std::time::Duration::from_millis(after));
+            takes += take(&mut sw, out);
+        }
+        assert_eq!(takes, 1, "only the music is taken");
+        assert_eq!(origin(&sw, licht), Some(LayerOrigin::Panic));
+        assert!(matches!(origin(&sw, musik), Some(LayerOrigin::Cue { .. })));
+        // A GO after the panic takes the light.
+        let show = Some(InputRef::Text("Show".into()));
+        let out = sw
+            .cue_go(show.as_ref(), t + std::time::Duration::from_secs(1), None)
+            .unwrap();
+        take(&mut sw, out);
+        assert!(matches!(origin(&sw, licht), Some(LayerOrigin::Cue { .. })));
     }
 
     #[test]
