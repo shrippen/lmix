@@ -3043,7 +3043,7 @@
   <context>
     <name>LayoutDialog</name>
     <message>
-      <location filename="../qml/LayoutDialog.qml" line="+80" />
+      <location filename="../qml/LayoutDialog.qml" line="+82" />
       <source>Top right quarter</source>
       <translation>Viertel oben rechts</translation>
     </message>
@@ -3108,7 +3108,22 @@
       <translation>Layout hinzufügen</translation>
     </message>
     <message>
-      <location line="+49" />
+      <location line="+155" />
+      <source>This layout was changed elsewhere while the dialog was open. Saving replaces it with what is shown here.</source>
+      <translation>Das Layout wurde anderswo geändert, während der Dialog offen war. Speichern ersetzt es durch das hier Gezeigte.</translation>
+    </message>
+    <message>
+      <location line="+1" />
+      <source>This layout was changed while the dialog was open. Saving keeps those changes wherever you changed nothing here.</source>
+      <translation>Das Layout wurde geändert, während der Dialog offen war. Speichern behält diese Änderungen überall dort, wo hier nichts geändert wurde.</translation>
+    </message>
+    <message>
+      <location line="+2" />
+      <source>Reload</source>
+      <translation>Neu laden</translation>
+    </message>
+    <message>
+      <location line="+8" />
       <source>Name</source>
       <translation>Name</translation>
     </message>
@@ -3203,7 +3218,7 @@
       <translation>Entfernen</translation>
     </message>
     <message>
-      <location line="+17" />
+      <location line="+12" />
       <source>Crop</source>
       <translation>Zuschnitt</translation>
     </message>
@@ -3248,12 +3263,12 @@
       <translation>+ Box</translation>
     </message>
     <message>
-      <location line="-549" />
+      <location line="-661" />
       <source>Empty</source>
       <translation>Leer</translation>
     </message>
     <message>
-      <location line="+436" />
+      <location line="+553" />
       <source>Select box %1</source>
       <translation>Box %1 wählen</translation>
     </message>
@@ -3448,7 +3463,7 @@
       <translation>Ordner mit den fehlenden Dateien</translation>
     </message>
     <message>
-      <location line="+201" />
+      <location line="+202" />
       <source>Inputs from a show…</source>
       <translation>Inputs aus einer Show …</translation>
     </message>
@@ -3539,7 +3554,7 @@
       <translation>Ansicht</translation>
     </message>
     <message>
-      <location line="-516" />
+      <location line="-517" />
       <source>FTB</source>
       <comment>fade to black</comment>
       <translation>FTB</translation>
@@ -3555,7 +3570,7 @@
       <translation>Schwarzblende: Programm auf Schwarz und zurück (SWI.9); Show und Ausgänge laufen weiter</translation>
     </message>
     <message>
-      <location line="+564" />
+      <location line="+565" />
       <source>Multiview</source>
       <translation>Multiview</translation>
     </message>

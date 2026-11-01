@@ -9,7 +9,9 @@ import Kante
  * dragging them on a 16:9 area (corner handle: size; arrow keys: move,
  * with Shift: size) or from preset places; each can be framed, cropped
  * (zoom into its input) and locked in place. Shift+click chooses more
- * boxes, which then move together. New layouts get a name.
+ * boxes, which then move together. New layouts get a name. Changed
+ * live while open (a cue swaps boxes): Save sends only what was changed
+ * here and keeps the rest as it is now.
  */
 KanteDialog {
     id: dialog
@@ -18,6 +20,8 @@ KanteDialog {
     required property var inputs
     /** Layout being edited; `null` adds one. Set before `open()`. */
     property var layout: null
+    /** `layouts` of the show state: the edited one as it is now. */
+    property var layouts: []
 
     /** Inputs with a picture. */
     readonly property var pictures: inputs.filter(i => i.source.kind !== "audio_device")
@@ -255,24 +259,127 @@ KanteDialog {
 
     onOpened: {
         nameField.text = ""
+        load(layout)
+    }
+
+    /** The layout as it was when the dialog took it: what Save compares
+     *  the working copy with. */
+    property var base: null
+    /** The edited layout as it is now; null when adding or gone. */
+    readonly property var live: visible ? liveNow() : null
+    function liveNow() {
+        return base ? layouts.find(l => l.id === base.id) || null : null
+    }
+    /** The live layout has other boxes or a background than when it was
+     *  taken (a cue, shortcut or another console changed it). */
+    readonly property bool changedMeanwhile: live !== null && !sameLayout(live, base)
+    /** Boxes were added or removed meanwhile: they cannot be told apart, Save replaces them. */
+    readonly property bool boxesChangedMeanwhile: changedMeanwhile && live.boxes.length !== base.boxes.length
+
+    /** Takes `l` (null: a new layout) into the dialog, dropping what was changed here. */
+    function load(l) {
+        base = l
         // Combo index 0 is "none": inputs start at 1.
-        background.currentIndex = layout && layout.background ? pictureIndex(layout.background) + 1 : 0
-        var noCrop = { left: 0, top: 0, right: 0, bottom: 0 }
-        boxes = layout ? layout.boxes.map(b => ({
-            input: b.input,
-            rect: Object.assign({}, b.rect),
-            framed: b.border_px > 0,
-            crop: Object.assign({}, noCrop, b.crop || {}),
-            locked: b.locked === true,
-            hidden: b.hidden === true
-        })) : []
+        background.currentIndex = l && l.background ? pictureIndex(l.background) + 1 : 0
+        boxes = l ? l.boxes.map(fromSpec) : []
         select(boxes.length > 0 ? 0 : -1, false)
         history = [snapshot()]
         historyAt = 0
     }
+    function reload() {
+        if (live)
+            load(live)
+    }
+
+    // What a box consists of, in parts that change on their own. The crop
+    // goes with the input (swap_boxes moves both, set_box_input clears it).
+    function samePart(a, b, part) {
+        const same = (p, q, keys) => keys.every(k => p[k] === q[k])
+        switch (part) {
+        case "picture": return a.input === b.input && same(a.crop, b.crop, ["left", "top", "right", "bottom"])
+        case "rect": return same(a.rect, b.rect, ["x", "y", "w", "h"])
+        default: return a[part] === b[part]
+        }
+    }
+    readonly property var parts: ({ picture: ["input", "crop"], rect: ["rect"], framed: ["framed"], locked: ["locked"], hidden: ["hidden"] })
+    function sameLayout(a, b) {
+        if ((a.background || null) !== (b.background || null) || a.boxes.length !== b.boxes.length)
+            return false
+        return a.boxes.every((box, i) => {
+            const p = fromSpec(box), q = fromSpec(b.boxes[i])
+            return Object.keys(parts).every(part => samePart(p, q, part))
+        })
+    }
+
+    /** The working copy over the live layout: a part of a box changed here
+     *  wins, every other part is taken as it is now. Boxes added or removed
+     *  elsewhere, or a mix that would show an input twice (lmix-core
+     *  refuses that): the working copy as it is. */
+    function merged(bg) {
+        const current = liveNow()
+        const own = { background: bg, boxes: boxes }
+        if (!current || current.boxes.length !== base.boxes.length)
+            return own
+        const was = base.boxes.map(fromSpec), now = current.boxes.map(fromSpec)
+        const wasBg = base.background || null
+        const mix = {
+            background: bg === wasBg ? current.background || null : bg,
+            boxes: boxes.map(b => {
+                if (b.origin < 0)
+                    return b
+                const out = Object.assign({}, b)
+                for (const part in parts) {
+                    if (samePart(b, was[b.origin], part))
+                        parts[part].forEach(k => out[k] = now[b.origin][k])
+                }
+                return out
+            })
+        }
+        const used = mix.boxes.map(b => b.input).concat(mix.background ? [mix.background] : [])
+        return used.every((id, i) => used.indexOf(id) === i) ? mix : own
+    }
+
+    /** A box of a layout as the dialog holds it. */
+    function fromSpec(b, origin) {
+        return {
+            /** Index in the layout it came from; -1 added here. */
+            origin: origin === undefined ? -1 : origin,
+            input: b.input,
+            rect: Object.assign({}, b.rect),
+            framed: b.border_px > 0,
+            crop: Object.assign({ left: 0, top: 0, right: 0, bottom: 0 }, b.crop || {}),
+            locked: b.locked === true,
+            hidden: b.hidden === true
+        }
+    }
+
+    function removeBox(index) {
+        var list = boxes.slice()
+        list.splice(index, 1)
+        boxes = list
+        select(Math.min(selected, list.length - 1), false)
+    }
+
+    function addBox() {
+        // New boxes start small in the top right, a step lower each.
+        var n = boxes.length
+        var y = Math.min(0.05 + 0.1 * n, 0.7)
+        boxes = boxes.concat([{
+            origin: -1,
+            input: null,
+            rect: { x: 0.7, y: y, w: 0.25, h: 0.25 },
+            framed: false,
+            crop: { left: 0, top: 0, right: 0, bottom: 0 },
+            locked: false,
+            hidden: false
+        }])
+        select(n, false)
+    }
 
     onAccepted: {
-        var specs = boxes.map(b => ({
+        var bg = background.currentIndex > 0 ? pictures[background.currentIndex - 1].id : null
+        var result = merged(bg)
+        var specs = result.boxes.map(b => ({
             rect: b.rect,
             input: b.input,
             border_px: b.framed ? frameWidth : 0,
@@ -280,9 +387,8 @@ KanteDialog {
             locked: b.locked,
             hidden: b.hidden
         }))
-        var bg = background.currentIndex > 0 ? pictures[background.currentIndex - 1].id : null
         if (layout)
-            act({ action: "set_layout", layout: layout.number, background: bg, boxes: specs })
+            act({ action: "set_layout", layout: layout.number, background: result.background, boxes: specs })
         else
             act({ action: "add_layout", name: nameField.text.trim() || null, background: bg, boxes: specs })
     }
@@ -291,6 +397,21 @@ KanteDialog {
         id: column
         width: parent.width
         spacing: Kirigami.Units.smallSpacing
+
+        // Live operation changes layouts while one is edited here: say so.
+        KanteCallout {
+            objectName: "changedHint"
+            Layout.fillWidth: true
+            visible: dialog.changedMeanwhile
+            kind: dialog.boxesChangedMeanwhile ? KanteCallout.Kind.Warn : KanteCallout.Kind.Info
+            text: dialog.boxesChangedMeanwhile
+                ? qsTr("This layout was changed elsewhere while the dialog was open. Saving replaces it with what is shown here.")
+                : qsTr("This layout was changed while the dialog was open. Saving keeps those changes wherever you changed nothing here.")
+            KanteButton {
+                text: qsTr("Reload")
+                onClicked: dialog.reload()
+            }
+        }
 
         RowLayout {
             Layout.fillWidth: true
@@ -586,12 +707,7 @@ KanteDialog {
                 }
                 KanteButton {
                     text: qsTr("Remove")
-                    onClicked: {
-                        var list = dialog.boxes.slice()
-                        list.splice(boxRow.index, 1)
-                        dialog.boxes = list
-                        dialog.select(Math.min(dialog.selected, list.length - 1), false)
-                    }
+                    onClicked: dialog.removeBox(boxRow.index)
                 }
             }
         }
@@ -650,20 +766,7 @@ KanteDialog {
             KanteButton {
                 text: qsTr("+ Box")
                 enabled: dialog.boxes.length < dialog.maxBoxes
-                onClicked: {
-                    // New boxes start small in the top right, a step lower each.
-                    var n = dialog.boxes.length
-                    var y = Math.min(0.05 + 0.1 * n, 0.7)
-                    dialog.boxes = dialog.boxes.concat([{
-                        input: null,
-                        rect: { x: 0.7, y: y, w: 0.25, h: 0.25 },
-                        framed: false,
-                        crop: { left: 0, top: 0, right: 0, bottom: 0 },
-                        locked: false,
-                        hidden: false
-                    }])
-                    dialog.select(n, false)
-                }
+                onClicked: dialog.addBox()
             }
         }
     }

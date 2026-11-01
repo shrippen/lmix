@@ -7648,3 +7648,45 @@ schickt `swap_boxes`, auch auf Sendung), `scripts/test-headless.sh` über
 die HTTP-API.
 
 **Offen**: Animation (Boxen gleiten an den neuen Platz), PRC.12.
+
+## 2026-11-01 — Layout-Editor bei Änderungen im Betrieb (Review LAY.7)
+
+**Kontext**: Der Layout-Dialog hält eine Arbeitskopie. Tauschte währenddessen
+ein Cue oder Kurzbefehl Boxen (`swap_boxes`), legte einen anderen Input
+in eine Box (`set_box_input`), blendete eine aus (`show_box`) oder
+speicherte eine andere Console das Layout, schrieb „Layout speichern“ die
+alte Kopie zurück und machte die Änderung im Betrieb stillschweigend
+rückgängig, auch auf Sendung.
+
+**Optionen**: (a) nur einen Hinweis zeigen und „Neu laden“ anbieten
+(eigene Änderungen gehen dann verloren, wer nur einen Rahmen setzen
+wollte, muss neu anfangen); (b) beim Speichern nur senden, was im Dialog
+geändert wurde, alles andere so, wie es jetzt ist (Drei-Wege-Abgleich
+gegen das Layout beim Öffnen); (c) eine Sperre des Layouts, solange es
+bearbeitet wird (verbietet Bedienung auf Sendung, die Vorrang hat).
+
+**Entscheidung**: (b) mit Hinweis aus (a).
+- Jede Box der Arbeitskopie merkt sich ihre Herkunft (Index beim Öffnen,
+  neue Boxen keine). Eine Box besteht aus Teilen, die sich unabhängig
+  ändern: Bild (Input mit Zuschnitt, wie `swap_boxes` und
+  `set_box_input` sie behandeln), Platz, Rahmen, Sperre, „Sichtbar“; dazu
+  der Hintergrund. Was im Dialog nicht geändert wurde, kommt aus dem
+  Layout, wie es jetzt ist; was geändert wurde, gilt. Entfernte und
+  hinzugefügte Boxen im Dialog stören den Abgleich nicht.
+- Hat sich die Zahl der Boxen anderswo geändert, lassen sich die Boxen
+  nicht mehr zuordnen: Speichern sendet, was der Dialog zeigt. Ebenso,
+  wenn der Abgleich einen Input zweimal ins Layout brächte (lmix-core
+  lehnte das ab, die Arbeit im Dialog wäre verloren).
+- Der Dialog sagt es (`KanteCallout`, solange das Layout anders ist als
+  beim Öffnen): „wird behalten, wo hier nichts geändert wurde“ bzw.
+  (Warnung) „Speichern ersetzt es durch das hier Gezeigte“, beide mit
+  „Neu laden“ (übernimmt den jetzigen Stand, verwirft die Arbeitskopie).
+- Muster wie `AddOutputDialog` (Zustand der Show als Eigenschaft, der
+  Dialog vergleicht selbst); kein Rückfrage-Dialog beim Speichern, der
+  im Betrieb aufhielte.
+
+**Geprüft**: QML-Test `tst_layout_dialog` (vor der Änderung rot):
+Tausch während offen bleibt mit eigenem Platz, eigene Änderung am selben
+Teil gewinnt, entfernte Box, doppelter Input fällt auf das Gezeigte
+zurück, unverändert ohne Hinweis, Boxen anderswo hinzugefügt mit Hinweis
+und „Neu laden“, neues Layout unverändert.
