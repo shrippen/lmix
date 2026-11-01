@@ -7723,13 +7723,24 @@ bearbeitet wird (verbietet Bedienung auf Sendung, die Vorrang hat).
   eine andere Console (oder ein Rückgängig) ein Layout davor, träfe die
   Nummer beim Öffnen ein anderes Layout und überschriebe es, womöglich auf
   Sendung. Ist das bearbeitete Layout selbst weg, sagt es der Hinweis
-  (Warnung, ohne „Neu laden“), Speichern ist gesperrt.
-- Grenze: Boxen werden über ihre Stelle in der Liste zugeordnet (die
-  Boxen haben keine Id). Ersetzt eine andere Console das Layout mit gleich
-  vielen, aber anderen Boxen, gilt der Abgleich trotzdem Stelle für Stelle;
-  der Hinweis erscheint, der Inhalt kann aber gemischt werden. Mit
-  `swap_boxes`, `set_box_input` und `show_box` (die die Boxen nicht
-  umordnen) passt die Zuordnung immer.
+  (Warnung, ohne „Neu laden“), und Speichern heißt „Als neues Layout
+  speichern“: `add_layout` mit dem Gezeigten, unter dem alten Namen, ist
+  er vergeben, mit Nummer wie bei Inputs („Interview (2)“, ohne
+  Groß/Klein). Die Arbeit im Dialog geht so nicht verloren.
+- Boxen werden über ihre Stelle in der Liste zugeordnet. Das gilt nur,
+  solange das Layout anderswo bloß so geändert wurde, wie es
+  `swap_boxes`, `set_box_input` und `show_box` tun: gleich viele Boxen,
+  jede mit demselben Platz, Rahmen und derselben Sperre. Sonst (eine
+  andere Console speicherte andere Boxen: umgeordnet, eine entfernt und
+  eine hinzugefügt) ersetzt Speichern das Layout durch das Gezeigte, mit
+  Warnung; kein stilles Mischen von Teilen verschiedener Boxen. Ändert
+  eine andere Console nur Rahmen oder Platz einer Box, gilt das ebenso
+  (nicht zu unterscheiden von einer anderen Box; die Warnung sagt es,
+  „Neu laden“ übernimmt es).
+  Verworfen: feste Ids für Boxen in lmix-core. Mehr Umbau (Show-Datei,
+  Vorlagen, Aktionen, Migration) für denselben Zweck: die Aktionen im
+  Betrieb ordnen nie um, nur `set_layout` tut es, und das ersetzt die
+  ganze Liste, sodass auch Ids dort von der sendenden Console abhingen.
 - Muster wie `AddOutputDialog` (Zustand der Show als Eigenschaft, der
   Dialog vergleicht selbst); kein Rückfrage-Dialog beim Speichern, der
   im Betrieb aufhielte.
@@ -7739,7 +7750,10 @@ Tausch während offen bleibt mit eigenem Platz, eigene Änderung am selben
 Teil gewinnt, entfernte Box, doppelter Input fällt auf das Gezeigte
 zurück, unverändert ohne Hinweis, Boxen anderswo hinzugefügt mit Hinweis
 und „Neu laden“, neues Layout unverändert, Speichern über die Id nach
-Entfernen des Layouts davor, entferntes Layout gesperrt mit Hinweis.
+Entfernen des Layouts davor, entferntes Layout als neues gespeichert
+(Name frei, sonst nummeriert), anderswo umgeordnete Boxen und eine
+entfernte plus eine hinzugefügte nicht gemischt (alle drei vor der
+Änderung rot).
 Switcher-Test `set_layout_by_id_hits_its_layout_after_one_before_is_gone`
 (Id als Text wie aus der Console, nach Entfernen des Layouts davor; ein
 Layout, das wie die Id heißt, gewinnt nicht).
