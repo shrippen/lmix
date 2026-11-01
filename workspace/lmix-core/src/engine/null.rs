@@ -72,6 +72,22 @@ pub struct NullEngine {
     /// Recording marks so far (REC.8).
     #[cfg(test)]
     marks: Mutex<Vec<super::marks::RecordingMark>>,
+    /// What the picture taps give (`set_tap`).
+    #[cfg(test)]
+    tap: Mutex<Tap>,
+}
+
+/// What a test's picture tap gives.
+#[cfg(test)]
+#[derive(Clone, Default)]
+pub enum Tap {
+    /// The engine has no pictures (`--engine none`).
+    #[default]
+    None,
+    /// The tap has no frame (yet), as strom's after attaching.
+    Waiting,
+    /// This JPEG.
+    Frame(Vec<u8>),
 }
 
 impl NullEngine {
@@ -223,6 +239,12 @@ impl NullEngine {
     #[cfg(test)]
     pub fn log(&self) -> Vec<Command> {
         self.log.lock().expect("log lock").clone()
+    }
+
+    /// Let every picture tap give `tap` from now on.
+    #[cfg(test)]
+    pub fn set_tap(&self, tap: Tap) {
+        *self.tap.lock().expect("tap lock") = tap;
     }
 
     /// Recording marks so far.
@@ -377,6 +399,12 @@ impl Engine for NullEngine {
     }
 
     async fn picture(&self, _picture: Picture) -> Result<Vec<u8>, EngineError> {
+        #[cfg(test)]
+        match self.tap.lock().expect("tap lock").clone() {
+            Tap::None => {}
+            Tap::Waiting => return Err(EngineError::NotReady),
+            Tap::Frame(jpeg) => return Ok(jpeg),
+        }
         Err(EngineError::NoPictures)
     }
 
