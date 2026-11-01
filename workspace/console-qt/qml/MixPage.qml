@@ -66,6 +66,13 @@ AppPage {
         property bool mixer: true
         /** Keys of the input actions kept in the "⋯" menu, as JSON. */
         property string menuOnly: "[]"
+        /** Guides over the monitors (OUT.12, SafeAreaGuides): safe-area
+         *  frame, crop, thirds, and on which monitor ("preview",
+         *  "program", "both"). */
+        property string guideFrame: ""
+        property string guideCrop: ""
+        property bool guideThirds: false
+        property string guidesOn: "preview"
     }
     readonly property var menuOnly: {
         try {
@@ -461,6 +468,7 @@ AppPage {
                         label: qsTr("Preview")
                         detail: root.busLabel(root.show ? root.show.preview : null)
                         tally: KanteStyle.positiveTextColor
+                        guides: viewSettings.guidesOn !== "program"
                         // The mixer's preview output: an input or a layout, as a
                         // take brings it; it does not change pipelines on a click.
                         source: root.show && root.show.preview ? "preview" : ""
@@ -506,6 +514,7 @@ AppPage {
                         label: qsTr("Program")
                         detail: root.busLabel(root.show ? root.show.program : null)
                         tally: KanteStyle.negativeTextColor
+                        guides: viewSettings.guidesOn !== "preview"
                         source: "program"
                         peakDb: root.levels.peak("program")
                         input: root.programInput
@@ -544,7 +553,7 @@ AppPage {
                         id: viewPopover
                         readonly property var multiview: root.show && root.show.multiview ? root.show.multiview : ({ program: "right", meters: "shown" })
                         GridLayout {
-                            columns: 2
+                            columns: 3
                             columnSpacing: Kirigami.Units.largeSpacing * 2
                             ColumnLayout {
                                 Layout.alignment: Qt.AlignTop
@@ -610,6 +619,25 @@ AppPage {
                                     checked: root.simple
                                     enabled: backend.uiMode === ""
                                     onToggled: viewSettings.simple = checked
+                                }
+                            }
+                            // OUT.12: guides in the console's monitors only, never in an output.
+                            GuidesPicker {
+                                Layout.alignment: Qt.AlignTop
+                                frame: viewSettings.guideFrame
+                                crop: viewSettings.guideCrop
+                                thirds: viewSettings.guideThirds
+                                monitor: viewSettings.guidesOn
+                                onChanged: (key, value) => {
+                                    if (key === "frame") {
+                                        viewSettings.guideFrame = value
+                                    } else if (key === "crop") {
+                                        viewSettings.guideCrop = value
+                                    } else if (key === "thirds") {
+                                        viewSettings.guideThirds = value
+                                    } else if (key === "monitor") {
+                                        viewSettings.guidesOn = value
+                                    }
                                 }
                             }
                         }
@@ -965,6 +993,8 @@ AppPage {
         property var peakDb: undefined
         /** The input shown, for its transport; null for layouts. */
         property var input: null
+        /** Whether the guides (OUT.12) show over this picture. */
+        property bool guides: false
         /** A double click into the picture. */
         signal doubleClicked()
 
@@ -1016,6 +1046,14 @@ AppPage {
                     core: root.backend
                     TapHandler {
                         onDoubleTapped: monitor.doubleClicked()
+                    }
+                    SafeAreaGuides {
+                        anchors.fill: parent
+                        visible: monitor.guides && shown
+                        aspect: root.aspect
+                        frame: viewSettings.guideFrame
+                        crop: viewSettings.guideCrop
+                        thirds: viewSettings.guideThirds
                     }
                 }
                 KanteAudioMeter {

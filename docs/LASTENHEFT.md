@@ -299,7 +299,7 @@ kann es, Console nicht.
 | OUT.9 | Virtuelle Kamera und virtuelles Audiogerät für andere Programme (v4l2loopback, PipeWire) | S | – |
 | OUT.10 | Multiview 1 und 2, je eigenes Layout: PVW/PGM + 2/8/14 Inputs, nur Inputs, Reihenfolge nach Nummer oder Typ, Titel oben/unten, Pegel, Tally-Rahmen, Klick wählt Preview | M | ◐ (Multiview der Engine als Ausgangsquelle, OUT.2; Program links oder rechts, Pegel an/aus; ohne 2/8/14 Kacheln, nur Inputs, Reihenfolge, Titel oben/unten, Klick wählt Preview, zweite Multiview) |
 | OUT.11 | Live-Monitore in der GUI: PVW, PGM, alle Input-Kacheln flüssig (volle Bildrate); Bilder lokal direkt über GPU-Speicher aus der Engine (G.2) | M | ◐ (alle Inputs live über Shared Memory, 30 fps bei 18 Ansichten; DMABuf ohne Kopie und volle Bildrate offen, H.4) |
-| OUT.12 | Schutzbereiche: EBU/SMPTE, 80/90 %, Raster, 4:3, 1:1, 9:16 | S | – |
+| OUT.12 | Schutzbereiche: EBU/SMPTE, 80/90 %, Raster, 4:3, 1:1, 9:16 | S | ✅ (Console, Mix-Seite: Hilfslinien über Vorschau, Programm oder beiden, nie im Ausgang; Rahmen 93/90 % (EBU R 95, SMPTE ST 2046-1) oder 90 % oder 80 %, Ausschnitt 4:3, 1:1 oder 9:16 mit abgedunkeltem Rest, Drittel-Raster; Einstellung je Rechner, 2026-11-01) |
 | OUT.13 | Messinstrumente: Waveform Y/RGB, Parade, Vektorskop (75/100 %-Marken), neben Bild | S | – |
 | OUT.14 | Hinweise über PGM-Anzeige (nicht in Senken): zu leise, FTB aktiv, keine Aufnahme | K | – |
 | OUT.15 | Snapshot des Programs | K | – |
