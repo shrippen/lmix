@@ -1901,7 +1901,10 @@ impl Switcher {
             | Action::CuePanic { .. }
             | Action::CueHardStop
             | Action::SetMood { .. } => Err(bad_cues("run through the service".into())),
-            Action::SetMoods { moods } => {
+            Action::SetMoods { mut moods } => {
+                // Pads removed meanwhile (the dialog still had them) leave
+                // it, as they left the show's.
+                prune_pads(&mut moods, &self.show.cue_lists);
                 check_moods(&moods, &self.show.cue_lists)?;
                 let removed = removed_from_moods(&self.show.moods, &moods);
                 let before = self.replace_moods(moods);
@@ -3969,18 +3972,10 @@ impl Switcher {
         out
     }
 
-    /// After the emergency list: the panic mood's actions (MOOD.9). Its
-    /// layers stay the panic's against the emergency list's cues of this
-    /// panic, whose actions run before and lose; a cue after the panic
-    /// takes them as any (MOOD.5).
+    /// After the emergency list: the panic mood's actions (MOOD.9).
     fn panic_mood(&mut self, out: &mut Vec<Out>) {
         let actions = self.moods.panic(&self.show.moods);
         if !actions.is_empty() {
-            let panic = &self.show.moods.panic;
-            out.retain(|o| {
-                !matches!(o, Out::TakeLayer { layer, .. }
-                    if matches!(panic.get(layer), Some(lmix_types::LayerContent::Actions { .. })))
-            });
             out.push(Out::Mood { actions });
         }
     }
@@ -4041,14 +4036,16 @@ impl Switcher {
     }
 
     /// Cue `cue` of `list` takes mood layer `layer` (MOOD.5): the actions
-    /// that fade the mood out there.
+    /// that fade the mood out there. `by_panic`: a run a panic started.
     pub fn mood_take(
         &mut self,
         layer: lmix_types::LayerId,
         list: lmix_types::InputId,
         cue: lmix_types::CueId,
+        by_panic: bool,
     ) -> Vec<Action> {
-        self.moods.take(&self.show.moods, layer, list, cue)
+        self.moods
+            .take(&self.show.moods, layer, list, cue, by_panic)
     }
 
     /// Set a mood (MOOD.4): the actions that change its layers.
@@ -10723,13 +10720,6 @@ mod tests {
                 }),
             ),
             (
-                "an unknown pad",
-                Box::new(|m| {
-                    m.collections
-                        .push(collection(Vec::new(), vec![lmix_types::CueId::new()]))
-                }),
-            ),
-            (
                 "an unknown mood",
                 Box::new(|m| {
                     m.collections
@@ -10807,7 +10797,11 @@ mod tests {
             "collections": [{"name": "Akt 1", "pads": [pad_id]}]
         }))
         .expect("moods");
-        sw.apply(Action::SetMoods { moods }).unwrap();
+        // An unknown pad (removed while the dialog was open) leaves it.
+        let mut unknown = moods.clone();
+        unknown.collections[0].pads.push(lmix_types::CueId::new());
+        sw.apply(Action::SetMoods { moods: unknown }).unwrap();
+        assert_eq!(sw.show().moods, moods);
         sw.apply(Action::SetCueList {
             list: InputRef::Text("Pads".into()),
             name: "Pads".into(),
@@ -10820,6 +10814,7 @@ mod tests {
 
     #[test]
     fn an_emergency_cue_takes_no_layer_of_the_panic_mood() {
+        use lmix_types::{CueKind, Follow, GroupMode, LayerOrigin};
         let moods: lmix_types::Moods = serde_json::from_value(serde_json::json!({
             "layers": [{"id": "00000000-0000-4000-8000-000000000001", "name": "Licht"},
                        {"id": "00000000-0000-4000-8000-000000000002", "name": "Musik"}],
@@ -10832,28 +10827,86 @@ mod tests {
             layer: Some(layer),
             ..Cue::actions(name, vec![Action::FadeToBlack { duration_ms: 0 }])
         };
+        // At once, after a pre wait, and as the follow in a group.
+        let late = Cue {
+            pre_wait_ms: 100,
+            ..on("Spät", licht)
+        };
+        let first = Cue {
+            name: "Erst".into(),
+            duration_ms: Some(100),
+            follow: Follow::AfterEnd,
+            ..Cue::empty(CueKind::Wait)
+        };
+        let group = Cue {
+            name: "Gruppe".into(),
+            mode: Some(GroupMode::First),
+            children: vec![first, on("Folge", licht)],
+            ..Cue::empty(CueKind::Group)
+        };
         let mut sw = Switcher::new(SLOTS);
         sw.apply(Action::SetMoods { moods }).unwrap();
-        sw.apply(Action::AddCueList {
-            name: "Notfall".into(),
-            cues: vec![on("Licht", licht), on("Musik", musik)],
-            source: None,
-        })
-        .unwrap();
+        for (name, cues) in [
+            (
+                "Notfall",
+                vec![on("Licht", licht), late, group, on("Musik", musik)],
+            ),
+            ("Show", vec![on("Spot", licht)]),
+        ] {
+            sw.apply(Action::AddCueList {
+                name: name.into(),
+                cues,
+                source: None,
+            })
+            .unwrap();
+        }
         sw.apply(Action::SetEmergencyList {
             list: Some(InputRef::Text("Notfall".into())),
         })
         .unwrap();
-        let out = sw.cue_panic(tokio::time::Instant::now(), Some(0)).unwrap();
-        let takes: Vec<_> = out
-            .iter()
-            .filter_map(|o| match o {
-                Out::TakeLayer { layer, .. } => Some(*layer),
-                _ => None,
-            })
-            .collect();
-        assert_eq!(takes, [musik], "the panic mood keeps its light");
+        // As the service runs them: each take in turn.
+        let take = |sw: &mut Switcher, out: Vec<Out>| -> usize {
+            let mut takes = 0;
+            for o in out {
+                if let Out::TakeLayer {
+                    list,
+                    cue,
+                    layer,
+                    panic,
+                } = o
+                {
+                    sw.mood_take(layer, list, cue, panic);
+                    takes += 1;
+                }
+            }
+            takes
+        };
+        let origin = |sw: &Switcher, layer| {
+            sw.state()
+                .mood
+                .layers
+                .iter()
+                .find(|l| l.layer == layer)
+                .map(|l| l.origin.clone())
+        };
+        let t = tokio::time::Instant::now();
+        let out = sw.cue_panic(t, Some(0)).unwrap();
         assert!(matches!(out.last(), Some(Out::Mood { .. })), "it runs last");
+        let mut takes = take(&mut sw, out);
+        for after in [150, 250, 350] {
+            let out = sw.cue_tick(t + std::time::Duration::from_millis(after));
+            takes += take(&mut sw, out);
+        }
+        assert_eq!(takes, 4, "every cue on a layer fired");
+        assert_eq!(origin(&sw, licht), Some(LayerOrigin::Panic));
+        assert!(matches!(origin(&sw, musik), Some(LayerOrigin::Cue { .. })));
+        // A GO after the panic takes the light.
+        let show = Some(InputRef::Text("Show".into()));
+        let out = sw
+            .cue_go(show.as_ref(), t + std::time::Duration::from_secs(1), None)
+            .unwrap();
+        take(&mut sw, out);
+        assert!(matches!(origin(&sw, licht), Some(LayerOrigin::Cue { .. })));
     }
 
     #[test]

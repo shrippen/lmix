@@ -849,13 +849,18 @@ impl Service {
                     let _ = self.events.send(Event::Panic { mode });
                 }
                 crate::cues::Out::Mood { actions } => self.run_mood_actions(actions, since).await,
-                crate::cues::Out::TakeLayer { list, cue, layer } => {
+                crate::cues::Out::TakeLayer {
+                    list,
+                    cue,
+                    layer,
+                    panic,
+                } => {
                     let actions = {
                         let mut sw = self.switcher.lock().await;
                         if self.panicked_since(since) {
                             continue;
                         }
-                        let actions = sw.mood_take(layer, list, cue);
+                        let actions = sw.mood_take(layer, list, cue, panic);
                         self.publish(&sw);
                         actions
                     };

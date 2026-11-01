@@ -57,6 +57,8 @@ pub enum Out {
         list: InputId,
         cue: CueId,
         layer: lmix_types::LayerId,
+        /// A run a panic started ([`Run::panic`]).
+        panic: bool,
     },
 }
 
@@ -85,6 +87,9 @@ struct Run {
     fade_out_ms: u32,
     /// Since when it is paused (RUN.5); its times stand still.
     paused_at: Option<Instant>,
+    /// Started by a panic: the emergency list's cue, a child, follow or
+    /// start of one (MOOD.9: it takes no layer of the panic mood).
+    panic: bool,
 }
 
 impl Run {
@@ -127,6 +132,8 @@ pub struct Runner {
     next_id: u64,
     /// A panic runs until then; another panic before is a hard stop.
     panic_until: Option<Instant>,
+    /// Runs spawned now come from a panic ([`Run::panic`]).
+    by_panic: bool,
     late: Lateness,
     /// Cues that started since the show was opened or reset (SUI.12).
     ran: BTreeSet<CueId>,
@@ -631,9 +638,11 @@ impl Runner {
         // before (a hard stop cuts what still fades out).
         out.push(Out::StopPlayback { fade_ms });
         if let Some(list) = emergency.and_then(|l| lists.get(l)) {
+            self.by_panic = true;
             for cue in &list.cues {
                 self.spawn(list.id, cue, None, now, Follow::None, &mut out);
             }
+            self.by_panic = false;
         }
         out.extend(self.tick(lists, now));
         out
@@ -780,6 +789,8 @@ impl Runner {
         out: &mut Vec<Out>,
     ) {
         self.next_id += 1;
+        let panic =
+            self.by_panic || parent.is_some_and(|p| self.runs.iter().any(|r| r.id == p && r.panic));
         let pre = ms(cue.pre_wait_ms);
         let total = match cue.kind {
             CueKind::Group => None,
@@ -810,6 +821,7 @@ impl Runner {
                 _ => 0,
             },
             paused_at: None,
+            panic,
         });
         self.ran.insert(cue.id);
         out.push(Out::Event {
@@ -851,6 +863,7 @@ impl Runner {
                 list: run.list,
                 cue: cue.id,
                 layer,
+                panic: run.panic,
             });
         }
         let mut end_at = Some(t);
@@ -865,7 +878,12 @@ impl Runner {
             }
             CueKind::Note => {}
             CueKind::Wait => end_at = Some(t + ms(cue.duration_ms.unwrap_or(0))),
-            CueKind::Start => self.fire_start(lists, list, &cue, t, out),
+            CueKind::Start => {
+                // What a cue of a panic starts is the panic's too.
+                self.by_panic = run.panic;
+                self.fire_start(lists, list, &cue, t, out);
+                self.by_panic = false;
+            }
             // As `set_mood` from the API: the service sets it under the
             // switcher's lock and runs what the layers do (MOOD.6).
             CueKind::Mood => match cue.mood.clone() {
@@ -1099,7 +1117,9 @@ impl Runner {
         let Some(next) = siblings(&entry.cues, &path).and_then(|s| s.get(index + 1)) else {
             return;
         };
+        self.by_panic = run.panic;
         self.spawn(run.list, next, run.parent, t, next.follow, out);
+        self.by_panic = false;
     }
 
     /// A group ends when none of its children is live any more.

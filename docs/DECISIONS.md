@@ -6629,16 +6629,22 @@ gesperrt blieb und `set_moods` Unstimmiges annahm.
   `set_cue_list`, `update_cue` oder `add_cue` einen laufenden Cue, stoppt
   er wie mit `cue_stop` (sein Klang oder Bild blendet mit seiner
   Ausblendzeit aus, das Ereignis `stopped` geht hinaus) und gibt die Ebene
-  ab, die er hielt. Vorher lief der Klang ohne Cue weiter. Der Switcher
+  ab, die er hielt. Vorher lief der Klang ohne Cue weiter. Das gilt auch
+  beim Neuladen einer Skript-Liste (IMP.9): ein Cue ohne Nummer bekommt
+  eine neue Id, wenn er umbenannt wird oder davor ein gleichnamiger Cue
+  hinzukommt, und stoppt dann, wenn er gerade läuft. Der Switcher
   sammelt solche Schritte (`Switcher::take_outs`), der Dienst führt sie
   nach der Änderung aus wie die eines Stopps, vor der Antwort; ohne solche
   Schritte kostet das nichts.
 - **Nach der Panik** nimmt ein Cue eine Ebene der Panik-Stimmung wie jede
   andere (MOOD.5); vorher blieb sie bis zur nächsten Stimmung gesperrt.
-  Geschützt bleibt sie nur gegen die Cues der Notfall-Liste derselben
-  Panik: deren Aktionen laufen vor der Panik-Stimmung und verlieren
-  (MOOD.9), die Ebene bleibt „Panik“. Was die Notfall-Liste erst später
-  startet, kommt nach der Panik und nimmt die Ebene.
+  Geschützt bleibt sie nur gegen die Cues, die die Panik selbst startet:
+  die der Notfall-Liste, ob sofort oder nach ihrer Wartezeit, und was sie
+  weiter starten (Kinder einer Gruppe, Folge-Cues, Start-Cues). Solche
+  Läufe tragen eine Marke (`Run::panic`, in `Out::TakeLayer`), und
+  `MoodRunner::take` lässt sie keine Ebene der Panik-Stimmung nehmen: die
+  Panik-Stimmung gewinnt (MOOD.9), die Ebene bleibt „Panik“. Ein GO des
+  Bedieners danach nimmt sie.
 - **Aktionen einer Ebene** spielen keinen Klang und zeigen kein Bild
   (`play_sound`, `show_picture`, Pegel und Blenden davon): die Ebene kennte
   sie nicht, sie blendeten nie aus. Dafür hat eine Ebene Klang oder Bild.
@@ -6654,9 +6660,11 @@ gesperrt blieb und `set_moods` Unstimmiges annahm.
   von Sammlungen je einmal und nicht die einer Stimmung (eine Id für
   Stimmungen und Sammlungen); in einer Sammlung nur Stimmungen und Pads,
   die es gibt, jede einmal. Pads, die es nicht mehr gibt (Cue entfernt,
-  Liste entfernt oder keine Pads mehr), fallen beim Bearbeiten der Listen,
-  beim Öffnen einer Show und beim Wiederherstellen aus den Sammlungen;
-  sonst lehnte das nächste `set_moods` der Seite sie ab.
+  Liste entfernt oder keine Pads mehr), fallen still aus den Sammlungen:
+  beim Bearbeiten der Listen, beim Öffnen einer Show, beim Wiederherstellen
+  und in `set_moods` selbst (der Dialog kann ein Pad noch haben, das
+  inzwischen anderswo gelöscht wurde; abgelehnt würde sein Speichern).
+  Doppelte Pads lehnt `set_moods` weiter ab.
 - **Panik-Stimmung und Mischer** (K4, keine Änderung): Die Aktionen der
   Panik-Stimmung dürfen den Mischer bedienen, auch mit Klang oder Bild
   (`transport_input`, `quick_play`, `cut_direct`). „Nie Klang oder Bild“
