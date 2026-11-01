@@ -8225,3 +8225,43 @@ strom `dev` gemergt, daran hängt das Submodul).
   pausierter oder am Ende gehaltener Clip wiederholt sein letztes Bild (`hold_still`), liefert
   also auch nach dem Anhängen wieder ein Bild. Beleg: strom-Test
   `test_reattached_tap_does_not_serve_a_picture_from_before` (vorher altes JPEG, jetzt Timeout).
+
+## 2026-11-01 — Höchstalter des gehaltenen Bilds (`/api/pictures`)
+
+Branch `picture-age`; todo „Bild-Speicher von lmix-core ohne Höchstalter“.
+
+**Kontext:** `Service::picture` merkt sich das letzte Bild je Abgriff (Program, Slot). Antwortet
+strom 504 (kein Bild), gibt lmix-core unter „hold“ (Program immer) dieses Bild aus, unter
+„black“ 503 mit Retry-After. Eingeführt am 8.10. (`dd4dce30`), damit ein pausierter Clip oder
+ein Standbild sein Bild behält. Das braucht es nicht mehr: beide wiederholen ihr letztes Bild
+(`hold_still`), der Abgriff bekommt weiter Bilder. Seit strom #66 verwirft ein abgehängter
+Abgriff (10 s ohne Abfrage) sein Bild; lmix-core gab danach sein eigenes aus, beliebig alt.
+Abnehmer von `/api/pictures`: die Web-Seiten `/mixer` und `/keys` (alle 1,5 s; bei 503 bleibt
+die Kachel leer), die VM-Tests (`test-m2b-vm.sh`, `test-looks-gl.sh`, `test-sdi-loop.sh`; sie
+wiederholen bei 503 und prüfen Bewegung, ein altes Bild verfälscht das) und fremde Programme
+(P5). Die Console liest `/api/pictures` nicht, sie zeigt die Live-Bilder über die Sockets.
+
+**Entscheidung:** Das gehaltene Bild überbrückt eine Lücke höchstens `HELD_PICTURE_MAX` = 5 s
+nach seinem Eingang, danach antwortet die API wie vor dem ersten Bild (503, Retry-After 1).
+Die Lücken, für die es da ist, sind kurz: das erste Bild nach dem Anhängen (strom greift eins je
+Sekunde), ein Neustart des Slots (Failback nach 2 s), ein oder zwei verpasste Abfragen der
+Web-Seiten. 5 s liegen unter stroms Leerlaufzeit (10 s, `STROM_TAP_IDLE`, per `const assert`
+gesichert): ein Bild von vor dem Abhängen kommt so nie zurück. Kosten: ein `Instant` je Bild,
+kein Timer, keine zusätzliche Abfrage. Kein API-Bruch: 503 kannten alle Abnehmer schon.
+Für die Bedienung (P1, P2, P5): eine leere Kachel sagt „kein aktuelles Bild“, ein altes Bild
+lügt. Der Mischer selbst hält unter „hold“ weiter das letzte Bild eines Inputs; das betrifft nur die Bilder der API.
+
+**Verworfen:**
+- Speicher behalten, Alter im Header melden (`Age` oder `X-Picture-Age`): `<img>` und `curl -f`
+  sehen keine Header, das alte Bild sähe weiter live aus.
+- Speicher ganz streichen: ohne ihn blinkt jede Kachel bei jedem Neustart eines Slots.
+- Höchstalter aus der Abfragezeit des Clients ableiten: lmix-core kennt sie nicht; ein fester
+  Wert unter stroms Leerlaufzeit reicht.
+
+**Offen (strom):** Solange ein Abgriff angehängt ist und abgefragt wird, gibt strom sein letztes
+Bild aus, auch wenn die Quelle keins mehr liefert (`ThumbnailTap::get_thumbnail`, `cache_ttl`
+ungenutzt). Das kann lmix-core nicht sehen; eigenes Thema.
+
+Beleg: `a_held_picture_is_served_only_while_fresh` und
+`a_reattached_tap_does_not_bring_back_the_held_picture` (vorher rot: altes Bild statt
+`NotReady`), `a_black_input_holds_no_picture`.
