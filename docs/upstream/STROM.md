@@ -42,6 +42,8 @@ Abgleich mit upstream: `git fetch https://github.com/Eyevinn/strom main` und
 | Media Player hält beim Pausieren das letzte Bild | 7682d41 | PR | offen |
 | DeckLink Output mit direktem Media-Timing | #50 | PR | offen; überschneidet sich mit upstream #1131, #1168, zuerst abgleichen |
 | CUDA-Mischer auf echter Hardware (Alpha nach Fade, Stinger, Thumbnails) | #29 | PR | offen; hängt am CUDA-Mischer |
+| Vorschaubild-Abgriff: Abhängen ohne Zustandssperre (Verklemmung mit dem Appsink-Callback) | 5f32f15, #63 | PR | offen; Test vorhanden, auch upstream `main` betroffen |
+| JSON-Speicher: Schreiben unter einer Sperre (gemeinsame Temp-Datei, verlorene Flows) | 8e7cbff, #62 | PR | offen; Test vorhanden, auch upstream `main` betroffen |
 | SRT-Passphrasen, Stream-Keys und Tokens in Logs und Bus-Fehlertexten maskieren (`redact`) | #59 | PR | offen; Branch von upstream 8fce2ee, beim Einreichen auf `main` rebasen (ein Konflikt in `bus.rs`, Warnungs-Sperre) |
 | Queue-Warnung: eigene `min-threshold-time` zählt mit, einmal je Überschreitung | #60 | PR | offen; Branch von upstream 8fce2ee, passt ohne Konflikt auf `main` |
 
