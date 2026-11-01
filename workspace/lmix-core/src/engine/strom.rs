@@ -294,23 +294,42 @@ impl StromEngine {
         {
             return prefix.clone();
         }
-        let flow = self.get_flow(flows::output_flow_id(id)).await;
-        let running = flow.ok().flatten().and_then(|flow| {
+        let flow = match self.get_flow(flows::output_flow_id(id)).await {
+            Ok(flow) => flow,
+            Err(e) => {
+                // Not kept: the next mark asks again.
+                tracing::debug!(output = %id, error = %e, "recording prefix unread, default used");
+                return marks::recording_prefix(id);
+            }
+        };
+        let running = flow.and_then(|flow| {
             let rec = flow.blocks.into_iter().find(|b| b.id == flows::RECORDER)?;
             match rec.properties.get("filename_prefix") {
                 Some(PropertyValue::String(prefix)) => Some(prefix.clone()),
                 _ => None,
             }
         });
-        match running {
-            Some(prefix) => {
-                let mut prefixes = self.recording_prefixes.lock().expect("prefixes lock");
-                prefixes.insert(id, prefix.clone());
-                prefix
-            }
+        let Some(prefix) = running else {
+            tracing::debug!(output = %id, "no recorder prefix in the flow, default used");
             // Unique to the output: at worst a provisional protocol.
-            None => marks::recording_prefix(id),
+            return marks::recording_prefix(id);
+        };
+        self.running_prefix(id, prefix)
+    }
+
+    /// `prefix`, read from the flow of recording `id`, kept, unless the
+    /// output started anew while it was read: its start prefix then wins
+    /// (marks run beside `StartOutput`, without the switcher's lock).
+    fn running_prefix(&self, id: lmix_types::OutputId, prefix: String) -> String {
+        // Locks in the order of `fresh_recording`.
+        let fresh = self.fresh_recordings.lock().expect("fresh lock");
+        let mut prefixes = self.recording_prefixes.lock().expect("prefixes lock");
+        if fresh.contains(&id) {
+            if let Some(started) = prefixes.get(&id) {
+                return started.clone();
+            }
         }
+        prefixes.entry(id).or_insert(prefix).clone()
     }
 
     /// `mark`'s line added to its protocol, the whole file written anew.
@@ -3176,6 +3195,23 @@ mod tests {
         let media = media.lock().unwrap();
         assert!(media.files.contains_key(&guess));
         assert!(!media.calls.iter().any(|c| c.contains("/api/flows/")));
+    }
+
+    /// REC.5: an output started anew while its old flow's prefix was
+    /// read keeps its start prefix; the old one does not overwrite it.
+    #[tokio::test]
+    async fn a_start_during_the_read_keeps_its_prefix() {
+        let (engine, _) = media_strom().await;
+        let id = OutputId::new();
+        // The read began before the start; the start lands meanwhile.
+        engine.fresh_recording(id, "New".into());
+        assert_eq!(engine.running_prefix(id, "Old".into()), "New");
+        assert_eq!(engine.recording_prefix_of(id).await, "New");
+
+        // Found running, nothing started here: the flow's prefix is kept.
+        let other = OutputId::new();
+        assert_eq!(engine.running_prefix(other, "Hall".into()), "Hall");
+        assert_eq!(engine.recording_prefix_of(other).await, "Hall");
     }
 
     /// A protocol strom could not read is not taken for none: nothing is

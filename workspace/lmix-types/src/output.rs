@@ -232,9 +232,8 @@ pub fn file_name_problem(pattern: &str) -> Option<String> {
     if pattern.contains(['/', '\\']) {
         return Some(format!("file name {pattern}: no folder, set it apart"));
     }
-    let rest = pattern
-        .replace(FILE_NAME_OUTPUT, "")
-        .replace(FILE_NAME_SOURCE, "");
+    // The pass of `file_name`: `{sour{output}ce}` leaves `{source}`.
+    let rest = filled_in(pattern, "", "");
     rest.contains(['{', '}']).then(|| {
         format!("file name {pattern}: placeholders are {FILE_NAME_OUTPUT} and {FILE_NAME_SOURCE}")
     })
@@ -249,7 +248,23 @@ pub fn file_name_problem(pattern: &str) -> Option<String> {
 /// is left: the caller's default name then.
 pub fn file_name(pattern: &str, output: &str, source: &str) -> String {
     use unicode_normalization::UnicodeNormalization;
-    // One pass: a name holding `{source}` itself stays as it is.
+    let filled = filled_in(pattern, output, source);
+    // Composed: `u` + U+0308 (names from macOS) is one letter `ü`.
+    let safe: String = filled
+        .nfc()
+        .map(|c| match c {
+            c if c.is_alphanumeric() => c,
+            ' ' | '-' | '_' | '.' => c,
+            _ => '_',
+        })
+        .take(FILE_NAME_MAX)
+        .collect();
+    safe.trim_matches([' ', '.']).to_string()
+}
+
+/// `pattern` with `{output}` and `{source}` filled in, in one pass: a
+/// name holding `{source}` itself stays as it is.
+fn filled_in(pattern: &str, output: &str, source: &str) -> String {
     let mut filled = String::new();
     let mut rest = pattern;
     while let Some(at) = rest.find('{') {
@@ -267,17 +282,7 @@ pub fn file_name(pattern: &str, output: &str, source: &str) -> String {
         }
     }
     filled.push_str(rest);
-    // Composed: `u` + U+0308 (names from macOS) is one letter `ü`.
-    let safe: String = filled
-        .nfc()
-        .map(|c| match c {
-            c if c.is_alphanumeric() => c,
-            ' ' | '-' | '_' | '.' => c,
-            _ => '_',
-        })
-        .take(FILE_NAME_MAX)
-        .collect();
-    safe.trim_matches([' ', '.']).to_string()
+    filled
 }
 
 /// Longest text of a recording mark (REC.8).
@@ -852,6 +857,9 @@ mod tests {
         assert_eq!(file_name_problem("Talk {output} {source}"), None);
         assert!(file_name_problem("{datum}").is_some());
         assert!(file_name_problem("{output").is_some());
+        // One pass, as filled in: no placeholder made of the rest.
+        assert!(file_name_problem("{sour{output}ce}").is_some());
+        assert!(file_name_problem("{{output}}").is_some());
         assert!(file_name_problem("day/one").is_some());
         assert!(file_name_problem(r"day\one").is_some());
         assert!(file_name_problem(&"x".repeat(FILE_NAME_MAX + 1)).is_some());
