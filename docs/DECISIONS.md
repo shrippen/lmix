@@ -8120,11 +8120,16 @@ ein roher Leerraum im Passwort (`srt://u:a b@h`), ein rohes `&` im
 geheimen Query-Wert vor einem unbekannten Namen (`passphrase=a&b=c`),
 Token im Pfad anderer Schemata (`rtsp://h/<token>/x`), `auth-token: a b`
 und ein `@` im Pfad (`rtmp://h/live/a@b` zeigte `b` als Host).
-Seit strom #70 (Review #69): ein Shell-`'\''` in einem Wert, der selbst ein
-Anführungszeichen öffnet (`'passphrase="my"'\''s secret'` zeigte
-`secret`; das im Wert offene Anführungszeichen maskiert jetzt bis zu
-seinem Partner oder Textende), und ein HTTP-Pfadsegment mit mehreren
+Seit strom #70 (Review #69): ein Shell-`'\''` hinter einem Wert, der über
+den Partner hinausläuft (`'passphrase="my"'\''s secret'` zeigte `secret`;
+`"my"` klebt am schließenden `'`, darum endet der Wert dort nicht, und was
+hinter dem Partner folgt, wird jetzt maskiert wie hinter einem Wert, der
+dort endet: das `'\''` bis Textende), und ein HTTP-Pfadsegment mit mehreren
 Zahlenblöcken (nur je Teil auf 10 Ziffern begrenzt, jetzt je Segment).
+strom #72 verschiebt die Tests nach `redact/tests.rs` (beide Dateien unter
+1 500 Zeilen) und nennt in den Kommentaren weder lmix noch Review-Runden,
+damit `dev` und der Upstream-Branch gleich bleiben; der Sync-Hinweis steht
+nur in `srt.rs`.
 
 Bewusst nicht abgedeckt (Prosa nicht unterscheidbar, im Doc-Kommentar von
 `text()` genannt): Namen ohne geheime Endung oder ohne `=`/`:`; ein
