@@ -6652,16 +6652,43 @@ je Marke; (c) wäre ein strom-Diff für eine Kann-Anforderung.
   `file` (die Datei, die strom gerade schreibt, aus dem Ereignis
   `RecorderFileChanged`), `file_time` (seit diese Datei begann), `text`.
   Zeiten auf die Sekunde, gemessen am Kern: ±1 s gegenüber dem Bild.
-- Hat strom noch keine Datei gemeldet, nimmt das Protokoll Präfix (aus dem
-  laufenden Flow) und Startzeit. Startet lmix-core während einer Aufnahme
-  neu, liest es das vorhandene Protokoll einmal und schreibt weiter.
+  Notizen, die eine Tabellenkalkulation als Formel läse (`=`, `+`, `-`,
+  `@`, Tab, CR am Anfang), bekommen ein `'` davor (CSV-Injektion).
+- **Uhren**: `time` ist die Uhrzeit des Kerns, der Zeitstempel im
+  Dateinamen die von strom. Laufen beide auf verschiedenen Rechnern,
+  sollten sie dieselbe Zeit und Zeitzone haben (NTP), sonst passen Name
+  und Spalten nicht zusammen.
+- **Vorläufiger Name**: Hat strom bei der ersten Marke noch keine Datei
+  gemeldet (der Live-Recorder meldet sie beim ersten Fragment), heißt das
+  Protokoll nach Präfix (aus dem laufenden Flow) und Startzeit, wie der
+  Kern sie sah. Ist die Datei gemeldet und heißt anders, zieht das
+  Protokoll mit der nächsten Marke neben sie um, der vorläufige Name wird
+  gelöscht.
+- **Neustart von lmix-core**: strom meldet die laufende Datei nicht noch
+  einmal, und der Kern kennt die Aufnahme erst ab seinem Neustart. Für
+  eine Aufnahme, die dieser Kern nicht gestartet hat, sucht die Marke im
+  Ordner (`GET /api/media`) die neueste Datei mit dem Präfix der Aufnahme
+  und schreibt im Protokoll daneben weiter; `recording` zählt ab dem
+  Zeitstempel im Dateinamen. Bei einer Aufnahme, die dieser Kern
+  gestartet hat, sucht sie nicht: die neueste Datei im Ordner könnte die
+  eines früheren Laufs sein.
+- **Nichts überschreiben**: Nur 404 heißt „kein Protokoll“. Kann strom es
+  nicht lesen (Fehler, Zeitüberschreitung), schreibt die Marke nichts und
+  meldet den Fehler; die nächste liest neu. Eine Datei des Namens, die
+  kein Protokoll ist, bleibt; das Protokoll nimmt `….marks-2.csv` usw.
+  Eine in einer Tabellenkalkulation neu gespeicherte (BOM, CRLF) gilt
+  weiter als Protokoll. Scheitert das Hochladen, nimmt der Kern die Zeile
+  zurück: eine wiederholte Marke steht einmal.
 - Ohne Sperre des Switchers: der Upload hält kein Schalten auf. Marken
   laufen nacheinander (eine Sperre im Treiber), so bleibt die Reihenfolge.
+  Jeder Medien-Aufruf einer Marke wartet höchstens 5 s, damit eine Marke
+  in einem Cue die Aktionen danach nicht lange aufhält.
 - Ein absoluter Aufnahmeordner liegt außerhalb des Medienordners; dort
   lehnt strom den Upload ab und die Marke meldet den Fehler.
 - Console: Knopf „Zeitmarke“ auf der Seite Ausgänge (mit Notizfeld, Enter
-  setzt die Marke) und in der Ausgangsleiste, sichtbar während eine
-  Aufnahme läuft; Vorlage „Zeitmarke in Aufnahmen“ für Kurzbefehle, Cues
+  setzt die Marke; höchstens 200 Zeichen, leert sich erst, wenn der Kern
+  die Marke angenommen hat) und in der Ausgangsleiste, sichtbar während
+  eine Aufnahme läuft; Vorlage „Zeitmarke in Aufnahmen“ für Kurzbefehle, Cues
   und Auslöser.
 
 **Bricht**: nichts (neue Felder mit Standard, neue Aktion).
@@ -6669,9 +6696,12 @@ je Marke; (c) wäre ein strom-Diff für eine Kann-Anforderung.
 **Geprüft**: lmix-types (Grenzen, alte Shows ohne Teilung),
 `flows::tests::a_split_recording_starts_new_files` (beide Recorder),
 `marks::tests` (Name, Zeile, CSV-Maskierung, Läufe),
-`strom::tests::marks_go_beside_the_recording` und
-`a_mark_before_the_first_file_names_the_start` (strom-Attrappe: ein Lesen
-je Lauf, ein Upload je Marke),
+`strom::tests` mit einer strom-Attrappe: `marks_go_beside_the_recording`
+(ein Lesen je Lauf, ein Upload je Marke),
+`a_guessed_protocol_moves_beside_the_recording`,
+`after_a_restart_marks_go_on_in_the_old_protocol`,
+`a_failed_read_overwrites_nothing` (einmal 500),
+`a_foreign_file_is_never_overwritten`,
 `service::tests::marks_go_to_running_recordings`, OSC; QML: Dialog
 (`tst_add_output_dialog`), Seite und Leiste (`tst_outputs_page`,
 `tst_output_bar`). Echte Aufnahme mit strom (GStreamer 1.28, CPU-Mischer,
