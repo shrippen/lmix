@@ -116,9 +116,11 @@ KanteDialog {
         }
     }
 
-    title: qsTr("Moods")
+    title: qsTr("Edit moods")
     modal: true
-    width: Kirigami.Units.gridUnit * 46
+    // At most 90 % of the window; lower, the tabs scroll between the tab bar
+    // and Close (docs/DESIGN-DIALOGE.md rule 3).
+    size: KanteDialog.Size.Large
     standardButtons: QQC2.Dialog.Close
     // KanteDialog has a child of its own (KanteScope), so the popup does not
     // size itself to this one.
@@ -273,6 +275,29 @@ KanteDialog {
         }
     }
 
+    /** A name to edit: Enter or leaving the field renames (`renamed`, only
+        when it changed and is not empty), Escape goes back to the name kept
+        without sending; a second Escape closes the dialog. After either the
+        field shows the name kept again: a refused one does not stay. */
+    component NameField: KanteTextField {
+        id: nameEdit
+        /** The name kept now. */
+        property string kept
+        signal renamed(string name)
+        text: kept
+        onEditingFinished: {
+            const name = text.trim()
+            if (name !== "" && name !== kept) {
+                renamed(name)
+            }
+            text = Qt.binding(() => nameEdit.kept)
+        }
+        Keys.onEscapePressed: event => {
+            event.accepted = text !== kept
+            text = Qt.binding(() => nameEdit.kept)
+        }
+    }
+
     /** A handle to drag a row of a list to another place; the row it is
         over is marked. Only the handle: a list that scrolls stays
         flickable over the rest of the row (on touch, too). */
@@ -389,7 +414,7 @@ KanteDialog {
             return layer ? qsTr("Layer %1").arg(layer.name) : ""
         }
         standardButtons: QQC2.Dialog.Close
-        width: Kirigami.Units.gridUnit * 30
+        size: KanteDialog.Size.Medium
         contentHeight: mediaColumn.implicitHeight
         onClosed: dialog.mediaLayer = ""
 
@@ -500,6 +525,9 @@ KanteDialog {
     ColumnLayout {
         id: column
         width: parent.width
+        // The dialog's room: lower than wished for (a small window), the
+        // tabs' lists scroll and their buttons stay in reach.
+        height: parent.height
         spacing: Kirigami.Units.smallSpacing
 
         KanteTabBar {
@@ -511,15 +539,22 @@ KanteDialog {
 
         StackLayout {
             Layout.fillWidth: true
+            Layout.fillHeight: true
             Layout.preferredHeight: Kirigami.Units.gridUnit * 22
+            Layout.minimumHeight: Kirigami.Units.gridUnit * 6
             currentIndex: dialog.tab
 
             // Groups and variants: the list left, the chosen one right.
             RowLayout {
                 spacing: Kirigami.Units.largeSpacing
 
+                // As wide with a choice as without: the buttons do not move.
                 ColumnLayout {
-                    Layout.preferredWidth: Kirigami.Units.gridUnit * 14
+                    objectName: "placesColumn"
+                    readonly property real fixedWidth: Kirigami.Units.gridUnit * 16
+                    Layout.preferredWidth: fixedWidth
+                    Layout.minimumWidth: fixedWidth
+                    Layout.maximumWidth: fixedWidth
                     Layout.fillHeight: true
 
                     ListView {
@@ -531,34 +566,48 @@ KanteDialog {
                         model: dialog.places
                         boundsBehavior: Flickable.StopAtBounds
                         QQC2.ScrollBar.vertical: QQC2.ScrollBar {}
-                        delegate: KanteListRow {
-                            id: placeRow
+                        // A long name is cut: the whole one under the pointer.
+                        delegate: Item {
+                            id: placeItem
                             required property var modelData
-                            readonly property string path: modelData.variant ? modelData.group.name + "/" + modelData.variant.name : modelData.group.name
-                            objectName: "place:" + path
                             width: ListView.view.width
-                            density: KanteListRow.Density.Compact
-                            leadingText: modelData.variant ? "›" : ""
-                            leadingWidth: Kirigami.Units.gridUnit
-                            text: modelData.variant ? modelData.variant.name : modelData.group.name
-                            selected: dialog.chosenId === modelData.id
-                            dropTarget: dialog.dragList === "places" && dialog.dropAt === modelData.id
-                            opacity: placeGrip.active ? 0.5 : 1
-                            onClicked: dialog.chosenId = modelData.id
-                            trailing: DragGrip {
-                                id: placeGrip
-                                objectName: "placeGrip:" + placeRow.path
-                                over: placeRow.dropTarget
-                                onMoved: position => {
-                                    dialog.dragList = "places"
-                                    dialog.dropAt = dialog.placeUnder(position)
+                            implicitHeight: placeRow.implicitHeight
+                            QQC2.ToolTip.visible: placeHover.hovered && !placeGrip.active
+                            QQC2.ToolTip.text: modelData.variant ? modelData.group.name + " / " + modelData.variant.name : modelData.group.name
+                            QQC2.ToolTip.delay: Kirigami.Units.toolTipDelay
+                            HoverHandler { id: placeHover }
+
+                            KanteListRow {
+                                id: placeRow
+                                readonly property var modelData: placeItem.modelData
+                                readonly property string path: modelData.variant ? modelData.group.name + "/" + modelData.variant.name : modelData.group.name
+                                objectName: "place:" + path
+                                width: parent.width
+                                density: KanteListRow.Density.Compact
+                                leadingText: modelData.variant ? "›" : ""
+                                leadingWidth: Kirigami.Units.gridUnit
+                                text: modelData.variant ? modelData.variant.name : modelData.group.name
+                                selected: dialog.chosenId === modelData.id
+                                dropTarget: dialog.dragList === "places" && dialog.dropAt === modelData.id
+                                opacity: placeGrip.active ? 0.5 : 1
+                                onClicked: dialog.chosenId = modelData.id
+                                trailing: DragGrip {
+                                    id: placeGrip
+                                    objectName: "placeGrip:" + placeRow.path
+                                    over: placeRow.dropTarget
+                                    onMoved: position => {
+                                        dialog.dragList = "places"
+                                        dialog.dropAt = dialog.placeUnder(position)
+                                    }
+                                    onDropped: position => dialog.dropPlace(placeRow.modelData, dialog.placeUnder(position))
+                                    onEnded: dialog.dragList = ""
                                 }
-                                onDropped: position => dialog.dropPlace(placeRow.modelData, dialog.placeUnder(position))
-                                onEnded: dialog.dragList = ""
                             }
                         }
                     }
-                    Flow {
+                    // Two fixed rows, in every language: adding, then moving
+                    // and removing the one chosen.
+                    RowLayout {
                         Layout.fillWidth: true
                         spacing: Kirigami.Units.smallSpacing
                         KanteButton {
@@ -587,9 +636,18 @@ KanteDialog {
                                 dialog.chosenId = id
                             }
                         }
-                        KanteButton {
+                    }
+                    RowLayout {
+                        Layout.fillWidth: true
+                        spacing: Kirigami.Units.smallSpacing
+                        KanteToolButton {
+                            objectName: "placeUp"
+                            icon.name: "go-up"
                             text: qsTr("Up")
+                            display: QQC2.AbstractButton.IconOnly
                             enabled: dialog.chosen !== null
+                            QQC2.ToolTip.visible: hovered
+                            QQC2.ToolTip.text: qsTr("Move up")
                             onClicked: {
                                 const place = dialog.chosen
                                 dialog.edit(copy => {
@@ -602,9 +660,14 @@ KanteDialog {
                                 })
                             }
                         }
-                        KanteButton {
+                        KanteToolButton {
+                            objectName: "placeDown"
+                            icon.name: "go-down"
                             text: qsTr("Down")
+                            display: QQC2.AbstractButton.IconOnly
                             enabled: dialog.chosen !== null
+                            QQC2.ToolTip.visible: hovered
+                            QQC2.ToolTip.text: qsTr("Move down")
                             onClicked: {
                                 const place = dialog.chosen
                                 dialog.edit(copy => {
@@ -617,6 +680,7 @@ KanteDialog {
                                 })
                             }
                         }
+                        Item { Layout.fillWidth: true }
                         KanteButton {
                             objectName: "removePlace"
                             text: qsTr("Remove")
@@ -627,14 +691,13 @@ KanteDialog {
                                 const gone = place.variant ? [place.variant.id] : [place.group.id].concat((place.group.variants || []).map(v => v.id))
                                 const variants = place.variant ? 0 : (place.group.variants || []).length
                                 const name = place.variant ? place.group.name + " / " + place.variant.name : place.group.name
-                                const named = "\u201c" + name + "\u201d"
                                 dialog.remove({
                                     name: name,
-                                    question: place.variant ? qsTr("Remove variant %1?").arg(named) : qsTr("Remove group %1?").arg(named),
+                                    question: place.variant ? qsTr("Remove variant “%1”?").arg(name) : qsTr("Remove group “%1”?").arg(name),
                                     consequence: (variants > 0 ? qsTr("Its variants go with it (%1). ").arg(variants) : "")
                                         + qsTr("Collections forget it; mood cues that set it are marked."),
                                     acceptText: place.variant ? qsTr("Remove variant") : qsTr("Remove group"),
-                                    removedText: place.variant ? qsTr("Variant %1 removed").arg(named) : qsTr("Group %1 removed").arg(named),
+                                    removedText: place.variant ? qsTr("Variant “%1” removed").arg(name) : qsTr("Group “%1” removed").arg(name),
                                     // By id: the moods may change while it asks.
                                     change: copy => {
                                         copy.groups = copy.groups.filter(g => gone.indexOf(g.id) < 0)
@@ -666,20 +729,16 @@ KanteDialog {
                         visible: dialog.chosen !== null
                         Layout.fillWidth: true
                         QQC2.Label { text: qsTr("Name") }
-                        KanteTextField {
+                        NameField {
                             id: nameField
                             objectName: "moodName"
                             Layout.fillWidth: true
-                            text: dialog.chosen ? (dialog.chosen.variant ? dialog.chosen.variant.name : dialog.chosen.group.name) : ""
-                            onEditingFinished: {
+                            kept: dialog.chosen ? (dialog.chosen.variant ? dialog.chosen.variant.name : dialog.chosen.group.name) : ""
+                            onRenamed: name => {
                                 const place = dialog.chosen
-                                const name = text.trim()
-                                const was = place ? (place.variant ? place.variant.name : place.group.name) : ""
-                                if (place && name !== "" && name !== was) {
+                                if (place) {
                                     dialog.edit(copy => { const at = dialog.find(copy, place); (at.variant || at.group).name = name })
                                 }
-                                // The kept name again; a refused one does not stay.
-                                text = Qt.binding(() => dialog.chosen ? (dialog.chosen.variant ? dialog.chosen.variant.name : dialog.chosen.group.name) : "")
                             }
                         }
                         CueColourButton {
@@ -700,11 +759,13 @@ KanteDialog {
 
                         ColumnLayout {
                             width: parent.width
-                            spacing: Kirigami.Units.smallSpacing
+                            spacing: Kirigami.Units.largeSpacing
 
+                            // Each layer: what it gets; a sound or picture has its
+                            // file on a line of its own, wide enough to read.
                             Repeater {
                                 model: dialog.chosen ? dialog.layers : []
-                                delegate: RowLayout {
+                                delegate: ColumnLayout {
                                     id: layerEdit
                                     required property var modelData
                                     readonly property var stored: dialog.own(modelData.id)
@@ -719,29 +780,76 @@ KanteDialog {
                                     Layout.fillWidth: true
                                     spacing: Kirigami.Units.smallSpacing
 
-                                    QQC2.Label {
-                                        Layout.preferredWidth: Kirigami.Units.gridUnit * 5
-                                        elide: Text.ElideRight
-                                        text: layerEdit.modelData.name
-                                    }
-                                    KanteComboBox {
-                                        objectName: "kind:" + layerEdit.modelData.name
-                                        Layout.preferredWidth: Kirigami.Units.gridUnit * 7
-                                        readonly property var choices: dialog.kinds(layerEdit.kind)
-                                        model: choices.map(c => c.label)
-                                        currentIndex: choices.findIndex(c => c.kind === layerEdit.kind)
-                                        Accessible.name: layerEdit.modelData.name
-                                        onActivated: index => {
-                                            if (choices[index].kind !== layerEdit.kind) {
-                                                dialog.chooseKind(layerEdit.modelData.id, choices[index].kind)
-                                            }
-                                            // Shows what is kept, also when the actions are cancelled.
-                                            currentIndex = Qt.binding(() => choices.findIndex(c => c.kind === layerEdit.kind))
+                                    RowLayout {
+                                        Layout.fillWidth: true
+                                        spacing: Kirigami.Units.smallSpacing
+
+                                        QQC2.Label {
+                                            id: layerLabel
+                                            Layout.preferredWidth: Kirigami.Units.gridUnit * 5
+                                            elide: Text.ElideRight
+                                            text: layerEdit.modelData.name
                                         }
+                                        KanteComboBox {
+                                            objectName: "kind:" + layerEdit.modelData.name
+                                            Layout.preferredWidth: Kirigami.Units.gridUnit * 7
+                                            readonly property var choices: dialog.kinds(layerEdit.kind)
+                                            model: choices.map(c => c.label)
+                                            currentIndex: choices.findIndex(c => c.kind === layerEdit.kind)
+                                            Accessible.name: layerEdit.modelData.name
+                                            onActivated: index => {
+                                                if (choices[index].kind !== layerEdit.kind) {
+                                                    dialog.chooseKind(layerEdit.modelData.id, choices[index].kind)
+                                                }
+                                                // Shows what is kept, also when the actions are cancelled.
+                                                currentIndex = Qt.binding(() => choices.findIndex(c => c.kind === layerEdit.kind))
+                                            }
+                                        }
+                                        KanteComboBox {
+                                            visible: layerEdit.kind === "picture" && dialog.stages.length > 1
+                                            Layout.preferredWidth: Kirigami.Units.gridUnit * 6
+                                            objectName: "stage:" + layerEdit.modelData.name
+                                            model: dialog.stages
+                                            currentIndex: layerEdit.kind === "picture" && layerEdit.media ? dialog.stages.indexOf(layerEdit.media.stage) : -1
+                                            Accessible.name: qsTr("Stage of the picture")
+                                            onActivated: index => {
+                                                const next = JSON.parse(JSON.stringify(layerEdit.content))
+                                                next.picture.stage = dialog.stages[index]
+                                                dialog.changeMedia(layerEdit.modelData.id, next)
+                                            }
+                                        }
+                                        QQC2.CheckBox {
+                                            objectName: "loop:" + layerEdit.modelData.name
+                                            visible: layerEdit.media !== null
+                                            text: qsTr("Loop")
+                                            checked: layerEdit.media !== null && layerEdit.media.repeat === "forever"
+                                            onToggled: {
+                                                const next = JSON.parse(JSON.stringify(layerEdit.content))
+                                                next[layerEdit.kind].repeat = checked ? "forever" : "once"
+                                                dialog.changeMedia(layerEdit.modelData.id, next)
+                                            }
+                                        }
+                                        KanteButton {
+                                            objectName: "media:" + layerEdit.modelData.name
+                                            visible: layerEdit.media !== null
+                                            // A sound has a level, a picture an opacity and a place.
+                                            text: layerEdit.kind === "picture" ? qsTr("Opacity…") : qsTr("Level…")
+                                            QQC2.ToolTip.visible: hovered
+                                            QQC2.ToolTip.text: layerEdit.kind === "sound" ? qsTr("Level and crosspoints of the sound") : qsTr("Opacity and layer of the picture")
+                                            onClicked: dialog.openMedia(layerEdit.modelData.id)
+                                        }
+                                        KanteButton {
+                                            visible: layerEdit.kind === "actions"
+                                            text: layerEdit.kind === "actions" && layerEdit.content.actions ? qsTr("Actions: %1…").arg(layerEdit.content.actions.length) : ""
+                                            onClicked: dialog.openActions("mood", layerEdit.modelData.id, layerEdit.content.actions)
+                                        }
+                                        Item { Layout.fillWidth: true }
                                     }
                                     PathField {
                                         objectName: "file:" + layerEdit.modelData.name
                                         Layout.fillWidth: true
+                                        // Under the choice, after the layer's name.
+                                        Layout.leftMargin: layerLabel.width + Kirigami.Units.smallSpacing
                                         visible: layerEdit.kind === "sound" || layerEdit.kind === "picture"
                                         key: dialog.chosenId + layerEdit.modelData.id + layerEdit.kind
                                         path: layerEdit.media ? layerEdit.media.file : ""
@@ -755,44 +863,6 @@ KanteDialog {
                                             dialog.changeMedia(layerEdit.modelData.id, next)
                                         }
                                     }
-                                    KanteComboBox {
-                                        visible: layerEdit.kind === "picture" && dialog.stages.length > 1
-                                        Layout.preferredWidth: Kirigami.Units.gridUnit * 6
-                                        objectName: "stage:" + layerEdit.modelData.name
-                                        model: dialog.stages
-                                        currentIndex: layerEdit.kind === "picture" && layerEdit.media ? dialog.stages.indexOf(layerEdit.media.stage) : -1
-                                        Accessible.name: qsTr("Stage of the picture")
-                                        onActivated: index => {
-                                            const next = JSON.parse(JSON.stringify(layerEdit.content))
-                                            next.picture.stage = dialog.stages[index]
-                                            dialog.changeMedia(layerEdit.modelData.id, next)
-                                        }
-                                    }
-                                    QQC2.CheckBox {
-                                        objectName: "loop:" + layerEdit.modelData.name
-                                        visible: layerEdit.media !== null
-                                        text: qsTr("Loop")
-                                        checked: layerEdit.media !== null && layerEdit.media.repeat === "forever"
-                                        onToggled: {
-                                            const next = JSON.parse(JSON.stringify(layerEdit.content))
-                                            next[layerEdit.kind].repeat = checked ? "forever" : "once"
-                                            dialog.changeMedia(layerEdit.modelData.id, next)
-                                        }
-                                    }
-                                    KanteButton {
-                                        objectName: "media:" + layerEdit.modelData.name
-                                        visible: layerEdit.media !== null
-                                        text: qsTr("Level…")
-                                        QQC2.ToolTip.visible: hovered
-                                        QQC2.ToolTip.text: layerEdit.kind === "sound" ? qsTr("Level and crosspoints of the sound") : qsTr("Opacity and layer of the picture")
-                                        onClicked: dialog.openMedia(layerEdit.modelData.id)
-                                    }
-                                    KanteButton {
-                                        visible: layerEdit.kind === "actions"
-                                        text: layerEdit.kind === "actions" && layerEdit.content.actions ? qsTr("Actions: %1…").arg(layerEdit.content.actions.length) : ""
-                                        onClicked: dialog.openActions("mood", layerEdit.modelData.id, layerEdit.content.actions)
-                                    }
-                                    Item { Layout.fillWidth: true; visible: layerEdit.kind === "off" || layerEdit.kind === "base" }
                                 }
                             }
                         }
@@ -800,7 +870,8 @@ KanteDialog {
                 }
             }
 
-            // Layers and the change times (MOOD.1).
+            // Layers and the change times (MOOD.1). The layers scroll; the
+            // times above and "+ Layer" below stay in reach.
             ColumnLayout {
                 spacing: Kirigami.Units.smallSpacing
 
@@ -829,88 +900,134 @@ KanteDialog {
                     }
                 }
                 KanteSectionLabel { text: qsTr("Layers") }
-                Repeater {
-                    id: layerRows
-                    model: dialog.layers
-                    delegate: RowLayout {
-                        id: layerRow
-                        required property var modelData
-                        required property int index
-                        Layout.fillWidth: true
-                        opacity: layerGrip.active ? 0.5 : 1
-                        DragGrip {
-                            id: layerGrip
-                            objectName: "layerGrip:" + layerRow.index
-                            over: dialog.dragList === "layers" && dialog.dropAt === layerRow.index
-                            onMoved: position => {
-                                dialog.dragList = "layers"
-                                dialog.dropAt = dialog.rowUnder(layerRows, position)
-                            }
-                            onDropped: position => dialog.dropRow("layers", layerRow.index, dialog.rowUnder(layerRows, position))
-                            onEnded: dialog.dragList = ""
-                        }
-                        KanteTextField {
-                            objectName: "layerName:" + layerRow.index
-                            Layout.fillWidth: true
-                            text: layerRow.modelData.name
-                            onEditingFinished: {
-                                const name = text.trim()
-                                if (name !== "" && name !== layerRow.modelData.name) {
-                                    dialog.edit(copy => copy.layers[layerRow.index].name = name)
-                                }
-                                text = Qt.binding(() => layerRow.modelData.name)
-                            }
-                        }
-                        DurationField {
-                            key: layerRow.modelData.id
-                            Layout.preferredWidth: Kirigami.Units.gridUnit * 6
-                            optional: true
-                            ms: layerRow.modelData.fade_ms !== undefined ? layerRow.modelData.fade_ms : null
-                            maxMs: 600000
-                            Accessible.name: qsTr("Fade of the layer")
-                            QQC2.ToolTip.visible: hovered
-                            QQC2.ToolTip.text: qsTr("The layer's own fade; empty: the change time")
-                            onEdited: value => dialog.edit(copy => {
-                                if (value === null) {
-                                    delete copy.layers[layerRow.index].fade_ms
-                                } else {
-                                    copy.layers[layerRow.index].fade_ms = value
-                                }
-                            })
-                        }
-                        KanteButton {
-                            text: qsTr("Up")
-                            enabled: layerRow.index > 0
-                            onClicked: dialog.edit(copy => dialog.move(copy.layers, layerRow.index, -1))
-                        }
-                        KanteButton {
-                            text: qsTr("Down")
-                            enabled: layerRow.index < dialog.layers.length - 1
-                            onClicked: dialog.edit(copy => dialog.move(copy.layers, layerRow.index, 1))
-                        }
-                        KanteButton {
-                            objectName: "removeLayer:" + layerRow.index
-                            text: qsTr("Remove")
-                            emphasis: KanteButton.Emphasis.Destructive
-                            onClicked: {
-                                const id = layerRow.modelData.id
-                                const named = "\u201c" + layerRow.modelData.name + "\u201d"
-                                dialog.remove({
-                                    name: layerRow.modelData.name,
-                                    question: qsTr("Remove layer %1?").arg(named),
-                                    consequence: qsTr("Every mood and the panic mood forget what they had on it; cues that take it are marked."),
-                                    acceptText: qsTr("Remove layer"),
-                                    removedText: qsTr("Layer %1 removed").arg(named),
-                                    change: copy => {
-                                        // By id: the order may change while it asks.
-                                        copy.layers = copy.layers.filter(l => l.id !== id)
-                                        copy.groups.forEach(g => {
-                                            delete (g.base || {})[id]
-                                            ;(g.variants || []).forEach(v => delete (v.layers || {})[id])
-                                        })
-                                        delete copy.panic[id]
+                // The columns of the rows below, over their fields.
+                Item {
+                    objectName: "layersHead"
+                    visible: dialog.layers.length > 0
+                    Layout.fillWidth: true
+                    implicitHeight: fadeHead.implicitHeight
+                    readonly property Item first: layerRows.count > 0 ? layerRows.itemAt(0) : null
+                    QQC2.Label {
+                        x: parent.first ? parent.first.nameX : 0
+                        text: qsTr("Name")
+                        color: KanteStyle.mutedTextColor
+                    }
+                    QQC2.Label {
+                        id: fadeHead
+                        objectName: "fadeHead"
+                        x: parent.first ? parent.first.fadeX : 0
+                        width: Kirigami.Units.gridUnit * 6
+                        elide: Text.ElideRight
+                        text: qsTr("Own fade")
+                        color: KanteStyle.mutedTextColor
+                        QQC2.ToolTip.visible: fadeHeadHover.hovered
+                        QQC2.ToolTip.text: qsTr("The layer's own fade; empty: the change time")
+                        HoverHandler { id: fadeHeadHover }
+                    }
+                }
+                QQC2.ScrollView {
+                    id: layersView
+                    objectName: "layersView"
+                    Layout.fillWidth: true
+                    Layout.fillHeight: true
+                    contentWidth: availableWidth
+
+                    ColumnLayout {
+                        width: layersView.availableWidth
+                        spacing: Kirigami.Units.smallSpacing
+
+                        Repeater {
+                            id: layerRows
+                            model: dialog.layers
+                            delegate: RowLayout {
+                                id: layerRow
+                                required property var modelData
+                                required property int index
+                                /** Where the name and the fade start, for the heads. */
+                                readonly property real nameX: layerName.x
+                                readonly property real fadeX: layerFade.x
+                                objectName: "layerRow:" + index
+                                Layout.fillWidth: true
+                                opacity: layerGrip.active ? 0.5 : 1
+                                DragGrip {
+                                    id: layerGrip
+                                    objectName: "layerGrip:" + layerRow.index
+                                    over: dialog.dragList === "layers" && dialog.dropAt === layerRow.index
+                                    onMoved: position => {
+                                        dialog.dragList = "layers"
+                                        dialog.dropAt = dialog.rowUnder(layerRows, position)
                                     }
-                                })
+                                    onDropped: position => dialog.dropRow("layers", layerRow.index, dialog.rowUnder(layerRows, position))
+                                    onEnded: dialog.dragList = ""
+                                }
+                                NameField {
+                                    id: layerName
+                                    objectName: "layerName:" + layerRow.index
+                                    Layout.fillWidth: true
+                                    kept: layerRow.modelData.name
+                                    Accessible.name: qsTr("Name of the layer")
+                                    onRenamed: name => dialog.edit(copy => copy.layers[layerRow.index].name = name)
+                                }
+                                DurationField {
+                                    id: layerFade
+                                    key: layerRow.modelData.id
+                                    Layout.preferredWidth: Kirigami.Units.gridUnit * 6
+                                    optional: true
+                                    ms: layerRow.modelData.fade_ms !== undefined ? layerRow.modelData.fade_ms : null
+                                    maxMs: 600000
+                                    Accessible.name: qsTr("Fade of the layer")
+                                    QQC2.ToolTip.visible: hovered
+                                    QQC2.ToolTip.text: qsTr("The layer's own fade; empty: the change time")
+                                    onEdited: value => dialog.edit(copy => {
+                                        if (value === null) {
+                                            delete copy.layers[layerRow.index].fade_ms
+                                        } else {
+                                            copy.layers[layerRow.index].fade_ms = value
+                                        }
+                                    })
+                                }
+                                KanteToolButton {
+                                    icon.name: "go-up"
+                                    text: qsTr("Up")
+                                    display: QQC2.AbstractButton.IconOnly
+                                    enabled: layerRow.index > 0
+                                    QQC2.ToolTip.visible: hovered
+                                    QQC2.ToolTip.text: qsTr("Move up")
+                                    onClicked: dialog.edit(copy => dialog.move(copy.layers, layerRow.index, -1))
+                                }
+                                KanteToolButton {
+                                    icon.name: "go-down"
+                                    text: qsTr("Down")
+                                    display: QQC2.AbstractButton.IconOnly
+                                    enabled: layerRow.index < dialog.layers.length - 1
+                                    QQC2.ToolTip.visible: hovered
+                                    QQC2.ToolTip.text: qsTr("Move down")
+                                    onClicked: dialog.edit(copy => dialog.move(copy.layers, layerRow.index, 1))
+                                }
+                                KanteButton {
+                                    objectName: "removeLayer:" + layerRow.index
+                                    text: qsTr("Remove")
+                                    emphasis: KanteButton.Emphasis.Destructive
+                                    onClicked: {
+                                        const id = layerRow.modelData.id
+                                        dialog.remove({
+                                            name: layerRow.modelData.name,
+                                            question: qsTr("Remove layer “%1”?").arg(layerRow.modelData.name),
+                                            consequence: qsTr("Every mood and the panic mood forget what they had on it; cues that take it are marked."),
+                                            acceptText: qsTr("Remove layer"),
+                                            removedText: qsTr("Layer “%1” removed").arg(layerRow.modelData.name),
+                                            change: copy => {
+                                                // By id: the order may change while it asks.
+                                                copy.layers = copy.layers.filter(l => l.id !== id)
+                                                copy.groups.forEach(g => {
+                                                    delete (g.base || {})[id]
+                                                    ;(g.variants || []).forEach(v => delete (v.layers || {})[id])
+                                                })
+                                                delete copy.panic[id]
+                                            }
+                                        })
+                                    }
+                                }
                             }
                         }
                     }
@@ -920,7 +1037,6 @@ KanteDialog {
                     text: qsTr("+ Layer")
                     onClicked: dialog.edit(copy => copy.layers.push({ id: dialog.newId(), name: dialog.freeName(qsTr("Layer"), dialog.layers.map(l => l.name)) }))
                 }
-                Item { Layout.fillHeight: true }
             }
 
             // Collections (MOOD.7): their content is chosen on the page.
@@ -933,63 +1049,78 @@ KanteDialog {
                     color: KanteStyle.mutedTextColor
                     text: qsTr("What a collection holds is put together on the Moods page (Compose).")
                 }
-                Repeater {
-                    id: collectionRows
-                    model: dialog.collections
-                    delegate: RowLayout {
-                        id: collectionRow
-                        required property var modelData
-                        required property int index
-                        Layout.fillWidth: true
-                        opacity: collectionGrip.active ? 0.5 : 1
-                        DragGrip {
-                            id: collectionGrip
-                            objectName: "collectionGrip:" + collectionRow.index
-                            over: dialog.dragList === "collections" && dialog.dropAt === collectionRow.index
-                            onMoved: position => {
-                                dialog.dragList = "collections"
-                                dialog.dropAt = dialog.rowUnder(collectionRows, position)
-                            }
-                            onDropped: position => dialog.dropRow("collections", collectionRow.index, dialog.rowUnder(collectionRows, position))
-                            onEnded: dialog.dragList = ""
-                        }
-                        KanteTextField {
-                            objectName: "collectionName:" + collectionRow.index
-                            Layout.fillWidth: true
-                            text: collectionRow.modelData.name
-                            onEditingFinished: {
-                                const name = text.trim()
-                                if (name !== "" && name !== collectionRow.modelData.name) {
-                                    dialog.edit(copy => copy.collections[collectionRow.index].name = name)
+                QQC2.ScrollView {
+                    id: collectionsView
+                    objectName: "collectionsView"
+                    Layout.fillWidth: true
+                    Layout.fillHeight: true
+                    contentWidth: availableWidth
+
+                    ColumnLayout {
+                        width: collectionsView.availableWidth
+                        spacing: Kirigami.Units.smallSpacing
+
+                        Repeater {
+                            id: collectionRows
+                            model: dialog.collections
+                            delegate: RowLayout {
+                                id: collectionRow
+                                required property var modelData
+                                required property int index
+                                Layout.fillWidth: true
+                                opacity: collectionGrip.active ? 0.5 : 1
+                                DragGrip {
+                                    id: collectionGrip
+                                    objectName: "collectionGrip:" + collectionRow.index
+                                    over: dialog.dragList === "collections" && dialog.dropAt === collectionRow.index
+                                    onMoved: position => {
+                                        dialog.dragList = "collections"
+                                        dialog.dropAt = dialog.rowUnder(collectionRows, position)
+                                    }
+                                    onDropped: position => dialog.dropRow("collections", collectionRow.index, dialog.rowUnder(collectionRows, position))
+                                    onEnded: dialog.dragList = ""
                                 }
-                                text = Qt.binding(() => collectionRow.modelData.name)
-                            }
-                        }
-                        KanteButton {
-                            text: qsTr("Up")
-                            enabled: collectionRow.index > 0
-                            onClicked: dialog.edit(copy => dialog.move(copy.collections, collectionRow.index, -1))
-                        }
-                        KanteButton {
-                            text: qsTr("Down")
-                            enabled: collectionRow.index < dialog.collections.length - 1
-                            onClicked: dialog.edit(copy => dialog.move(copy.collections, collectionRow.index, 1))
-                        }
-                        KanteButton {
-                            objectName: "removeCollection:" + collectionRow.index
-                            text: qsTr("Remove")
-                            emphasis: KanteButton.Emphasis.Destructive
-                            onClicked: {
-                                const id = collectionRow.modelData.id
-                                const named = "\u201c" + collectionRow.modelData.name + "\u201d"
-                                dialog.remove({
-                                    name: collectionRow.modelData.name,
-                                    question: qsTr("Remove collection %1?").arg(named),
-                                    consequence: qsTr("Its moods and one-shots stay."),
-                                    acceptText: qsTr("Remove collection"),
-                                    removedText: qsTr("Collection %1 removed").arg(named),
-                                    change: copy => copy.collections = copy.collections.filter(c => c.id !== id)
-                                })
+                                NameField {
+                                    objectName: "collectionName:" + collectionRow.index
+                                    Layout.fillWidth: true
+                                    kept: collectionRow.modelData.name
+                                    Accessible.name: qsTr("Name of the collection")
+                                    onRenamed: name => dialog.edit(copy => copy.collections[collectionRow.index].name = name)
+                                }
+                                KanteToolButton {
+                                    icon.name: "go-up"
+                                    text: qsTr("Up")
+                                    display: QQC2.AbstractButton.IconOnly
+                                    enabled: collectionRow.index > 0
+                                    QQC2.ToolTip.visible: hovered
+                                    QQC2.ToolTip.text: qsTr("Move up")
+                                    onClicked: dialog.edit(copy => dialog.move(copy.collections, collectionRow.index, -1))
+                                }
+                                KanteToolButton {
+                                    icon.name: "go-down"
+                                    text: qsTr("Down")
+                                    display: QQC2.AbstractButton.IconOnly
+                                    enabled: collectionRow.index < dialog.collections.length - 1
+                                    QQC2.ToolTip.visible: hovered
+                                    QQC2.ToolTip.text: qsTr("Move down")
+                                    onClicked: dialog.edit(copy => dialog.move(copy.collections, collectionRow.index, 1))
+                                }
+                                KanteButton {
+                                    objectName: "removeCollection:" + collectionRow.index
+                                    text: qsTr("Remove")
+                                    emphasis: KanteButton.Emphasis.Destructive
+                                    onClicked: {
+                                        const id = collectionRow.modelData.id
+                                        dialog.remove({
+                                            name: collectionRow.modelData.name,
+                                            question: qsTr("Remove collection “%1”?").arg(collectionRow.modelData.name),
+                                            consequence: qsTr("Its moods and one-shots stay."),
+                                            acceptText: qsTr("Remove collection"),
+                                            removedText: qsTr("Collection “%1” removed").arg(collectionRow.modelData.name),
+                                            change: copy => copy.collections = copy.collections.filter(c => c.id !== id)
+                                        })
+                                    }
+                                }
                             }
                         }
                     }
@@ -999,7 +1130,6 @@ KanteDialog {
                     text: qsTr("+ Collection")
                     onClicked: dialog.edit(copy => copy.collections.push({ id: dialog.newId(), name: dialog.freeName(qsTr("Collection"), dialog.collections.map(c => c.name)), moods: [], pads: [] }))
                 }
-                Item { Layout.fillHeight: true }
             }
 
             // The panic mood (MOOD.9): per layer off or actions, never sound
@@ -1013,45 +1143,57 @@ KanteDialog {
                     color: KanteStyle.mutedTextColor
                     text: qsTr("Panic and hard stop fade every sound and picture out. Here a layer can run actions then, e.g. the house light on; they run after the emergency list.")
                 }
-                Repeater {
-                    model: dialog.layers
-                    delegate: RowLayout {
-                        id: panicEdit
-                        required property var modelData
-                        readonly property var content: (dialog.moods.panic || {})[modelData.id]
-                        readonly property bool acts: content !== undefined && content.kind === "actions"
-                        Layout.fillWidth: true
+                QQC2.ScrollView {
+                    id: panicView
+                    objectName: "panicView"
+                    Layout.fillWidth: true
+                    Layout.fillHeight: true
+                    contentWidth: availableWidth
+
+                    ColumnLayout {
+                        width: panicView.availableWidth
                         spacing: Kirigami.Units.smallSpacing
-                        QQC2.Label {
-                            Layout.preferredWidth: Kirigami.Units.gridUnit * 5
-                            elide: Text.ElideRight
-                            text: panicEdit.modelData.name
-                        }
-                        KanteComboBox {
-                            objectName: "panic:" + panicEdit.modelData.name
-                            Layout.preferredWidth: Kirigami.Units.gridUnit * 7
-                            model: [qsTr("Off"), qsTr("Actions")]
-                            currentIndex: panicEdit.acts ? 1 : 0
-                            Accessible.name: panicEdit.modelData.name
-                            onActivated: index => {
-                                if (index === 0 && panicEdit.acts) {
-                                    dialog.edit(copy => delete copy.panic[panicEdit.modelData.id])
-                                } else if (index === 1 && !panicEdit.acts) {
-                                    dialog.openActions("panic", panicEdit.modelData.id, [])
+
+                        Repeater {
+                            model: dialog.layers
+                            delegate: RowLayout {
+                                id: panicEdit
+                                required property var modelData
+                                readonly property var content: (dialog.moods.panic || {})[modelData.id]
+                                readonly property bool acts: content !== undefined && content.kind === "actions"
+                                Layout.fillWidth: true
+                                spacing: Kirigami.Units.smallSpacing
+                                QQC2.Label {
+                                    Layout.preferredWidth: Kirigami.Units.gridUnit * 5
+                                    elide: Text.ElideRight
+                                    text: panicEdit.modelData.name
                                 }
-                                // Shows what is kept, also when the actions are cancelled.
-                                currentIndex = Qt.binding(() => panicEdit.acts ? 1 : 0)
+                                KanteComboBox {
+                                    objectName: "panic:" + panicEdit.modelData.name
+                                    Layout.preferredWidth: Kirigami.Units.gridUnit * 7
+                                    model: [qsTr("Off"), qsTr("Actions")]
+                                    currentIndex: panicEdit.acts ? 1 : 0
+                                    Accessible.name: panicEdit.modelData.name
+                                    onActivated: index => {
+                                        if (index === 0 && panicEdit.acts) {
+                                            dialog.edit(copy => delete copy.panic[panicEdit.modelData.id])
+                                        } else if (index === 1 && !panicEdit.acts) {
+                                            dialog.openActions("panic", panicEdit.modelData.id, [])
+                                        }
+                                        // Shows what is kept, also when the actions are cancelled.
+                                        currentIndex = Qt.binding(() => panicEdit.acts ? 1 : 0)
+                                    }
+                                }
+                                KanteButton {
+                                    visible: panicEdit.acts
+                                    text: panicEdit.acts && panicEdit.content.actions ? qsTr("Actions: %1…").arg(panicEdit.content.actions.length) : ""
+                                    onClicked: dialog.openActions("panic", panicEdit.modelData.id, panicEdit.content.actions)
+                                }
+                                Item { Layout.fillWidth: true }
                             }
                         }
-                        KanteButton {
-                            visible: panicEdit.acts
-                            text: panicEdit.acts && panicEdit.content.actions ? qsTr("Actions: %1…").arg(panicEdit.content.actions.length) : ""
-                            onClicked: dialog.openActions("panic", panicEdit.modelData.id, panicEdit.content.actions)
-                        }
-                        Item { Layout.fillWidth: true }
                     }
                 }
-                Item { Layout.fillHeight: true }
             }
         }
     }

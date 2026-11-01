@@ -118,7 +118,88 @@ TestCase {
             layers: [{ layer: "l-light", origin: { kind: "panic" } }]
         } })
         compare(findChild(p, "layer:Light").source, "Panic")
+        // The panic mood is what holds now: not "no mood" under a panic head.
+        compare(findChild(p, "nowName").text, "Panic mood")
+        compare(p.subtitle, "Panic mood")
+    }
+
+    // The mood set was removed since: lmix-core may still name it (or no
+    // mood any more) while its layers run; no base and no panic to name.
+    function test_a_removed_mood_names_no_base() {
+        const p = page()
+        fakeShell.show = Object.assign({}, fakeShell.show, { mood: {
+            mood: "g-gone",
+            layers: [{ layer: "l-music", origin: { kind: "mood", mood: "g-gone" } }]
+        } })
+        const music = findChild(p, "layer:Music")
+        compare(music.source, "Mood (gone)")
+        verify(!findChild(p, "layerText:Music").visible, "no origin text")
+        compare(findChild(p, "nowName").text, "Mood (gone)")
+        fakeShell.show = Object.assign({}, fakeShell.show, { mood: {
+            layers: [{ layer: "l-music", origin: { kind: "mood", mood: "g-gone" } }]
+        } })
+        compare(music.source, "Mood (gone)")
+        compare(findChild(p, "layerText:Music").text, "")
         compare(findChild(p, "nowName").text, "No mood set")
+    }
+
+    function test_counts_say_one_and_many() {
+        const p = page()
+        compare(p.moodCount(1), "1 mood")
+        compare(p.moodCount(4), "4 moods")
+        compare(p.shotCount(1), "1 one-shot")
+        compare(p.shotCount(0), "0 one-shots")
+        // In the language's numbers.
+        compare(p.secondsLeft(6000, Qt.locale("de_DE")), "6,0 s left")
+        compare(p.secondsLeft(6000, Qt.locale("en_GB")), "6.0 s left")
+    }
+
+    // The name beside the fade keeps its width: the fade has its room
+    // whether it shows or not.
+    function test_the_head_does_not_jump_while_a_change_fades() {
+        const p = page()
+        waitForRendering(p)
+        const name = findChild(p, "nowName")
+        const fade = findChild(p, "fadeColumn")
+        const nameWidth = name.width
+        const fadeWidth = fade.width
+        compare(fade.opacity, 0)
+        fakeShell.show = Object.assign({}, fakeShell.show, { mood: {
+            mood: "v-fight", fading: { since_ms: Date.now(), duration_ms: 2000 }
+        } })
+        verify(p.fading)
+        waitForRendering(p)
+        compare(fade.opacity, 1)
+        compare(fade.width, fadeWidth)
+        compare(name.width, nameWidth)
+    }
+
+    // Composing, a member is marked with a check (not by a shade only); a
+    // head that cannot be clicked is no button to look at.
+    function test_members_and_heads_show_what_they_are() {
+        const p = page()
+        p.collectionId = "c-act1"
+        const tavern = findChild(p, "base:Tavern")
+        verify(!tavern.enabled)
+        compare(tavern.emphasis, 4 /* KanteButton.Emphasis.Quiet */)
+        findChild(p, "compose").clicked()
+        const night = findChild(p, "variant:Tavern/Night")
+        const fight = findChild(p, "variant:Tavern/Fight")
+        compare(night.icon.name, "checkmark")
+        compare(night.emphasis, 3 /* KanteButton.Emphasis.Data */)
+        compare(fight.icon.name, "")
+        compare(fight.emphasis, 0 /* KanteButton.Emphasis.Normal */)
+        verify(tavern.enabled)
+        compare(tavern.emphasis, 0)
+        compare(findChild(p, "pad:Door").icon.name, "checkmark")
+        compare(findChild(p, "pad:Thunder").icon.name, "")
+        findChild(p, "compose").clicked()
+        compare(night.icon.name, "", "done: no marks")
+    }
+
+    function test_a_variant_tells_its_whole_name() {
+        const p = page()
+        verify(findChild(p, "variant:Tavern/Night").tip.startsWith("Night\n"))
     }
 
     function test_a_collection_shows_its_moods_and_one_shots() {

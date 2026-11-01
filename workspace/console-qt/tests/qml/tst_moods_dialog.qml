@@ -1,5 +1,8 @@
 import QtQuick
 import QtTest
+import QtQuick.Controls as QQC2
+import Kante
+import org.kde.kirigami as Kirigami
 import "../../qml"
 
 /**
@@ -526,5 +529,167 @@ TestCase {
         // The rest of the moods stays as it was.
         compare(sent().groups[0], test.moods.groups[0])
         media.close()
+    }
+
+    /** The moods with `n` layers. */
+    function manyLayers(n) {
+        const moods = JSON.parse(JSON.stringify(test.moods))
+        for (let i = moods.layers.length; i < n; i++) {
+            moods.layers.push({ id: "l-" + i, name: "Layer " + i })
+        }
+        return moods
+    }
+    /** `item` lies inside the dialog's content, not below its foot. */
+    function inside(d, item) {
+        const at = item.mapToItem(d.contentItem, 0, 0)
+        return item.visible && at.y >= 0 && at.y + item.height <= d.contentItem.height + 1
+    }
+
+    // Many layers scroll; "+ Layer" and the change times stay in reach.
+    function test_many_layers_scroll_and_add_stays_in_reach() {
+        show = Object.assign({}, show, { moods: manyLayers(16) })
+        const d = dialog()
+        d.tab = 1
+        waitForRendering(d.contentItem)
+        const view = findChild(d.contentItem, "layersView")
+        verify(view.contentHeight > view.height, "the rows scroll: " + view.contentHeight + " in " + view.height)
+        const add = findChild(d.contentItem, "addLayer")
+        verify(inside(d, add), "+ Layer in the dialog")
+        mouseClick(add)
+        compare(sent().layers.length, 17)
+        // The panic mood scrolls the same way.
+        d.tab = 3
+        waitForRendering(d.contentItem)
+        const panic = findChild(d.contentItem, "panicView")
+        verify(panic.contentHeight > panic.height)
+        verify(inside(d, panic))
+    }
+
+    // In a small window the dialog stays inside it; the tabs scroll.
+    function test_the_dialog_keeps_to_its_size_step() {
+        const d = dialog()
+        compare(d.title, "Edit moods")
+        compare(d.size, KanteDialog.Size.Large)
+        verify(d.width <= test.Window.width * 0.9 + 1)
+        verify(d.height <= test.Window.height * 0.9 + 1)
+        d.chosenId = "g-tavern"
+        findChild(d.contentItem, "media:Music").clicked()
+        const media = findChild(d, "mediaDialog")
+        tryVerify(() => media.opened)
+        compare(media.size, KanteDialog.Size.Medium)
+        media.close()
+    }
+
+    // The list keeps its width with a choice and without: the buttons do
+    // not jump or wrap differently.
+    function test_the_list_keeps_its_width() {
+        const d = dialog()
+        waitForRendering(d.contentItem)
+        const column = findChild(d.contentItem, "placesColumn")
+        const width = column.width
+        d.chosenId = "g-tavern"
+        waitForRendering(d.contentItem)
+        compare(column.width, width)
+        // Remove at the end of its row, inside the column.
+        const remove = findChild(d.contentItem, "removePlace")
+        const at = remove.mapToItem(column, 0, 0)
+        verify(at.x + remove.width <= column.width + 1)
+        compare(remove.parent, findChild(d.contentItem, "placeUp").parent, "beside up and down")
+    }
+
+    // The file of a sound has a line of its own, wide enough to read.
+    function test_a_file_is_wide_enough_to_read() {
+        const d = dialog()
+        d.chosenId = "g-tavern"
+        waitForRendering(d.contentItem)
+        const file = findChild(d.contentItem, "file:Music")
+        verify(file.field.width > Kirigami.Units.gridUnit * 14, "the path field is " + file.field.width + " px")
+        compare(findChild(d.contentItem, "media:Music").text, "Level…")
+    }
+
+    function test_a_picture_has_opacity_not_level() {
+        const moods = JSON.parse(JSON.stringify(test.moods))
+        moods.groups[1].base = { "l-light": { kind: "picture", picture: { file: "/pictures/sea.mp4", stage: "Back" } } }
+        show = Object.assign({}, show, { moods: moods })
+        const d = dialog()
+        d.chosenId = "g-forest"
+        compare(findChild(d.contentItem, "media:Light").text, "Opacity…")
+    }
+
+    // Escape in a name goes back to the name kept, sends nothing and
+    // leaves the dialog open.
+    function test_escape_in_a_name_cancels() {
+        const d = dialog()
+        tryVerify(() => d.opened)
+        d.chosenId = "g-tavern"
+        const field = findChild(d.contentItem, "moodName")
+        field.forceActiveFocus()
+        field.selectAll()
+        keyClick(Qt.Key_X)
+        compare(field.text, "x")
+        keyClick(Qt.Key_Escape)
+        compare(field.text, "Tavern")
+        verify(d.opened, "the first Escape is the field's")
+        // Leaving the field now sends nothing either.
+        field.editingFinished()
+        compare(acted.length, 0)
+        d.tab = 1
+        waitForRendering(d.contentItem)
+        const layer = findChild(d.contentItem, "layerName:0")
+        layer.forceActiveFocus()
+        layer.selectAll()
+        keyClick(Qt.Key_Y)
+        keyClick(Qt.Key_Escape)
+        compare(layer.text, "Light")
+        compare(acted.length, 0)
+    }
+
+    // The layers' own fade has a head over its column.
+    function test_the_fade_column_has_a_head() {
+        const d = dialog()
+        d.tab = 1
+        waitForRendering(d.contentItem)
+        const head = findChild(d.contentItem, "fadeHead")
+        verify(head.visible)
+        compare(head.text, "Own fade")
+        const row = findChild(d.contentItem, "layerRow:0")
+        verify(head.x > 0)
+        compare(head.x, row.fadeX)
+    }
+
+    Component {
+        id: smallWindow
+        Window {
+            visible: true
+            width: 1000
+            height: 420
+            property alias dialog: smallDialog
+            MoodsDialog {
+                id: smallDialog
+                parent: QQC2.Overlay.overlay
+                anchors.centerIn: parent
+                act: test.act
+                askRemove: test.askRemove
+                show: test.show
+                core: null
+            }
+        }
+    }
+
+    // In a low window the dialog keeps to 90 % of it; the layers scroll and
+    // "+ Layer" stays in reach.
+    function test_a_low_window_keeps_the_dialog_inside() {
+        show = Object.assign({}, show, { moods: manyLayers(14) })
+        const win = createTemporaryObject(smallWindow, test)
+        const d = win.dialog
+        d.tab = 1
+        d.open()
+        tryVerify(() => d.opened)
+        waitForRendering(d.contentItem)
+        verify(d.height <= win.height * 0.9 + 1, "dialog " + d.height + " in " + win.height)
+        verify(inside(d, findChild(d.contentItem, "addLayer")), "+ Layer in reach")
+        const view = findChild(d.contentItem, "layersView")
+        verify(view.contentHeight > view.height)
+        d.close()
     }
 }

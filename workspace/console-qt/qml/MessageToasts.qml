@@ -1,4 +1,5 @@
 import QtQuick
+import QtQuick.Controls as QQC2
 import org.kde.kirigami as Kirigami
 import Kante
 
@@ -8,6 +9,11 @@ import Kante
  * or the Console as a toast that stays until it is closed. The same text
  * twice shows once; at most `limit`, the oldest goes first. Pages put
  * their own toasts (Undo after a removal) into `column` too.
+ *
+ * The toasts float above the window's dialogs (a popup of their own, not
+ * modal): a refusal of an edit in a modal dialog, or the Undo of a
+ * removal made there, shows over the dialog and its dimmed ground and
+ * takes the click (docs/DESIGN-DIALOGE.md rule 1: Undo acts at once).
  */
 Item {
     id: toasts
@@ -60,26 +66,46 @@ Item {
         }
     }
 
-    Column {
-        id: column
-        anchors.right: parent.right
-        anchors.bottom: parent.bottom
-        spacing: Kirigami.Units.smallSpacing
+    // Only as large as the toasts (nothing without one): it takes no
+    // clicks beside them and never the keyboard focus. Always open: the
+    // toasts in it are hidden while it is closed, so they could not open it.
+    QQC2.Popup {
+        id: layer
+        objectName: "toastLayer"
+        parent: toasts
+        width: column.implicitWidth
+        height: column.implicitHeight
+        x: toasts.width - width
+        y: toasts.height - height
+        // Above every dialog, also one opened after it.
+        z: 1000
+        modal: false
+        dim: false
+        focus: false
+        closePolicy: QQC2.Popup.NoAutoClose
+        padding: 0
+        background: null
+        visible: true
 
-        Repeater {
-            model: errors
-            KanteToast {
-                id: toast
-                required property int index
-                required text
-                width: Kirigami.Units.gridUnit * 20
-                kind: KanteToast.Kind.Danger
-                life: 0
-                actionText: qsTr("Close")
-                onClosed: errors.remove(index)
-                Component.onCompleted: show()
-                Accessible.role: Accessible.AlertMessage
-                Accessible.name: toast.text
+        contentItem: Column {
+            id: column
+            spacing: Kirigami.Units.smallSpacing
+
+            Repeater {
+                model: errors
+                KanteToast {
+                    id: toast
+                    required property int index
+                    required text
+                    width: Kirigami.Units.gridUnit * 20
+                    kind: KanteToast.Kind.Danger
+                    life: 0
+                    actionText: qsTr("Close")
+                    onClosed: errors.remove(index)
+                    Component.onCompleted: show()
+                    Accessible.role: Accessible.AlertMessage
+                    Accessible.name: toast.text
+                }
             }
         }
     }

@@ -1,5 +1,7 @@
 import QtQuick
+import QtQuick.Controls as QQC2
 import QtTest
+import Kante
 import "../../qml"
 
 /**
@@ -19,6 +21,7 @@ TestCase {
 
     QtObject {
         id: fakeCore
+        property string message: ""
         signal answered(string action, string refusal)
     }
     QtObject {
@@ -210,5 +213,92 @@ TestCase {
         tryCompare(toast, "shown", true)
         compare(toast.text, "Group \u201cTavern\u201d removed")
         compare(toast.actionText, "Undo")
+    }
+
+    // As in the window: the toasts of MessageToasts, and a modal dialog
+    // (the moods editor) the removal was made in.
+    Component {
+        id: windowComponent
+        Item {
+            id: inWindow
+            anchors.fill: parent
+            property alias removals: windowRemovals
+            property alias modal: modalDialog
+            MessageToasts {
+                id: windowToasts
+                anchors.fill: parent
+                core: fakeCore
+            }
+            Removals {
+                id: windowRemovals
+                core: fakeCore
+                act: action => test.sent.push(action)
+                show: fakeShow
+                column: windowToasts.column
+            }
+            KanteDialog {
+                id: modalDialog
+                parent: QQC2.Overlay.overlay
+                modal: true
+                x: 20
+                y: 20
+                width: 300
+                height: 200
+                standardButtons: QQC2.Dialog.Close
+            }
+        }
+    }
+
+    /** Removes a bus through `removals` until its toast shows. */
+    function removedBus(removals, name) {
+        removals.remove(removals.request("bus", { id: "b-" + name, name: name }))
+        fakeCore.answered(JSON.stringify({ action: "remove_bus", bus: "b-" + name }), "")
+        fakeShow.restorable = { kind: "bus", name: name }
+        const toast = toastIn(removals)
+        tryCompare(toast, "shown", true)
+        // In from the right: click once it is there, laid out in the window.
+        tryCompare(toast.transform[0], "x", 0)
+        tryVerify(() => toast.mapToItem(null, toast.width, 0).x <= test.Window.width)
+        return toast
+    }
+    function toastIn(removals) {
+        for (let i = 0; i < removals.column.children.length; i++) {
+            if (removals.column.children[i].restores !== undefined) {
+                return removals.column.children[i]
+            }
+        }
+        return null
+    }
+    function undoButton(item) {
+        for (let i = 0; i < item.children.length; i++) {
+            const child = item.children[i]
+            if (child.text === "Undo" && child.clicked !== undefined) {
+                return child
+            }
+            const found = undoButton(child)
+            if (found) {
+                return found
+            }
+        }
+        return null
+    }
+
+    // Undo acts at once (rule 1), also from a modal dialog: the toast is
+    // over its dimmed ground and takes the click; Ctrl+Z works there too.
+    function test_undo_works_over_a_modal_dialog() {
+        const win = createTemporaryObject(windowComponent, test.Window.contentItem)
+        win.modal.open()
+        tryCompare(win.modal, "opened", true)
+        let toast = removedBus(win.removals, "Stream")
+        mouseClick(undoButton(toast))
+        compare(sent[sent.length - 1], { action: "restore" })
+        verify(win.modal.opened, "the click is the toast's, the dialog stays")
+        sent = []
+        fakeShow.restorable = null
+        toast = removedBus(win.removals, "In-Ear")
+        keyClick(Qt.Key_Z, Qt.ControlModifier)
+        compare(sent[sent.length - 1], { action: "restore" })
+        verify(win.modal.opened)
+        win.modal.close()
     }
 }
