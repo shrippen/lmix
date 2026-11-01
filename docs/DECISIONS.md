@@ -7154,7 +7154,7 @@ regeln gebraucht.
   eines SRT- oder RTMP-Ausgangs). In die Rechner-Einstellungen
   (Geheimnisse dort, Entscheidung 7) gehört sie erst mit den Ausgabezielen
   für Inputs; das bleibt offen. lmix-core schreibt einen gescheiterten
-  Engine-Befehl ins Log ohne den Wert von `passphrase=` (`srt::redact`; gilt
+  Engine-Befehl ins Log ohne den Wert von `passphrase=` (siehe Nachtrag; gilt
   auch für SRT-Ausgänge). strom schreibt die URI samt Passphrase ins
   Log (`SRT source configured: uri=…`); ein Kandidat für ein Issue bei
   Eyevinn, hier nicht geändert.
@@ -7186,3 +7186,34 @@ jetzt `srt://host:port` ohne Abfrage.
 **Offen** (SRC.12): Wahl des Hardware-Decoders, HEVC mit echtem Sender
 prüfen, mehrere Tonspuren zu Mehrkanal (strom kann `num_audio_tracks`, der
 Slot nimmt eine Spur).
+
+## 2026-11-01 — SRT-Input: Nacharbeiten aus dem Review (SRC.12)
+
+Nachtrag zu „SRT-Input mit Feldern statt URI“, aus dem Abschluss-Review
+von #217:
+- **Hosts in anderen Schriften**: `kamera-büro.local` gilt wieder als Host
+  (Buchstaben nach Unicode). Geprüft mit GStreamer 1.28: `srtsrc` dekodiert
+  den prozentkodierten Host (`kamera-b%C3%BCro.local`) und löst über GLib
+  auf, das ihn in Punycode wandelt (`xn--kamera-bro-heb.local`); ob der Name
+  dann gefunden wird, ist Sache von DNS bzw. mDNS. Abgelehnt bleiben `:`
+  außer in IPv6, `@`, `/`, `?`, `#`, Leerraum.
+- **IPv6 in Klammern** (`[fd00::5]` im Feld „Adresse“) gilt wie ohne; die
+  Zone nach `%` nur aus `A–Z a–z 0–9 _ . -` (ein Schnittstellenname), sonst
+  stünde ein rohes Leerzeichen in der URI.
+- **Geheimnisse im Log nach Struktur**: Statt den Text eines Befehls nach
+  `passphrase=` zu durchsuchen (endete bei `"` oder Leerzeichen, der Rest
+  einer Passphrase stand im Log), ersetzt `Command::without_secrets` vor dem
+  Loggen die Felder: SRT-Passphrase (bis zum nächsten `&`, gleich welche
+  Zeichen; `srt::redact_url`), RTMP-Schlüssel, `user:passwort@` in Adressen
+  von Inputs und Ausgängen. Der vorgeschlagene Name eines neuen
+  SRT-Ausgangs zeigt die Adresse ebenfalls ohne Abfrage.
+- **Ablehnungen übersetzt**: `ActionError::BadSrt` trägt das `SrtProblem`
+  (`{"error":"bad_srt","problem":{"problem":"…",…}}` statt `reason`); die
+  Console nennt es in ihren Worten, auch wenn es über API, OSC oder Skript
+  kam. Bricht die Form dieser einen Ablehnung; kein Release, kein Client
+  außer der Console liest sie.
+- **Leeres Formular**: Ohne Host und Port sperrt der Dialog nur den Knopf,
+  statt gleich „braucht die Adresse der Gegenseite“ in Rot zu zeigen.
+- **Einfügen über eine Auswahl**: Als Einfügen gilt jede Änderung, die
+  nicht genau ein Zeichen dazu- oder wegnimmt, auch eine gleich lange über
+  eine Auswahl.

@@ -407,9 +407,28 @@ impl OutputSpec {
         }
     }
 
+    /// The output with its secrets as `…`, for logs: an RTMP stream key,
+    /// an SRT passphrase, a `user:password@` in an address.
+    pub fn without_secrets(&self) -> Self {
+        use crate::srt::redact_url;
+        let mut spec = self.clone();
+        match &mut spec {
+            Self::Srt { uri, .. } => *uri = redact_url(uri),
+            Self::Rtmp { url, key, .. } => {
+                *url = redact_url(url);
+                if !key.is_empty() {
+                    *key = "…".into();
+                }
+            }
+            _ => {}
+        }
+        spec
+    }
+
     pub fn default_name(&self) -> String {
         match self {
-            Self::Srt { uri, .. } => format!("SRT {uri}"),
+            // Without the query: it can hold a passphrase.
+            Self::Srt { uri, .. } => format!("SRT {}", crate::srt::public_uri(uri)),
             Self::Rtmp { url, .. } => format!("RTMP {url}"),
             Self::Record { folder, .. } => format!("Record {folder}"),
             Self::Ndi { name } => format!("NDI {name}"),

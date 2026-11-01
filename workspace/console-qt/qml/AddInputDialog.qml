@@ -140,10 +140,14 @@ KanteDialog {
         const problem = String(core.srtCheck(JSON.stringify(fields)))
         return problem.charAt(0) === "{" ? JSON.parse(problem) : null
     }
-    /** Why the fields make no address SRT accepts; empty when they do. */
+    /** Why the fields make no address SRT accepts; empty when they do. A
+     *  missing host or port on a form not yet filled in only holds the
+     *  button: nothing is wrong yet. */
+    readonly property bool srtUntouched: srtHost.text.trim() === "" && srtPort.text.trim() === ""
     readonly property string srtProblem: !picksSrt ? ""
         : srtPasteProblem ? qsTr("This address does not read: %1").arg(Texts.srtProblem(srtPasteProblem))
-        : srtRefusal ? Texts.srtProblem(srtRefusal) : ""
+        : srtRefusal && !(srtUntouched && ["needs_host", "no_port"].indexOf(srtRefusal.problem) >= 0)
+            ? Texts.srtProblem(srtRefusal) : ""
     readonly property var srtModeHints: ({
         caller: qsTr("lmix calls the sender at this address."),
         listener: qsTr("lmix waits on this port until the sender calls. Without an address it listens on all of this machine's."),
@@ -257,7 +261,7 @@ KanteDialog {
         return !replacing && typed.length > 0 && inputs.some(i => i.name.toLowerCase() === typed)
     }
     readonly property bool complete: kind === "pattern" || kind === "color"
-        || (kind === "srt" ? srtProblem === "" && srtAddress !== "" : textField.text.trim().length > 0)
+        || (kind === "srt" ? !srtRefusal && !srtPasteProblem && srtAddress !== "" : textField.text.trim().length > 0)
 
     function choose(k) {
         if (k !== kind) {
@@ -602,7 +606,9 @@ KanteDialog {
                                 dialog.srtPasteProblem = null
                         }
                         onTextEdited: {
-                            const pasted = text.length - lastLength > 1
+                            // One key adds or removes one character; a paste
+                            // (also over a selection of any length) does not.
+                            const pasted = Math.abs(text.length - lastLength) !== 1
                             lastLength = text.length
                             takeAddress(pasted)
                         }
@@ -682,12 +688,12 @@ KanteDialog {
                 text: dialog.srtProblem
             }
             KanteSectionLabel {
-                visible: dialog.picksSrt && dialog.srtProblem === ""
+                visible: dialog.picksSrt && !dialog.srtRefusal && !dialog.srtPasteProblem
                 text: srtPassphrase.text.length > 0 ? qsTr("Address (passphrase not shown)") : qsTr("Address")
             }
             TextEdit {
                 objectName: "srtAddress"
-                visible: dialog.picksSrt && dialog.srtProblem === ""
+                visible: dialog.picksSrt && !dialog.srtRefusal && !dialog.srtPasteProblem
                 Layout.fillWidth: true
                 text: dialog.srtShown
                 readOnly: true

@@ -247,6 +247,19 @@ impl SourceSpec {
         )
     }
 
+    /// The source with its secrets as `…`, for logs: an SRT passphrase,
+    /// a `user:password@` in an address.
+    pub fn without_secrets(&self) -> Self {
+        use crate::srt::redact_url;
+        let mut source = self.clone();
+        match &mut source {
+            Self::Srt { uri, .. } => *uri = redact_url(uri),
+            Self::Url { url } | Self::Web { url, .. } => *url = redact_url(url),
+            _ => {}
+        }
+        source
+    }
+
     /// Default input name for a new source.
     pub fn default_name(&self) -> String {
         match self {
@@ -834,5 +847,42 @@ mod tests {
         assert!(json.contains(r#""decoder_delay_ms":300"#), "{json}");
         assert_eq!(serde_json::from_str::<SourceSpec>(&json).unwrap(), delayed);
         assert_eq!(delayed.default_name(), "srt://cam:9000");
+    }
+
+    #[test]
+    fn logged_sources_and_outputs_keep_no_secrets() {
+        let srt = SourceSpec::Srt {
+            uri: r#"srt://cam:9000?passphrase=ab"cd efgh&pbkeylen=16"#.into(),
+            decoder_delay_ms: Some(10),
+        };
+        assert_eq!(
+            srt.without_secrets(),
+            SourceSpec::Srt {
+                uri: "srt://cam:9000?passphrase=…&pbkeylen=16".into(),
+                decoder_delay_ms: Some(10),
+            }
+        );
+        let rtsp = SourceSpec::Url {
+            url: "rtsp://admin:pw@cam/live".into(),
+        };
+        assert!(!format!("{:?}", rtsp.without_secrets()).contains("pw"));
+        let rtmp = crate::OutputSpec::Rtmp {
+            url: "rtmp://live.example/app".into(),
+            key: "streamkey-123".into(),
+            video_kbps: 6000,
+            encoding: Default::default(),
+            delay_s: 0,
+        };
+        let shown = format!("{:?}", rtmp.without_secrets());
+        assert!(!shown.contains("streamkey"), "{shown}");
+        assert!(shown.contains("rtmp://live.example/app"), "{shown}");
+        let out = crate::OutputSpec::Srt {
+            uri: "srt://cdn:9000?passphrase=0123456789".into(),
+            video_kbps: 6000,
+            encoding: Default::default(),
+            delay_s: 0,
+        };
+        assert!(!format!("{:?}", out.without_secrets()).contains("0123456789"));
+        assert_eq!(out.default_name(), "SRT srt://cdn:9000");
     }
 }

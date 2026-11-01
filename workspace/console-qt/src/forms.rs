@@ -740,6 +740,20 @@ mod tests {
         };
         let base = |host: &str, passphrase: &str| serde_json::json!({"mode": "caller", "host": host, "port": 9000, "passphrase": passphrase});
         assert_eq!(check(base("cam.local", "")), None);
+        assert_eq!(check(base("kamera-büro.local", "")), None);
+        assert_eq!(
+            check(base("[fd00::5]", "")),
+            None,
+            "brackets typed around IPv6"
+        );
+        assert_eq!(
+            srt_uri(&base("[fd00::5]", "").to_string()),
+            "srt://[fd00::5]:9000"
+        );
+        assert_eq!(
+            check(base("fe80::1%eth 0", "")).as_deref(),
+            Some("bad_host")
+        );
         for host in ["cam.local:9000", "srt://cam", "cam local", "user@cam"] {
             assert_eq!(check(base(host, "")).as_deref(), Some("bad_host"), "{host}");
             // And the core refuses the address the fields make.
