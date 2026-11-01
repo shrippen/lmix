@@ -7,7 +7,7 @@ User es als lmix-eigen entschieden hat.
 Stand 2026-11-01: `dev` (c426a7e) hat 172 Commits ohne Merges, die upstream `main` (4479d8c) nicht
 hat (`git log --no-merges 4479d8c..gitea/dev`).
 
-Stand 2026-11-01: bei Eyevinn liegen sieben PRs von uns (#1185–#1191, unten), auf `main` 4479d8c
+Stand 2026-11-01: bei Eyevinn liegen 15 PRs von uns (#1185–#1199, unten), auf `main` 4479d8c
 rebasiert. Issue-Entwürfe liegen bereit und gehen erst nach Freigabe raus; weitere PR-Branches
 auf upstream `main` sind vorbereitet und warten auf den Review.
 
@@ -24,25 +24,26 @@ Abgleich mit upstream: `git fetch https://github.com/Eyevinn/strom main` und
 | Thema | Commits / Gitea-PR | Weg | Stand, Hinweis |
 |---|---|---|---|
 | Media Player: Bus-Watch, die beim Stoppen entfernt wird (CRITICAL „has no signal watches“) | 21d8ec5 (kam mit #1) | – | upstream erledigt: upstream zählt die `add_signal_watch`-Aufrufe und entfernt genau so viele |
-| Vorschaubild-Abgriff liefert kein Bild älter als `max_age` (3 s, mindestens zwei `update_interval`); eine Quelle, die keine Bilder mehr schickt, sah sonst live aus, solange der Abgriff abgefragt wird (`cache_ttl` war ungenutzt) | 7e40604, 594092c, #68 | PR | offen; Gitea #68 noch offen, nicht auf `dev`; Test vorhanden, auch upstream `main` betroffen. Branch von upstream 8fce2ee, hängt nicht an #63/#66; gehört zu Eyevinn #1187/#1189, beim Stapeln auf `thumbnail-drop-stale` nur die Fix-Commits nehmen (7e40604, 594092c), nicht den Merge gegen `dev`. Upstream `main` hat `cache_ttl` gestrichen (#897): beim Rebase zwei triviale Konflikte (Feld und `Default`). Submodul zeigt bis zum Merge auf `lmix-tap-age` (242248c = `dev` + Fix) |
+| Vorschaubild-Abgriff liefert kein Bild älter als `max_age` (3 s, mindestens zwei `update_interval`); eine Quelle, die keine Bilder mehr schickt, sah sonst live aus, solange der Abgriff abgefragt wird (`cache_ttl` war ungenutzt) | 7e40604, 594092c, #68 | PR | **Eyevinn #1194** (Branch `thumbnail-max-age-upstream`, Gitea #68) |
+| Vorschaubild: 504 (kein Bild) auf DEBUG statt ERROR loggen | #71 | PR | **Eyevinn #1193** (Branch `thumbnail-504-quiet-upstream`) |
 | Panic im eigenständigen nativen Frontend | 779cc60 | PR | **Eyevinn #1190** (Branch `native-frontend-tokio-runtime`, eae43df) |
-| GL-Renderer-Probe auf GStreamer 1.28 | a7a2aa9 | PR | upstream nicht gelöst (#1123 passte nur Tests an); Branch `gl-probe-glmemory` (ecf6736) auf `main` 4479d8c, Text fertig, wartet auf Review/Einreichen; Test jetzt CI-fähig (`backend/tests/gl_probe_test.rs`, Mesa surfaceless EGL) |
+| GL-Renderer-Probe auf GStreamer 1.28 | a7a2aa9 | PR | **Eyevinn #1199** (Branch `gl-probe-glmemory`, ecf6736); Test CI-fähig (`backend/tests/gl_probe_test.rs`, Mesa surfaceless EGL) |
 | NVENC-Rate-Control auf GStreamer 1.28 | dcf2b83 | – | upstream erledigt: `videoenc.rs` wählt `rate-control` oder `rc-mode` nach der vorhandenen Eigenschaft (#1166) |
 | build.rs beobachtet das echte Git-Verzeichnis | 01bdcc0 | PR | **Eyevinn #1191** (Branch `build-rs-git-dir`, 76ed3ac) |
 | Pipeline bleibt PLAYING, wenn ein Thumbnail-Abgriff andockt | da76592 | PR | offen |
 | Deinterlace nur bei interlaced | e23f0b5 | – | großteils upstream erledigt (3225792, #952: progressive Pads direkt). Rest ohne Branch: Pads ohne Caps (explizit gebauter Decoder in EFP/MPEG-TS) gehen noch durch deinterlace, VA ohne `vadeinterlace`; kleiner Folge-PR auf `link_raw_video`, noch nicht vorbereitet |
-| Buffer-Alter auch für Puffer vor der Uhr zählen | fb62d2b | PR | Branch `buffer-age-early-buffers` (dd59d7c) auf `main` 4479d8c, Text fertig, wartet auf Review/Einreichen; Review ohne Wichtig |
-| EFP-SRT-H.264-Decoder nach Rang statt Hersteller | ecd2ed6 | PR | Branch `efp-decoder-by-rank` (cd9afee) auf `main` 4479d8c, Text fertig, wartet auf Review/Einreichen; Test ist nur Demonstration (alter Code wählt auf NVIDIA denselben Decoder) |
-| GL-Eingänge und Underlays auf NVIDIA ohne udmabuf | 887248d, 2e4a749, #36 | PR | Branch `gl-upload-udmabuf-nvidia` (64a3610) auf `main` 4479d8c, Text fertig, wartet auf Review/Einreichen; auf `gl-probe-glmemory` gestapelt (ohne die Probe bleibt der Workaround auf 1.28 aus); 807221f/658a739 heben sich auf und fehlen |
+| Buffer-Alter auch für Puffer vor der Uhr zählen | fb62d2b | PR | **Eyevinn #1198** (Branch `buffer-age-early-buffers`, dd59d7c) |
+| EFP-SRT-H.264-Decoder nach Rang statt Hersteller | ecd2ed6 | PR | Branch `efp-decoder-by-rank` (cd9afee), Text fertig, im Review; Test ist nur Demonstration (alter Code wählt auf NVIDIA denselben Decoder) |
+| GL-Eingänge und Underlays auf NVIDIA ohne udmabuf | 887248d, 2e4a749, #36 | PR | Branch `gl-upload-udmabuf-nvidia` (64a3610), Text fertig, im Review; auf #1199 gestapelt (ohne die Probe bleibt der Workaround auf 1.28 aus); 807221f/658a739 heben sich auf und fehlen |
 | Inaktive Pads in den Compositoren ignorieren | 2ccb62b, bb4fcd5 | PR | offen |
 | Encoder: GPU-Speicher vor Software-Konvertierung herunterladen, vor NVENC auf der GPU konvertieren | 79b3b31, 3e8301e | – | upstream erledigt: a0e32bb (#1111, Download-Front) und 1e9b9c0 (kein `autovideoconvert` mehr); übrig nur CUDA-I420 aus dem CUDA-Mischer, gehört ins CUDA-Issue |
 | DSK bleibt an, wenn er während des Ausblendens eingeschaltet wird | 04b87d1 | Issue (mit d47a50a) | gehört zum Ein-/Ausblenden der DSK-Ebenen (d47a50a), steht im DSK-Issue-Entwurf als Folgefix |
 | Losgelassenes Standbild lässt die Haupt-Pipeline fallen | #15 | PR | offen |
 | PiP-Schnitt zeigt das neue Bild vor dem Ausblenden des alten | #35 | PR | offen |
 | CUDA-Thumbnails ohne cudaconvertscale | #37 | PR | offen; hängt am CUDA-Mischer |
-| AAC-Encoder-Delay aus der Zeitachse | #38 | PR | Branch `aac-encoder-delay` (f281979) auf `main` 4479d8c, Text fertig, wartet auf Review/Einreichen; Review ohne Wichtig |
-| Start, Stopp, Löschen und Update eines Flows unter einer Sperre je Flow | #45, #47 | PR | Branch `flow-lifecycle-lock` (d2bc646) auf `main` 4479d8c, Text fertig, wartet auf Review/Einreichen; Review: nach Textkorrektur PR |
-| Event-Filter-Test ohne Log-Zähler | #44 | PR | Branch `event-filter-test-direct` (1fa4b3f) auf `main` 4479d8c, Text fertig, wartet auf Review/Einreichen; Flake deterministisch nachgestellt |
+| AAC-Encoder-Delay aus der Zeitachse | #38 | PR | **Eyevinn #1196** (Branch `aac-encoder-delay`, f281979) |
+| Start, Stopp, Löschen und Update eines Flows unter einer Sperre je Flow | #45, #47 | PR | **Eyevinn #1197** (Branch `flow-lifecycle-lock`, d2bc646) |
+| Event-Filter-Test ohne Log-Zähler | #44 | PR | **Eyevinn #1195** (Branch `event-filter-test-direct`, 1fa4b3f) |
 | Thumbnail-Zweig starten, bevor das Tee ihn speist (sonst hält die Quelle an) | #55 | PR | offen; Test vorhanden |
 | Media Player hält beim Pausieren das letzte Bild | 7682d41 | PR | offen |
 | DeckLink Output mit direktem Media-Timing | #50 | – | geht in #53 auf. Abgleich: upstream #1131 (f294622, Video an den Modus anpassen) und #1168 (a340f49, Audio anpassen) sind gemergt und berühren weder den Kartentakt-Seed noch den Vorlauf. Der Seed (eefe858, 56245a9, 031721f) ist auf `dev` durch #53 (decklink2sink) wieder entfernt; übrig bleibt der Vorlauf (`processing_deadline_ms`, 1e98a41), der im decklink2sink-Issue-Entwurf mitläuft |
@@ -51,11 +52,11 @@ Abgleich mit upstream: `git fetch https://github.com/Eyevinn/strom main` und
 | JSON-Speicher: Schreiben unter einer Sperre (gemeinsame Temp-Datei, verlorene Flows) | 8e7cbff, #62 | PR | **Eyevinn #1186** (Branch `json-storage-lock`, d44fd98) |
 | Mischer: Multiview-, Vorschau- und Kachel-Queues werfen alte Bilder weg statt Program aufzuhalten | 4ba8ad8 (upstream-fähig), 76513f5 (nur `dev`), #65 | PR | **Eyevinn #1188** (Branch `mixer-monitor-queues`, eed0070, nur 4ba8ad8; Vorschau/Kacheln gibt es upstream nicht) |
 | Vorschaubild-Abgriff verwirft sein Bild beim Abhängen (kein altes Bild nach dem Wiederanhängen) | 8c77ec8, #66 | PR | **Eyevinn #1189** (Branch `thumbnail-drop-stale`, e4fac6c); auf #1187 gestapelt, das Löschen nach dem Stoppen wie auf `dev` |
-| SRT-Passphrasen, Stream-Keys und Tokens in Logs und Bus-Fehlertexten maskieren (`redact`) | #59 | PR | offen; auf `dev` gemergt (d4a4a0f). Seit 2bf5674 fail-closed: nur schlichte URL-Teile sichtbar, Namen nach Endung; seit e5b75db werden Anführungszeichen vom Textanfang verfolgt, jede Maske in einem offenen läuft bis zu dessen Partner; seit 10893ce läuft `text()` unter `catch_unwind` (ein Panic maskiert alles, statt strom im Bus-Callback abzubrechen), HTTP nur mit Herkunft (`origin`), seit e8907cd (#69, unten) mit Pfadwörtern; seit 0e21812 Nachschlagen per Index (#67, unten); lmix `redact_text` ist eine Portierung mit denselben Test-Eingaben. Branch `redact-secrets-in-logs` auf upstream `main` 4479d8c rebased (b7de5ed, mit #70; `bus.rs` ohne Konflikt, dort `as_deref` für clippy, weil `debug_info` jetzt `String` ist), PR-Text bereit, noch nicht eingereicht |
+| SRT-Passphrasen, Stream-Keys und Tokens in Logs und Bus-Fehlertexten maskieren (`redact`) | #59 | PR | **Eyevinn #1192** (Branch `redact-secrets-in-logs`, zusammengefasst als c9c2925; enthält #67, #69, #70, #72) |
 | Queue-Warnung: eigene `min-threshold-time` zählt mit, einmal je Überschreitung | #60 | PR | **Eyevinn #1185** (Branch `queue-warn-delay`, f4c2e3e) |
-| `redact` in linearer Zeit: Partner, Wortende und `@` aus einem Index statt eines Caches mit einem Eintrag (ein Anführungszeichen über den ganzen Text machte das Maskieren quadratisch, 1 MB 11–124 s, jetzt unter 0,1 s; Ausgabe unverändert) | 677d223, #67 | PR | offen; auf `dev` gemergt (c426a7e). Gehört zum `redact`-PR (#59): auf dessen Branch `redact-secrets-in-logs` als 0e21812 nachgezogen |
-| `redact`: Restlücken geschlossen (Shell-`'\''`, einzelnes Anführungszeichen davor, roher Leerraum im Passwort, `&` vor unbekanntem Namen, Token im RTSP-/SRT-Pfad, `name: wert` bis Zeilenende, `@` im Pfad) und Lesbarkeit zurück (Partner und Rest hinter einer Maske, begrenzte URL-Masken, bekannte Paare hinter Leerraum, HTTP-Pfadwörter wie `whip`, `index.m3u8`) | 5923a21, #69 | PR | offen; auf `dev` gemergt (4377d67). Gehört zum `redact`-PR (#59): auf dessen Branch `redact-secrets-in-logs` als e8907cd nachgezogen; lmix `redact_text` portiert, gleiche Test-Eingaben |
-| `redact`: HTTP-Pfadsegment höchstens 10 Ziffern (`live-1234567890-9876543210-…` gilt nicht mehr als Wort), Shell-`'\''` in einem Wert, der selbst ein Anführungszeichen öffnet (`'passphrase="my"'\''s secret'` zeigte `secret`), Doku: `name:`-Wert endet an Leerraum vor bekanntem Paar oder `!` (Review #69) | 97cb2c5, #70 | PR | offen. Gehört zum `redact`-PR (#59), dort im rebasten Branch enthalten; lmix `redact_text` portiert, gleiche Test-Eingaben |
+| `redact` in linearer Zeit: Partner, Wortende und `@` aus einem Index statt eines Caches mit einem Eintrag (ein Anführungszeichen über den ganzen Text machte das Maskieren quadratisch, 1 MB 11–124 s, jetzt unter 0,1 s; Ausgabe unverändert) | 677d223, #67 | PR | in **Eyevinn #1192** enthalten |
+| `redact`: Restlücken geschlossen (Shell-`'\''`, einzelnes Anführungszeichen davor, roher Leerraum im Passwort, `&` vor unbekanntem Namen, Token im RTSP-/SRT-Pfad, `name: wert` bis Zeilenende, `@` im Pfad) und Lesbarkeit zurück (Partner und Rest hinter einer Maske, begrenzte URL-Masken, bekannte Paare hinter Leerraum, HTTP-Pfadwörter wie `whip`, `index.m3u8`) | 5923a21, #69 | PR | in **Eyevinn #1192** enthalten |
+| `redact`: HTTP-Pfadsegment höchstens 10 Ziffern (`live-1234567890-9876543210-…` gilt nicht mehr als Wort), Shell-`'\''` in einem Wert, der selbst ein Anführungszeichen öffnet (`'passphrase="my"'\''s secret'` zeigte `secret`), Doku: `name:`-Wert endet an Leerraum vor bekanntem Paar oder `!` (Review #69) | 97cb2c5, #70 | PR | in **Eyevinn #1192** enthalten |
 
 ## Features
 
