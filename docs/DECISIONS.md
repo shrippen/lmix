@@ -7950,7 +7950,9 @@ zurück unter die Schwelle meldet `debug`. lmix-core maskiert zusätzlich
 (Verteidigung in der Tiefe) strom-Fehlertexte, die es weitergibt
 (`check()` in `engine/strom.rs`, `PipelineError` in `engine/meters.rs`),
 mit `lmix_types::srt::redact_text` (Wörter mit URL über `redact_url`,
-nackte `passphrase=…`).
+nackte `passphrase=…`; Wörter enden wie in strom an Leerraum, Anführungszeichen
+und spitzen Klammern). `streamid` gilt jetzt auch in lmix als Geheimnis (manche
+SRT-Server nehmen sie als Publish-Key), wie in strom.
 
 **Grenze**: Die STR.5-Queues haben 2 s Luft über der Verzögerung
 (`max-size-time`), erreichen die neue Schwelle also nie; ein volles
