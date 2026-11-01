@@ -1,4 +1,4 @@
-//! Output targets of this machine (show mode EXT.1–5).
+//! Output targets of this machine (show mode EXT.1–6).
 //!
 //! Kept with their secrets in a settings file of their own (`--targets`,
 //! readable only by the user), never in the show. Messages go to every
@@ -129,6 +129,29 @@ pub struct Request {
     pub body: Option<serde_json::Value>,
 }
 
+/// A message to a target: an HTTP request or an OSC packet (EXT.6).
+#[derive(Clone, Debug, PartialEq)]
+pub enum Message {
+    Http(Request),
+    Osc(Vec<u8>),
+}
+
+/// What a message is spoken in; the target must speak it too.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Speech {
+    Http,
+    Osc,
+}
+
+impl Message {
+    pub fn speech(&self) -> Speech {
+        match self {
+            Message::Http(_) => Speech::Http,
+            Message::Osc(_) => Speech::Osc,
+        }
+    }
+}
+
 /// A Home Assistant service call (EXT.4): `light.turn_on` for
 /// `light.room` is `POST /api/services/light/turn_on` with
 /// `{"entity_id": "light.room", …data}`.
@@ -168,7 +191,7 @@ pub async fn send(
     target: &TargetConfig,
     request: &Request,
 ) -> TargetResult {
-    if let Err(reason) = sendable(target) {
+    if let Err(reason) = sendable(target, Speech::Http) {
         return TargetResult::Failed { reason };
     }
     let sends = target
@@ -178,12 +201,15 @@ pub async fn send(
     combine(futures_util::future::join_all(sends).await)
 }
 
-/// Whether lmix sends to `target` at all.
-pub fn sendable(target: &TargetConfig) -> Result<(), String> {
-    if target.kind != TargetKind::Http {
-        return Err(format!("{} speaks OSC; OSC cues come later", target.name));
+/// Whether `target` speaks `speech`: HTTP requests go to `http` targets,
+/// OSC messages to `osc_udp` and `osc_tcp` ones.
+pub fn sendable(target: &TargetConfig, speech: Speech) -> Result<(), String> {
+    let osc = target.kind != TargetKind::Http;
+    match (speech, osc) {
+        (Speech::Http, true) => Err(format!("{} speaks OSC: use osc_send", target.name)),
+        (Speech::Osc, false) => Err(format!("{} speaks HTTP: use http_request", target.name)),
+        _ => Ok(()),
     }
-    Ok(())
 }
 
 /// The answers of a target's addresses as one: reached when one answered
@@ -253,6 +279,9 @@ fn reason(e: &reqwest::Error) -> String {
 
 /// A probe of `target` (EXT.5): `GET` of its first address.
 pub async fn probe(http: &reqwest::Client, target: &TargetConfig) -> Result<(), String> {
+    if target.kind != TargetKind::Http {
+        return crate::osc_out::probe(target).await;
+    }
     let request = Request {
         method: HttpMethod::Get,
         path: String::new(),

@@ -474,6 +474,9 @@ pub enum CueProblem {
     TargetUnreached { target: String, reason: String },
     /// The targets are locked: it would send nothing (RUN.9).
     TargetLocked { target: String },
+    /// Its target speaks the other protocol: HTTP to an OSC target or
+    /// OSC to an HTTP one (EXT.6).
+    TargetMismatch { target: String },
     /// An action names an input that is not there.
     InputGone { input: String },
     /// An input a cue uses has no media file.
@@ -498,6 +501,9 @@ impl CueProblem {
             }
             Self::TargetLocked { target } => {
                 format!("sends to target {target}, but network out is locked")
+            }
+            Self::TargetMismatch { target } => {
+                format!("sends to target {target}, which speaks another protocol (HTTP or OSC)")
             }
             Self::InputGone { input } => format!("uses input {input}, which is not there"),
             Self::MediaMissing { input } => {

@@ -32,9 +32,9 @@ pub enum TargetKind {
     /// HTTP(S); addresses are base URLs.
     #[default]
     Http,
-    /// OSC over UDP; addresses are `host:port` (OSC cues: S2).
+    /// OSC over UDP; addresses are `host:port` (`osc_send`, EXT.6).
     OscUdp,
-    /// OSC over TCP (SLIP); addresses are `host:port` (OSC cues: S2).
+    /// OSC over TCP (SLIP); addresses are `host:port` (`osc_send`, EXT.6).
     OscTcp,
 }
 

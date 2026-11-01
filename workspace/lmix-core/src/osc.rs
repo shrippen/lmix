@@ -86,6 +86,22 @@ pub enum Arg {
     Int(i32),
     Float(f32),
     Str(String),
+    /// `T` or `F`, without data (sent only: received as int 1/0).
+    Bool(bool),
+    /// `N`, without data.
+    Nil,
+}
+
+impl From<&lmix_types::OscArg> for Arg {
+    fn from(arg: &lmix_types::OscArg) -> Self {
+        match arg {
+            lmix_types::OscArg::Int(i) => Arg::Int(*i),
+            lmix_types::OscArg::Float(f) => Arg::Float(*f),
+            lmix_types::OscArg::Text(text) => Arg::Str(text.clone()),
+            lmix_types::OscArg::Bool(b) => Arg::Bool(*b),
+            lmix_types::OscArg::Nil => Arg::Nil,
+        }
+    }
 }
 
 #[derive(Debug, PartialEq)]
@@ -185,6 +201,9 @@ pub fn encode_args(address: &str, args: &[Arg]) -> Vec<u8> {
             Arg::Int(_) => 'i',
             Arg::Float(_) => 'f',
             Arg::Str(_) => 's',
+            Arg::Bool(true) => 'T',
+            Arg::Bool(false) => 'F',
+            Arg::Nil => 'N',
         })
         .collect();
     write_string(&mut out, &format!(",{tags}"));
@@ -193,6 +212,7 @@ pub fn encode_args(address: &str, args: &[Arg]) -> Vec<u8> {
             Arg::Int(i) => out.extend_from_slice(&i.to_be_bytes()),
             Arg::Float(f) => out.extend_from_slice(&f.to_be_bytes()),
             Arg::Str(text) => write_string(&mut out, text),
+            Arg::Bool(_) | Arg::Nil => {}
         }
     }
     out
@@ -670,6 +690,9 @@ mod tests {
                 Arg::Int(_) => 'i',
                 Arg::Float(_) => 'f',
                 Arg::Str(_) => 's',
+                Arg::Bool(true) => 'T',
+                Arg::Bool(false) => 'F',
+                Arg::Nil => 'N',
             })
             .collect();
         write_string(&mut out, &format!(",{tags}"));
@@ -678,6 +701,7 @@ mod tests {
                 Arg::Int(i) => out.extend_from_slice(&i.to_be_bytes()),
                 Arg::Float(f) => out.extend_from_slice(&f.to_be_bytes()),
                 Arg::Str(s) => write_string(&mut out, s),
+                Arg::Bool(_) | Arg::Nil => {}
             }
         }
         out

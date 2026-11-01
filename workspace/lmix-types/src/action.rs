@@ -329,6 +329,7 @@ pub const ACTION_GROUPS: &[(&str, &[&str])] = &[
             "check_targets",
             "http_request",
             "ha_service",
+            "osc_send",
             "set_feed",
             "remove_feed",
         ],
@@ -1073,6 +1074,17 @@ pub enum Action {
         entity: Option<String>,
         #[serde(default, skip_serializing_if = "Option::is_none")]
         data: Option<serde_json::Value>,
+    },
+    /// An OSC message to every address of `target` (`osc_udp` or
+    /// `osc_tcp`, SLIP-framed). Like `http_request`, it does not wait;
+    /// how it went comes as `Event::Target` (EXT.6).
+    OscSend {
+        target: String,
+        /// E.g. `/eos/chan/1/at`.
+        address: crate::osc::OscAddress,
+        /// E.g. `50 0.5 "Szene 2" true nil` (`crate::osc`).
+        #[serde(default)]
+        args: crate::osc::OscArgs,
     },
 
     /// Add a fixed OSC subscriber, or replace the one of the same name
