@@ -329,7 +329,7 @@ kann es, Console nicht.
 | STR.4 | Multi-Bitrate: ein Ziel mit mehreren Qualitäten, keyframe-ausgerichtet | K | – |
 | STR.5 | Sendeverzögerung n s (Puffer im RAM, Countdown) | S | ✅ (SRT und RTMP je Ausgang 0–60 s, kodiert im RAM; Countdown bis „auf Sendung“ auf der Ausgänge-Seite und in der Ausgangsleiste; ein Stopp beendet den Stream sofort, was noch wartet, geht verloren; RTMP meldet sich dabei bei der Plattform ab) |
 | STR.6 | Beschnitt auf 1:1 oder 9:16 je Stream | S | – |
-| STR.7 | Status: Bitrate, Puffer, verworfene Frames, Laufzeit, Encoder CPU/GPU | M | ◐ (Senderate, Paketverluste und -verwürfe, RTT, Laufzeit; ohne Puffer, Encoder-Last) |
+| STR.7 | Status: Bitrate, Puffer, verworfene Frames, Laufzeit, Encoder CPU/GPU | M | ✅ (Senderate, Paketverluste und -verwürfe, RTT, Laufzeit; je Stream und Aufnahme Puffer vor dem Encoder, verworfene Bilder, Encoder-Zeit je Bild und Anteil an der Echtzeit, für Software- und GPU-Encoder gleich gemessen, beim GPU-Encoder als Latenz gezeigt (kein Anteil, keine Warnung); NVENC-Auslastung nur für die ganze Maschine in `/metrics`; DECISIONS 1.11. „Ausgänge: Puffer und Encoder-Last“) |
 | STR.8 | Lokales Mitschauen im LAN per HLS-Seite (≈ 10 s Verzug, ~100 Zuschauer) | K | – |
 | STR.9 | Anmeldung bei Plattformen (YouTube, Twitch …) mit Kanalwahl | X | – |
 | STR.10 | Adaptive Bitrate: bei schwankender Leitung Bitrate automatisch senken und wieder anheben, ohne Stream-Abbruch (P3) | S | – |

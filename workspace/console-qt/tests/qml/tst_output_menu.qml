@@ -160,6 +160,19 @@ TestCase {
             }
         }
         compare(rows, ["Running=00:01:05", "Rate=" + Texts.linkRate(test.stats), "Packets lost=3", "Packets dropped=0", "Round trip=12 ms"])
+        // STR.7: an encoded output's load under its link.
+        menu.link = Object.assign({}, test.stats, { load: { buffer_ms: 33, buffer_max_ms: 500,
+            frames_dropped: 4, encode_ms: 8.25, encoder_percent: 24 } })
+        const loadRows = []
+        for (let i = 0; i < stats.subMenu.count; i++) {
+            const item = stats.subMenu.itemAt(i)
+            if (item.valueText !== undefined && item.visible) {
+                loadRows.push(item.text + "=" + item.valueText)
+            }
+        }
+        compare(loadRows.slice(5), ["Buffer=33 of 500 ms", "Frames dropped=4",
+            "Encoder=" + Texts.encoderLoad(menu.link.load)])
+        compare(Texts.encoderLoad({ encode_ms: null, encoder_percent: null }), "–")
         menu.output = Object.assign({}, stream, { status: { state: "stopped" } })
         compare(stats.enabled, false)
     }
