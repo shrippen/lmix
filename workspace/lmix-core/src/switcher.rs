@@ -6165,7 +6165,7 @@ impl Switcher {
                 };
                 Some(RecordingMark {
                     output: o.id,
-                    folder: lmix_types::engine_folder(folder),
+                    folder: folder.clone(),
                     since_ms: *since_ms,
                     at_ms,
                     text: text.to_string(),

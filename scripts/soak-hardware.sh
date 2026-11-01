@@ -82,7 +82,7 @@ CORE_BIN="${CARGO_TARGET_DIR:-$ROOT/workspace/lmix-core/target}/release/lmix-cor
 
 log "soak: ${MINUTES} min, mixer ${MIXER}, ${INPUTS} inputs, ${STREAMS} streams, ISO ${ISO}, work ${WORK}"
 (cd "$WORK" && exec "$STROM_BIN" --host 127.0.0.1 --port "$STROM_PORT" --no-auto-restart \
-    --data-dir "$WORK/strom-data" >"$WORK/strom.log" 2>&1) &
+    --data-dir "$WORK/strom-data" --media-path "$WORK" >"$WORK/strom.log" 2>&1) &
 STROM_PID=$!
 PIDS+=("$STROM_PID")
 wait_up "$STROM/health" strom
@@ -103,13 +103,13 @@ act '{"action":"cut_direct","input":1}'
 OUTPUTS=()
 if [[ "$RECORD" == 1 ]]; then
     mkdir -p "$WORK/rec"
-    act "{\"action\":\"add_output\",\"spec\":{\"kind\":\"record\",\"folder\":\"$WORK/rec\",\"container\":\"mkv\"},\"name\":\"Rec\"}"
+    act "{\"action\":\"add_output\",\"spec\":{\"kind\":\"record\",\"folder\":\"rec\",\"container\":\"mkv\"},\"name\":\"Rec\"}"
     OUTPUTS+=(Rec)
 fi
 if [[ "$ISO" == 1 ]]; then
     mkdir -p "$WORK/iso"
     first="$(curl -sf "$CORE/state" | jq -r '.inputs[0].id')"
-    act "{\"action\":\"add_output\",\"spec\":{\"kind\":\"record\",\"folder\":\"$WORK/iso\",\"container\":\"mkv\"},\"source\":{\"from\":\"input\",\"input\":\"$first\"},\"name\":\"ISO\"}"
+    act "{\"action\":\"add_output\",\"spec\":{\"kind\":\"record\",\"folder\":\"iso\",\"container\":\"mkv\"},\"source\":{\"from\":\"input\",\"input\":\"$first\"},\"name\":\"ISO\"}"
     OUTPUTS+=(ISO)
 fi
 for n in $(seq 1 "$STREAMS"); do

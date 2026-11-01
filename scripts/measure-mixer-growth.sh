@@ -85,7 +85,7 @@ fi
 
 mkdir -p "$WORK/rec"
 (cd "$WORK" && exec "$STROM_BIN" --host 127.0.0.1 --port "$STROM_PORT" --no-auto-restart \
-    --data-dir "$WORK/strom-data" >"$WORK/strom.log" 2>&1) &
+    --data-dir "$WORK/strom-data" --media-path "$WORK" >"$WORK/strom.log" 2>&1) &
 STROM_PID=$!
 PIDS+=("$STROM_PID")
 wait_up "$STROM/health" strom
@@ -102,7 +102,7 @@ sleep 3
 echo "mixer ${MIXER}, ${COUNT} inputs added one after another"
 echo "1 input: strom $(strom_cpu 5) %, latency $(latency) ms"
 
-act "{\"action\":\"add_output\",\"spec\":{\"kind\":\"record\",\"folder\":\"$WORK/rec\",\"container\":\"mkv\"},\"name\":\"Rec\"}"
+act "{\"action\":\"add_output\",\"spec\":{\"kind\":\"record\",\"folder\":\"rec\",\"container\":\"mkv\"},\"name\":\"Rec\"}"
 act '{"action":"start_output","output":"Rec"}'
 T_REC=$(date +%s.%N)
 sleep 4

@@ -935,10 +935,7 @@ pub fn output_flow(
             };
             let mut properties = vec![
                 ("container", PropertyValue::String(container.nick().into())),
-                (
-                    "output_dir",
-                    PropertyValue::String(lmix_types::engine_folder(folder)),
-                ),
+                ("output_dir", PropertyValue::String(folder.clone())),
                 (
                     "filename_prefix",
                     PropertyValue::String(super::marks::recording_prefix(id)),

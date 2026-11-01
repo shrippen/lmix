@@ -6896,7 +6896,16 @@ je Marke; (c) wäre ein strom-Diff für eine Kann-Anforderung.
   er Pfade normalisiert (`marks::normal_path`): gemeldete Datei,
   Protokoll daneben, vorläufiger Name, Umzug.
 - Der Aufnahmeordner liegt immer im Medienordner von strom; ein `/` vorn
-  meint dessen Wurzel, nicht die des Rechners.
+  meint dessen Wurzel, nicht die des Rechners. strom selbst prüft das
+  nicht (es hängt `output_dir` ungeprüft an den Medienordner, `../x`
+  schriebe daneben): der Kern sorgt dafür, beim Anlegen und beim Laden.
+- **Alte Shows**: Beim Laden bringt der Kern jeden Aufnahmeordner in
+  Normalform (unabhängig von der Version der Datei, bleibt gleich, was
+  schon normal ist), damit die Console zeigt, wohin strom schreibt.
+  Abgewogen für `..`: Laden ablehnen (die ganze Show wäre weg, wegen eines
+  Ordners) oder kürzen. Entschieden: `..`-Teile fallen weg (`../../x` wird
+  `x`), bleibt nichts übrig, heißt der Ordner `recordings`; das Log nennt
+  alten und neuen Ordner.
 - Console: Knopf „Zeitmarke“ auf der Seite Ausgänge (mit Notizfeld, Enter
   setzt die Marke; höchstens 200 Zeichen, leert sich erst, wenn der Kern
   die Marke angenommen hat) und in der Ausgangsleiste, sichtbar während
@@ -6906,10 +6915,15 @@ je Marke; (c) wäre ein strom-Diff für eine Kann-Anforderung.
 **Bricht**: Aufnahmeordner sind jetzt immer relativ zum Medienordner von
 strom und in Normalform. Ein absoluter Ordner (`/home/…/rec`) wird beim
 Anlegen zu `home/…/rec` im Medienordner, `..` abgelehnt. Alte Shows
-laden weiter; ihr Ordner geht normalisiert an strom. Migriert:
+laden weiter, ihr Ordner wird beim Laden normalisiert (s. o.). Migriert:
 `demo/run.py` (Ordner `rec` statt eines absoluten Pfads), QML-Fixtures
-(`tst_output_menu`, `tst_outputs_page`). Sonst nichts (neue Felder mit
-Standard, neue Aktion).
+(`tst_output_menu`, `tst_outputs_page`) und die Mess-Skripte, die
+aufnehmen (`measure-sdi-latency`, `measure-switch-gaps`, `measure-av`,
+`measure-mixer-growth`, `measure-gui-frames`, `soak-hardware`,
+`test-channel-delay`): sie starten strom mit `--media-path` auf ihren
+Arbeitsordner und geben einen relativen Ordner (`rec`, `mv`, `pgm`, …),
+so bleiben ihre Suchpfade. Sonst nichts (neue Felder mit Standard, neue
+Aktion).
 
 **Geprüft**: lmix-types (Grenzen, alte Shows ohne Teilung),
 `flows::tests::a_split_recording_starts_new_files` (beide Recorder),
@@ -6922,6 +6936,7 @@ Standard, neue Aktion).
 `show//…`: „start“ einmal, kein DELETE),
 `a_guess_gone_already_is_removed` (DELETE 404),
 `switcher::tests::a_recording_folder_is_kept_in_its_normal_form`,
+`show::tests::recording_folders_load_in_their_normal_form`,
 `after_a_restart_marks_go_on_in_the_old_protocol`,
 `a_failed_read_overwrites_nothing` (einmal 500),
 `a_foreign_file_is_never_overwritten`,
@@ -6930,4 +6945,8 @@ Standard, neue Aktion).
 `tst_output_bar`). Echte Aufnahme mit strom (GStreamer 1.28, CPU-Mischer,
 Rauschen mit 40 Mbit/s): `split_mb: 10` ergab Dateien von 10–12 MB in
 Folge; `split_minutes: 1` (MP4) die zweite Datei nach gut 60 s; die Marken
-standen in beiden Protokollen mit der jeweils geschriebenen Datei.
+standen in beiden Protokollen mit der jeweils geschriebenen Datei. Nach der
+Umstellung der Skripte (CPU-Mischer, ohne Hardware) fanden
+`test-channel-delay`, `measure-av`, `measure-switch-gaps` und
+`measure-mixer-growth` ihre Aufnahmen; die übrigen brauchen SDI-Karte,
+GPU oder Bildschirm und sind nur mit `bash -n` geprüft.

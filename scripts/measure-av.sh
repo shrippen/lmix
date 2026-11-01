@@ -68,7 +68,7 @@ for run in $(seq 1 "$RUNS"); do
     dir="$WORK/run$run"
     mkdir -p "$dir/pgm" "$dir/iso"
     (cd "$dir" && exec "$STROM_BIN" --host 127.0.0.1 --port "$STROM_PORT" --no-auto-restart \
-        --data-dir "$dir/strom-data" >"$dir/strom.log" 2>&1) &
+        --data-dir "$dir/strom-data" --media-path "$dir" >"$dir/strom.log" 2>&1) &
     PIDS=($!)
     wait_up "http://127.0.0.1:${STROM_PORT}/health" strom
     "$CORE_BIN" --strom "http://127.0.0.1:${STROM_PORT}" --listen "127.0.0.1:${CORE_PORT}" \
@@ -81,8 +81,8 @@ for run in $(seq 1 "$RUNS"); do
     act '{"action":"cut_direct","input":1}'
     sleep 4
     id="$(curl -sf "$CORE/state" | jq -r '.inputs[0].id')"
-    act "{\"action\":\"add_output\",\"spec\":{\"kind\":\"record\",\"folder\":\"$dir/pgm\",\"container\":\"mkv\"},\"name\":\"Pgm\"}"
-    act "{\"action\":\"add_output\",\"spec\":{\"kind\":\"record\",\"folder\":\"$dir/iso\",\"container\":\"mkv\"},\"source\":{\"from\":\"input\",\"input\":\"$id\"},\"name\":\"Iso\"}"
+    act "{\"action\":\"add_output\",\"spec\":{\"kind\":\"record\",\"folder\":\"pgm\",\"container\":\"mkv\"},\"name\":\"Pgm\"}"
+    act "{\"action\":\"add_output\",\"spec\":{\"kind\":\"record\",\"folder\":\"iso\",\"container\":\"mkv\"},\"source\":{\"from\":\"input\",\"input\":\"$id\"},\"name\":\"Iso\"}"
     act '{"action":"start_output","output":"Pgm"}'
     act '{"action":"start_output","output":"Iso"}'
     sleep "$SECS"

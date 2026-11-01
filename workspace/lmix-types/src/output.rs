@@ -209,12 +209,6 @@ pub fn normal_folder(folder: &str) -> Result<String, String> {
     Ok(parts.join("/"))
 }
 
-/// The folder an engine writes a recording to: its normal form; a folder
-/// of an older show that has none as it was (the engine refuses it).
-pub fn engine_folder(folder: &str) -> String {
-    normal_folder(folder).unwrap_or_else(|_| folder.to_string())
-}
-
 /// Longest text of a recording mark (REC.8).
 pub const MARK_TEXT_MAX: usize = 200;
 
