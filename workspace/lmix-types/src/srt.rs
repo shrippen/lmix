@@ -397,12 +397,15 @@ fn secret_key(key: &str) -> bool {
 
 /// `text` (an engine error, a log line) with each URL in it through
 /// [`redact_url`] and each bare secret `key=value` (gst-launch style)
-/// masked, a quoted value whole. Words end at blanks, quotes and angle
-/// brackets (and a backslash, as in `{:?}` dumps), as in strom:
+/// masked. Words end at blanks, quotes, backslashes and angle brackets, as
+/// in strom; a secret value is never cut there, though (fail closed): one
+/// that opens with a quote, escaped as often as `{:?}` makes it, runs to the
+/// same quote with as many backslashes before it, or to the end; any other
+/// runs to the next blank.
 ///
 /// ```text
 /// 400: uri=srt://h:1?passphrase=x refused -> 400: uri=srt://h:1?passphrase=… refused
-/// srtsink passphrase=x latency=120        -> srtsink passphrase=… latency=120
+/// srtsink passphrase="a b" latency=120    -> srtsink passphrase="…" latency=120
 /// ```
 pub fn redact_text(text: &str) -> String {
     let mut out = String::with_capacity(text.len());
@@ -414,27 +417,24 @@ pub fn redact_text(text: &str) -> String {
             continue;
         }
         let end = rest.find(word_end).unwrap_or(rest.len());
-        let word = &rest[..end];
+        let (masked, open) = redact_word(&rest[..end]);
         rest = &rest[end..];
 
-        // `passphrase="two words"`: the value is the quoted run that follows.
-        let quote = ["\\\"", "\"", "'"]
-            .into_iter()
-            .find(|q| rest.starts_with(q));
-        let key = word.strip_suffix('=');
-        let (Some(quote), Some(key)) = (quote, key) else {
-            out.push_str(&redact_word(word));
-            continue;
-        };
-        if !secret_key(key) {
-            out.push_str(word);
-            continue;
+        match (open, opening_quote(rest)) {
+            (Open::No, _) => out.push_str(&masked),
+            // `passphrase="two words"`: the quoted run is the value.
+            (Open::Empty, Some(quote)) => {
+                out.push_str(masked.strip_suffix('…').unwrap_or(&masked));
+                out.push_str(&format!("{quote}…{quote}"));
+                rest = &rest[quoted_end(rest, quote)..];
+            }
+            // The value goes on behind a quote or backslash: up to a blank.
+            _ => {
+                out.push_str(&masked);
+                let blank = rest.find(char::is_whitespace).unwrap_or(rest.len());
+                rest = &rest[blank..];
+            }
         }
-        let close = rest[quote.len()..]
-            .find(quote)
-            .map_or(rest.len(), |i| 2 * quote.len() + i);
-        out.push_str(&format!("{word}{quote}…{quote}"));
-        rest = &rest[close..];
     }
     out
 }
@@ -444,19 +444,80 @@ fn word_end(c: char) -> bool {
     c.is_whitespace() || "\"'`<>\\".contains(c)
 }
 
-/// One word of [`redact_text`].
-fn redact_word(word: &str) -> String {
+/// Whether a word of [`redact_text`] leaves a secret value open at its end.
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum Open {
+    /// Nothing open.
+    No,
+    /// `passphrase=`: the value has not started yet.
+    Empty,
+    /// `passphrase=ab`: the value may go on.
+    Started,
+}
+
+/// One word of [`redact_text`], masked, and whether a value is open.
+fn redact_word(word: &str) -> (String, Open) {
     if let Some(sep) = word.find("://") {
-        // Walk back over the scheme, so `uri=srt://…` keeps its `uri=`.
+        // Walk back over the scheme; only a plain `name=` stays in front
+        // (`uri=srt://…`), anything else is one odd URL.
         let start = word[..sep]
             .rfind(|c: char| !(c.is_ascii_alphanumeric() || "+-.".contains(c)))
             .map_or(0, |i| i + 1);
-        return format!("{}{}", &word[..start], redact_url(&word[start..]));
+        let plain_name = word[..start].strip_suffix('=').is_some_and(|name| {
+            !name.is_empty()
+                && name
+                    .chars()
+                    .all(|c| c.is_ascii_alphanumeric() || "_-.".contains(c))
+        });
+        let start = if plain_name { start } else { 0 };
+        let masked = format!("{}{}", &word[..start], redact_url(&word[start..]));
+        let open = match masked.ends_with('…') && masked != word {
+            false => Open::No,
+            true if word.ends_with('=') => Open::Empty,
+            true => Open::Started,
+        };
+        return (masked, open);
     }
     match word.split_once('=') {
-        Some((key, _)) if secret_key(key) => format!("{key}=…"),
-        _ => word.to_string(),
+        Some((key, value)) if secret_key(key) => {
+            let open = if value.is_empty() {
+                Open::Empty
+            } else {
+                Open::Started
+            };
+            (format!("{key}=…"), open)
+        }
+        _ => (word.to_string(), Open::No),
     }
+}
+
+/// The quote that opens `rest`, with the backslashes escaping it: `"`, `'`,
+/// `\"` in a `{:?}` dump, `\\\"` in a dump of a dump.
+fn opening_quote(rest: &str) -> Option<&str> {
+    let escapes = rest.len() - rest.trim_start_matches('\\').len();
+    match rest[escapes..].chars().next() {
+        Some(q @ ('"' | '\'')) => Some(&rest[..escapes + q.len_utf8()]),
+        _ => None,
+    }
+}
+
+/// The end of a value that opens with `quote` at the start of `rest`: behind
+/// the same quote with exactly as many backslashes before it (an inner quote
+/// is escaped once more), or the end of `rest`.
+fn quoted_end(rest: &str, quote: &str) -> usize {
+    let escapes = quote.len() - 1;
+    let mark = &quote[escapes..];
+    let mut from = quote.len();
+    while let Some(i) = rest[from..].find(mark) {
+        let at = from + i;
+        let before = &rest[quote.len()..at];
+        let run = before.len() - before.trim_end_matches('\\').len();
+        if run == escapes {
+            return at + 1;
+        }
+        from = at + 1;
+    }
+    rest.len()
 }
 
 /// Percent-encode all but RFC 3986's unreserved characters.
@@ -727,6 +788,43 @@ mod tests {
         }
     }
 
+    /// A secret value is never cut at a quote or backslash inside it; the
+    /// reviewers' inputs, also as `{:?}` dumps. No secret survives, nothing
+    /// panics.
+    #[test]
+    fn redact_text_fails_closed_inside_values() {
+        let texts: &[(&str, &[&str])] = &[
+            ("passphrase=ab\\SEKRET x", &["SEKRET"]),
+            ("passphrase=\\SEKRET", &["SEKRET"]),
+            ("passphrase=ab'SEKRET x", &["SEKRET"]),
+            ("uri=srt://h?passphrase=ab'SEKRET x", &["SEKRET"]),
+            ("e: \"passphrase=ab\\\"SEKRET\" x\"", &["SEKRET"]),
+            ("passphrase='SEKA\\'SEKB' x", &["SEKA", "SEKB"]),
+            ("token=\"SEKA\\\"SEKB\" x", &["SEKA", "SEKB"]),
+            ("passphrase=\\\\\"SEKA SEKB\\\\\"", &["SEKA", "SEKB"]),
+            ("uri=srt://h?passphrase=\"SEKA SEKB\"", &["SEKA", "SEKB"]),
+            ("{\"e\":\"passphrase=\\\"a\\\\\\\"SEKA\\\" x\"}", &["SEKA"]),
+            ("passphrase=\"SEKRET", &["SEKRET"]),
+            ("x passphrase=\"ü SEKRET ö\" y", &["SEKRET"]),
+            ("PassPhrase='SEKA SEKB'", &["SEKA", "SEKB"]),
+            ("name=\"v\" passphrase=\"SEKRET\" after \"q\"", &["SEKRET"]),
+            ("token=\"", &[]),
+            ("token=\\\"", &[]),
+            ("a=\"ü", &[]),
+            ("ü=\"ä", &[]),
+            ("?://@", &[]),
+            ("", &[]),
+        ];
+        for (raw, secrets) in texts {
+            for input in [raw.to_string(), format!("{raw:?}")] {
+                let shown = redact_text(&input);
+                for secret in *secrets {
+                    assert!(!shown.contains(secret), "{input:?} -> {shown:?}");
+                }
+            }
+        }
+    }
+
     #[test]
     fn redact_text_masks_urls_and_pairs() {
         for (text, shown) in [
@@ -744,11 +842,12 @@ mod tests {
             ),
             (
                 "{\"details\":\"passphrase=abcdefghij\"}",
-                "{\"details\":\"passphrase=…\"}",
+                // A value runs to the blank: it may hold a quote.
+                "{\"details\":\"passphrase=…",
             ),
             (
                 "<srt://h:1?streamid=feed>",
-                "<srt://h:1?streamid=…>",
+                "<srt://h:1?streamid=…",
             ),
             (
                 "srtsink passphrase=\"two secret words\" latency=120",
