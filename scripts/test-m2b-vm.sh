@@ -519,6 +519,22 @@ wait "$rtmp_receiver" || true
 act '{"action":"stop_output","output":"RTMP"}' >/dev/null
 act '{"action":"remove_output","output":"RTMP"}' >/dev/null
 pass "outputs: RTMP stream received with H.264 and AAC"
+# A delayed RTMP stream (STR.5) stops at once and still unpublishes: the
+# relay reports the publisher's deleteStream (a dropped connection has none).
+timeout 60 ffmpeg -loglevel error -listen 1 -i rtmp://127.0.0.1:19351/live/late -c copy -f null - &
+PIDS+=($!)
+node "$ROOT/scripts/rtmp-unpublish.cjs" 19352 19351 >"$WORK/rtmp-late.txt" &
+PIDS+=($!)
+sleep 1
+act '{"action":"add_output","spec":{"kind":"rtmp","url":"rtmp://127.0.0.1:19352/live","key":"late","video_kbps":2000,"delay_s":2},"name":"Late"}' >/dev/null
+act '{"action":"start_output","output":"Late"}' >/dev/null
+wait_for "$SETTLE_S" grep -qx publish "$WORK/rtmp-late.txt" || fail "delayed RTMP output never published"
+sleep 2
+act '{"action":"stop_output","output":"Late"}' >/dev/null
+wait_for "$SETTLE_S" is output_state Late stopped || fail "delayed RTMP output did not stop"
+wait_for "$SETTLE_S" grep -qx unpublish "$WORK/rtmp-late.txt" || fail "delayed RTMP stop sent no unpublish"
+act '{"action":"remove_output","output":"Late"}' >/dev/null
+pass "outputs: delayed RTMP stream stopped with unpublish"
 # Encoding (STR.3): H.265 at a constant bitrate lands as HEVC.
 act '{"action":"add_output","spec":{"kind":"record","folder":"hevc","container":"mkv","encoding":{"codec":"h265","rate":"cbr","keyframe_ms":1000}},"name":"HEVC"}' >/dev/null
 act '{"action":"start_output","output":"HEVC"}' >/dev/null
