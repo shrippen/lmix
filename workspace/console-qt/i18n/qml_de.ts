@@ -2939,7 +2939,7 @@
   <context>
     <name>LayoutBar</name>
     <message>
-      <location filename="../qml/LayoutBar.qml" line="+57" />
+      <location filename="../qml/LayoutBar.qml" line="+59" />
       <source>Layouts</source>
       <translation>Layouts</translation>
     </message>
@@ -2949,7 +2949,12 @@
       <translation>Box %1 (%2) und Box %3 (%4)</translation>
     </message>
     <message>
-      <location line="+37" />
+      <location line="-7" />
+      <source>%1, hidden</source>
+      <translation>%1, ausgeblendet</translation>
+    </message>
+    <message>
+      <location line="+44" />
       <source>Click: into preview. Right click: edit, swap boxes or remove.</source>
       <translation>Klick: in die Vorschau. Rechtsklick: bearbeiten, Boxen tauschen oder entfernen.</translation>
     </message>

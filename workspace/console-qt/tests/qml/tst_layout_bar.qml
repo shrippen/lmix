@@ -93,6 +93,12 @@ TestCase {
         compare(pairs[5].label, "Box 3 (Guest) and box 4 (?)")
     }
 
+    function test_a_hidden_box_says_so() {
+        const bar = createTemporaryObject(barComponent, test)
+        const layout = { boxes: [{ input: "b" }, { input: "c", hidden: true }] }
+        compare(bar.swapChoices(layout)[0].label, "Box 1 (Host) and box 2 (Guest, hidden)")
+    }
+
     function test_a_pick_swaps_also_on_program() {
         const bar = createTemporaryObject(barComponent, test)
         waitForRendering(bar)

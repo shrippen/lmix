@@ -207,7 +207,6 @@ state_is '.layouts[1].name == "Corner 2" and .layouts[1].boxes[0].rect.x == 0.7'
 pass "layout template saved apart from the show and loaded"
 # LAY.7: two boxes trade inputs through the API, one takes another input.
 act '{"action":"set_layout","layout":"Corner 2","boxes":[{"rect":{"x":0,"y":0,"w":0.5,"h":1},"input":"Bars"},{"rect":{"x":0.5,"y":0,"w":0.5,"h":1},"input":"Ball"}]}'
-bars_id="$(curl -sf "$CORE/api/state" | jq -r '.inputs[] | select(.name == "Bars") | .id')"
 act '{"action":"swap_boxes","layout":"Corner 2","a":1,"b":2}'
 state_is ".layouts[1].boxes[0].input == \"$ball_id\" and .layouts[1].boxes[1].input == \"$bars_id\" and .layouts[1].boxes[0].rect.x == 0" \
     || fail "boxes not swapped"

@@ -27,13 +27,15 @@ RowLayout {
     readonly property var templateChoices: templates.map(t => ({ value: t.name, label: t.name }))
 
     /** Pairs of boxes a layout can swap (LAY.7), `{value: [a, b], label}`,
-     *  numbers 1-based, each box named by its input. */
+     *  numbers 1-based, each box named by its input; a hidden box says so
+     *  (its input goes on air when swapped into a shown box). */
     function swapChoices(layout) {
         var boxes = layout && layout.boxes ? layout.boxes : []
         var inputs = show && show.inputs ? show.inputs : []
-        var name = id => {
-            var found = inputs.find(i => i.id === id)
-            return found ? found.name : "?"
+        var name = box => {
+            var found = inputs.find(i => i.id === box.input)
+            var text = found ? found.name : "?"
+            return box.hidden ? qsTr("%1, hidden").arg(text) : text
         }
         var choices = []
         for (var a = 0; a < boxes.length; a++) {
@@ -41,7 +43,7 @@ RowLayout {
                 choices.push({
                     value: [a + 1, b + 1],
                     label: qsTr("Box %1 (%2) and box %3 (%4)")
-                        .arg(a + 1).arg(name(boxes[a].input)).arg(b + 1).arg(name(boxes[b].input))
+                        .arg(a + 1).arg(name(boxes[a])).arg(b + 1).arg(name(boxes[b]))
                 })
             }
         }
