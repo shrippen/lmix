@@ -334,6 +334,9 @@ KanteDialog {
                 text: qsTr("Add a box, then drag it into place")
             }
 
+            // Undo and redo of the boxes are the area's own: taken before a
+            // shortcut of the application (the Undo of a removal's toast).
+            Keys.onShortcutOverride: event => event.accepted = event.matches(StandardKey.Undo) || event.matches(StandardKey.Redo)
             Keys.onPressed: event => {
                 if (event.matches(StandardKey.Undo)) {
                     dialog.undo()

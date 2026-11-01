@@ -44,47 +44,47 @@ Item {
 
     /** What removing `item` of `kind` asks and says. */
     function request(kind, item) {
-        const named = "\u201c" + item.name + "\u201d"
-        return Object.assign({ kind: kind, name: item.name }, texts(kind, item, named))
+        return Object.assign({ kind: kind, name: item.name }, texts(kind, item))
     }
-    function texts(kind, item, named) {
+    // The quotes are in the texts: each language sets its own („…“ in German).
+    function texts(kind, item) {
         switch (kind) {
         case "input": return {
             action: { action: "remove_input", input: item.id },
-            question: qsTr("Remove input %1 %2?").arg(item.number).arg(named),
+            question: qsTr("Remove input %1 “%2”?").arg(item.number).arg(item.name),
             consequence: qsTr("Its picture leaves program, preview, the layouts and the overlays."),
             acceptText: qsTr("Remove input"),
-            removedText: qsTr("Input %1 %2 removed").arg(item.number).arg(named)
+            removedText: qsTr("Input %1 “%2” removed").arg(item.number).arg(item.name)
         }
         case "layout": return {
             action: { action: "remove_layout", layout: item.id },
-            question: qsTr("Remove layout %1?").arg(named),
+            question: qsTr("Remove layout “%1”?").arg(item.name),
             consequence: qsTr("Its boxes and their places go with it."),
             acceptText: qsTr("Remove layout"),
-            removedText: qsTr("Layout %1 removed").arg(named)
+            removedText: qsTr("Layout “%1” removed").arg(item.name)
         }
         case "bus": return {
             action: { action: "remove_bus", bus: item.id },
-            question: qsTr("Remove bus %1?").arg(named),
+            question: qsTr("Remove bus “%1”?").arg(item.name),
             consequence: qsTr("Every input's send to it goes with it."),
             acceptText: qsTr("Remove bus"),
-            removedText: qsTr("Bus %1 removed").arg(named)
+            removedText: qsTr("Bus “%1” removed").arg(item.name)
         }
         // Not kept for Undo (rule 1 names templates too; they follow): the
         // question says so.
         case "template": return {
             action: { action: "remove_layout_template", template: item.name },
-            question: qsTr("Remove template %1?").arg(named),
+            question: qsTr("Remove template “%1”?").arg(item.name),
             consequence: qsTr("Layouts made from it stay. The template cannot be brought back."),
             acceptText: qsTr("Remove template"),
             undo: false
         }
         case "output": return {
             action: { action: "remove_output", output: item.id },
-            question: qsTr("Remove output %1?").arg(named),
+            question: qsTr("Remove output “%1”?").arg(item.name),
             consequence: qsTr("Its address and settings go with it."),
             acceptText: qsTr("Remove output"),
-            removedText: qsTr("Output %1 removed").arg(named)
+            removedText: qsTr("Output “%1” removed").arg(item.name)
         }
         }
         return null
@@ -111,13 +111,12 @@ Item {
     /** New settings for `output` (the state's, before): the toast brings
      *  them back. The core names the settings by the name they had. */
     function change(output, action) {
-        const named = "\u201c" + output.name + "\u201d"
         pending = { request: {
             kind: "output_settings",
             name: output.name,
             action: action,
             title: qsTr("Changed"),
-            removedText: qsTr("Settings of output %1 changed").arg(named)
+            removedText: qsTr("Settings of output “%1” changed").arg(output.name)
         }, answered: false }
         removals.act(action)
     }
@@ -220,10 +219,13 @@ Item {
         onActionTriggered: removals.act({ action: "restore" })
     }
     // A show's own shortcut on Ctrl+Z wins, as for the File keys: two
-    // shortcuts on one key would both stay silent.
+    // shortcuts on one key would both stay silent. Also over a modal dialog
+    // (a removal made in it): a shortcut of the window would be blocked
+    // there, so it is the application's, for the window that is active.
     Shortcut {
         sequence: "Ctrl+Z"
-        enabled: toast.shown && toast.restorable && removals.undoKeyFree
+        context: Qt.ApplicationShortcut
+        enabled: toast.shown && toast.restorable && removals.undoKeyFree && removals.Window.active
         onActivated: {
             toast.hide()
             removals.act({ action: "restore" })

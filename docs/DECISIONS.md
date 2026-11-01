@@ -6606,3 +6606,108 @@ dem Griff bewegt nichts, weggenommenes Ziehen legt nicht ab, Deckkraft und
 Ebene eines Bilds, nur eigene Antworten beenden den Entwurf),
 `tst_action_rows.qml` (16 Zeilen scrollen in beiden Dialogen und bleiben
 im Fenster), `tst_show_moods.qml`; alle QML-Tests (254).
+
+## 2026-11-01 — Stimmungen: Fehler aus dem Test in der Oberfläche (MOOD Stufe 7b)
+
+**Anlass**: Ein Test der Seite Stimmungen und ihres Dialogs mit der Demo
+(deutsch und englisch, dunkel und hell, auch mit 14 Ebenen, langen Namen und
+kleinem Fenster) fand Fehler in der Oberfläche: Die Reiter „Ebenen“ und
+„Panik-Stimmung“ scrollten nicht, mit mehr als zehn Ebenen lief der Inhalt
+aus dem Dialog und „+ Ebene“ war nicht mehr erreichbar. Rückgängig ging bei
+offenem Dialog nicht: Strg+Z war vom modalen Dialog gesperrt, der Toast lag
+unter dessen abgedunkeltem Grund, und ein Klick auf „Rückgängig“ schloss nur
+den Dialog. Dazu kleinere Punkte: der Inspector nannte nach dem Entfernen
+der gesetzten Stimmung „Basis“ und „Panik-Stimmung“, das Dateifeld eines
+Klangs war rund 70 px schmal, beim Zusammenstellen waren Mitglieder kaum zu
+erkennen und ein nicht klickbarer Gruppenkopf sah klickbar aus, „1
+Oneshots“, „noch 6.0 s“, englische Anführungszeichen im Deutschen, der
+Dialogtitel gleich dem ersten Reiter, Breiten außerhalb der Kante-Stufen,
+eine springende linke Spalte, abgeschnittene Namen ohne Tooltip, „Pegel…“
+auch bei Bildern, „Panik-Stimmung“ über „Keine Stimmung gesetzt“, ein
+springender Kopf „Jetzt“ beim Überblenden, Escape speicherte eine
+Umbenennung, die Spalte der Ebenen-Blende hatte keinen Kopf.
+
+**Entscheidung**:
+- Die Toasts eines Fensters (`MessageToasts`) bleiben im Fensterinhalt,
+  unter Menüs, Listen und Tooltips und in der Tab-Folge (ein Fehler-Toast
+  lässt sich mit der Tastatur schließen). Nur solange ein modaler Dialog
+  das Fenster abdunkelt, wandern sie in ein eigenes, nicht modales Popup
+  ohne Fokus, das nach dem Dialog geöffnet wird und darum über ihm und
+  seinem abgedunkelten Grund liegt; Listen und Menüs, die der Dialog danach
+  öffnet, liegen wieder darüber. So stehen Ablehnungen und das Rückgängig
+  nach einem Entfernen auch über einem modalen Dialog, und der Klick auf
+  „Rückgängig“ wirkt sofort (Regel 1 in `DESIGN-DIALOGE.md`), für jeden
+  Dialog, der `askRemove`/`askRemoveWith` nutzt (auch den Bus-Dialog).
+  Ob ein Dialog abdunkelt, zeigt sein Grund im Overlay: ein Element, das das
+  ganze Overlay bedeckt und kein Popup ist (Qt bringt jeden Grund auf die
+  Größe des Overlays). Andere Elemente dort sind kleiner, etwa die passiven
+  Meldungen eines Kirigami-Fensters (das Hauptfenster). Die Spalte zieht
+  erst um, wenn das Popup offen ist, damit die Toasts nicht kurz verschwinden.
+  Solange ein modaler Dialog offen ist, haben die gehobenen Toasts keinen
+  Fokus und sind nicht per Tab erreichbar: Ein Fehler-Toast schließt sich
+  dann nur mit der Maus, „Rückgängig“ geht auch mit Strg+Z. Erwogen: die Ebene immer offen
+  und ganz oben (verdeckte Menüs und Tooltips unten rechts, Toasts nicht
+  mehr per Tab erreichbar), den Toast in jeden Dialog legen (jeder Dialog
+  hätte es selbst tun müssen), ein Zähler in `KanteDialog` (deckt nicht
+  jedes modale Popup und gehört nach Kante).
+- Strg+Z des Toasts ist ein Kurzbefehl der Anwendung, aktiv nur im
+  aktiven Fenster: Ein Kurzbefehl des Fensters wird von einem modalen Dialog
+  gesperrt. Wer Strg+Z selbst behandelt, nimmt es vorher im
+  `ShortcutOverride`: ein Textfeld (macht Qt selbst), die Fläche des
+  Layout-Dialogs (Rückgängig und Wiederholen der Boxen, LAY.6) und der
+  Knopf, der im Kurzbefehl-Dialog eine Taste aufnimmt.
+- Der Dialog hat die Größe L (48 Rastereinheiten, höchstens 90 % des
+  Fensters), der Pegel-Dialog M. Ebenen, Sammlungen und Panik-Stimmung
+  scrollen zwischen festem Kopf und „+ Ebene“/„+ Sammlung“; ist das Fenster
+  niedrig, wird der Inhalt kleiner und scrollt.
+- Titel „Stimmungen bearbeiten“ (LASTENHEFT MOOD.12). Die linke Spalte ist
+  fest 16 Rastereinheiten breit; ihre Knöpfe stehen in zwei festen Zeilen
+  (Hinzufügen; Hoch und Runter als Icons, Entfernen), in jeder Sprache
+  gleich. Hoch und Runter sind auch bei Ebenen und Sammlungen Icons mit
+  Tooltip.
+- Ein Klang oder Bild einer Ebene hat seine Datei in einer eigenen Zeile
+  unter der Auswahl; ein Pfad, der nicht ins Feld passt, steht ganz im
+  Tooltip (`PathField`, für alle Dateifelder). Der Knopf heißt bei Bildern
+  „Deckkraft…“, bei Klängen weiter „Pegel…“.
+- Namen (Stimmung, Ebene, Sammlung) laufen über ein gemeinsames Feld:
+  Enter oder Verlassen benennt um, Escape stellt den gespeicherten Namen
+  wieder her, ohne zu senden; erst ein zweites Escape schließt den Dialog.
+  Über der Blende der Ebenen steht der Kopf „Eigene Blende“.
+- Die Anführungszeichen stehen in den übersetzbaren Texten („Remove group
+  “%1”?“ → „Gruppe „%1“ entfernen?“), auch in `Removals` für Inputs,
+  Layouts, Busse, Vorlagen und Ausgänge.
+- Einzahl und Mehrzahl: zwei Texte je Zahl („%1 mood“/„%1 moods“). Die
+  Console hat keine `%n`-Formen; mit Englisch als Quellsprache bräuchten sie
+  eine eigene englische Übersetzungsdatei, für zwei Sprachen mit je einer
+  Einzahl lohnt das nicht. Zahlen mit Nachkommastellen im Zahlenformat der
+  Sprache (`toLocaleString(Qt.locale(), "f", 1)`, wie in `Texts.qml`).
+- Seite: Nach einer Panik zeigt „Jetzt“ die Panik-Stimmung (rot), nicht
+  „Keine Stimmung gesetzt“. Ist die gesetzte Stimmung entfernt, nennt der
+  Inspector „Stimmung (entfernt)“ und keine Herkunft; ebenso, wenn lmix-core
+  keine Stimmung mehr nennt, die Ebenen aber noch laufen (Stufe 7a). Die
+  Anzeige des Überblendens hat immer ihren Platz (unsichtbar, wenn nichts
+  blendet), der Name daneben springt nicht.
+- Zusammenstellen: Mitglieder sind cyan umrandet und tragen einen Haken
+  (nicht nur Farbe); ein Gruppenkopf, der in der Sammlung nicht klickbar
+  ist, ist ein leiser Knopf ohne Rahmen. Tooltips von Gruppen, Varianten
+  und Oneshots nennen den ganzen Namen, ebenso die Zeilen der Liste im
+  Dialog.
+
+**Bricht**: nichts (nur Oberfläche und Übersetzungen).
+
+**Geprüft**: `tst_moods_dialog.qml` (16 Ebenen scrollen, „+ Ebene“ bleibt im
+Dialog, auch in einem niedrigen Fenster; Größenstufen; feste linke Spalte;
+breites Dateifeld; „Deckkraft…“; Escape bricht ab; Kopf der Blende),
+`tst_moods_page.qml` (Panik-Stimmung als Jetzt, entfernte Stimmung,
+Einzahl und Mehrzahl, Zahlenformat, Kopf springt nicht, Mitglieder und
+Köpfe, ganzer Name im Tooltip), `tst_removals.qml` (Rückgängig per Klick
+und Strg+Z über einem modalen Dialog, Toasts nur dann gehoben, ein eigenes
+Rückgängig im Dialog behält Strg+Z), `tst_message_toasts.qml` (ein Menü
+liegt über den Toasts, Tab erreicht „Schließen“), `tst_app_shell.qml`
+(im Hauptfenster liegen die Toasts ohne Dialog im Inhalt, mit Dialog
+gehoben); alle QML-Tests (275). Sichtprüfung
+mit der Demo auf Xvfb (deutsch, dunkel): Dialog in Größe L, Datei lesbar,
+Ebenen scrollen, „+ Ebene“ erreichbar, Toast über dem Dialog, Rückgängig per
+Klick und Strg+Z, Escape im Namen, Mitglieder beim Zusammenstellen.
+Die Sichtprüfung lief mit der ersten Fassung der Toast-Ebene (immer offen);
+das Heben nur bei abgedunkeltem Fenster prüfen die Tests.

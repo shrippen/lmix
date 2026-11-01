@@ -78,6 +78,9 @@ KanteDialog {
                         forceActiveFocus()
                     }
                     onActiveFocusChanged: if (!activeFocus) listening = false
+                    // Recording takes every key, also one an application
+                    // shortcut has (Ctrl+Z while a removal's toast shows).
+                    Keys.onShortcutOverride: event => event.accepted = listening
                     Keys.onPressed: event => {
                         if (!listening)
                             return

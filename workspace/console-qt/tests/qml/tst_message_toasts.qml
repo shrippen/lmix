@@ -1,5 +1,6 @@
 import QtQuick
 import QtTest
+import QtQuick.Controls as QQC2
 import "../../qml"
 
 /**
@@ -104,5 +105,60 @@ TestCase {
         tryCompare(shownToasts(toasts), "length", 1)
         compare(shownToasts(toasts)[0].text, "No live picture")
         fakeCore.message = ""
+    }
+
+    Component {
+        id: menuComponent
+        QQC2.Menu {
+            QQC2.MenuItem { text: "One" }
+            QQC2.MenuItem { text: "Two" }
+        }
+    }
+    Component {
+        id: buttonComponent
+        QQC2.Button { text: "Before"; focusPolicy: Qt.StrongFocus }
+    }
+
+    function inOverlay(item, overlay) {
+        for (var p = item; p; p = p.parent) {
+            if (p === overlay) {
+                return true
+            }
+        }
+        return false
+    }
+
+    // Without a dialog the toasts are content: a menu at the bottom right
+    // covers them.
+    function test_a_menu_covers_the_toasts() {
+        var toasts = createTemporaryObject(toastsComponent, test.Window.contentItem)
+        fakeCore.answered("{}", refusal("Show is locked"))
+        tryCompare(shownToasts(toasts), "length", 1)
+        var toast = shownToasts(toasts)[0]
+        var menu = createTemporaryObject(menuComponent, test.Window.contentItem)
+        menu.popup(test.Window.width - 50, test.Window.height - 50)
+        tryCompare(menu, "opened", true)
+        // The menu is in the overlay, which lies over the window's content;
+        // the toast is not in it.
+        var overlay = QQC2.Overlay.overlay
+        verify(inOverlay(menu.contentItem, overlay))
+        verify(!inOverlay(toast, overlay))
+        menu.close()
+    }
+
+    // A toast that stays is closed by keyboard: Tab reaches its Close.
+    function test_tab_reaches_a_toasts_close() {
+        var before = createTemporaryObject(buttonComponent, test.Window.contentItem)
+        var toasts = createTemporaryObject(toastsComponent, test.Window.contentItem)
+        fakeCore.answered("{}", refusal("Show is locked"))
+        tryCompare(shownToasts(toasts), "length", 1)
+        var close = buttonIn(shownToasts(toasts)[0])
+        before.forceActiveFocus()
+        for (var i = 0; i < 6 && !close.activeFocus; i++) {
+            keyClick(Qt.Key_Tab)
+        }
+        verify(close.activeFocus, "Tab reaches Close")
+        keyClick(Qt.Key_Space)
+        tryCompare(shownToasts(toasts), "length", 0)
     }
 }

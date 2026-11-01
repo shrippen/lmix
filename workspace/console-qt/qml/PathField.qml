@@ -1,5 +1,6 @@
 import QtQuick
 import QtQuick.Layouts
+import QtQuick.Controls as QQC2
 import QtQuick.Dialogs
 import org.kde.kirigami as Kirigami
 import Kante
@@ -38,6 +39,9 @@ RowLayout {
         font.family: KanteStyle.monoFamily
         invalid: text.trim() !== "" && !text.trim().startsWith("/")
         Accessible.name: row.title
+        // A path longer than the field shows whole under the pointer.
+        QQC2.ToolTip.visible: hovered && !activeFocus && contentWidth > width - leftPadding - rightPadding
+        QQC2.ToolTip.text: text
 
         // What is typed stays until it is taken; a new state meanwhile
         // does not overwrite it.

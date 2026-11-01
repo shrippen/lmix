@@ -1,4 +1,5 @@
 import QtQuick
+import QtQuick.Controls as QQC2
 import org.kde.kirigami as Kirigami
 import Kante
 
@@ -8,6 +9,13 @@ import Kante
  * or the Console as a toast that stays until it is closed. The same text
  * twice shows once; at most `limit`, the oldest goes first. Pages put
  * their own toasts (Undo after a removal) into `column` too.
+ *
+ * The toasts are in the window's content, under its menus and lists and
+ * in its Tab order. While a modal dialog dims the window they move into a
+ * popup of their own above it (not modal, no focus): a refusal of an edit
+ * in the dialog, or the Undo of a removal made there, shows over the
+ * dimmed ground and takes the click (docs/DESIGN-DIALOGE.md rule 1: Undo
+ * acts at once).
  */
 Item {
     id: toasts
@@ -60,10 +68,68 @@ Item {
         }
     }
 
+    /** Modal dialogs dim the window now: each has its dimmed ground in the
+     *  overlay, an item over the whole of it (Qt sizes every ground to the
+     *  overlay). Other items there are smaller: the popups' own, and in a
+     *  Kirigami window its passive notifications. */
+    readonly property int dimmed: {
+        const overlay = QQC2.Overlay.overlay
+        let n = 0
+        // An overlay not laid out yet (size 0) has no ground to look for.
+        for (const item of overlay && overlay.width > 0 && overlay.height > 0 ? overlay.children : []) {
+            if (item.visible && item.width >= overlay.width && item.height >= overlay.height
+                    && !String(item).startsWith("QQuickPopupItem")) {
+                n++
+            }
+        }
+        return n
+    }
+    /** The toasts are raised above the dialogs. */
+    readonly property bool raised: dimmed > 0
+    // Opened again for each dialog, after it has opened: of popups at the
+    // same height the one opened last is on top, so a dialog's own lists
+    // and menus opened later still cover the toasts.
+    onDimmedChanged: Qt.callLater(() => {
+        // Gone with its window meanwhile.
+        if (!layer) {
+            return
+        }
+        layer.close()
+        if (toasts.raised) {
+            layer.open()
+        }
+    })
+
+    // Only as large as the toasts: it takes no clicks beside them and never
+    // the keyboard focus.
+    QQC2.Popup {
+        id: layer
+        objectName: "toastLayer"
+        parent: toasts
+        width: column.implicitWidth
+        height: column.implicitHeight
+        x: toasts.width - width
+        y: toasts.height - height
+        modal: false
+        dim: false
+        focus: false
+        closePolicy: QQC2.Popup.NoAutoClose
+        padding: 0
+        background: null
+        enter: null
+        exit: null
+        contentItem: Item {
+            id: holder
+        }
+    }
+
     Column {
         id: column
-        anchors.right: parent.right
-        anchors.bottom: parent.bottom
+        // In the content, or above the dialogs (see above): moved once the
+        // popup is open, so the toasts never blink away in between.
+        parent: layer.opened ? holder : toasts
+        x: parent ? parent.width - width : 0
+        y: parent ? parent.height - height : 0
         spacing: Kirigami.Units.smallSpacing
 
         Repeater {

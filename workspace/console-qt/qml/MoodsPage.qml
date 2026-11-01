@@ -37,6 +37,10 @@ AppPage {
     readonly property var now: show && show.mood ? show.mood : ({})
     /** The mood set now as `{ group, variant }`, or null. */
     readonly property var current: placeOf(now.mood)
+    /** The mood set now is no longer among the moods (removed since). */
+    readonly property bool currentGone: !!now.mood && current === null
+    /** A panic ran: the panic mood holds the layers, not a mood. */
+    readonly property bool panicked: (now.layers || []).some(l => l.origin.kind === "panic")
 
     /** The collection shown; "" for all of the pools. */
     property string collectionId: settings.collection
@@ -75,7 +79,7 @@ AppPage {
 
     pageId: "moods"
     title: qsTr("Moods")
-    subtitle: current ? placeName(current) : ""
+    subtitle: panicked ? qsTr("Panic mood") : current ? placeName(current) : ""
     busy: fading
     focusTarget: groupsView
     // Beside "Panic" for everything (PanicButtons): this one is the show's.
@@ -162,6 +166,17 @@ AppPage {
     function placeName(place) {
         return place.variant ? place.group.name + " / " + place.variant.name : place.group.name
     }
+    /** "1 mood", "4 moods": one and many, as English and German count. */
+    function moodCount(n) {
+        return (n === 1 ? qsTr("%1 mood") : qsTr("%1 moods")).arg(n)
+    }
+    function shotCount(n) {
+        return (n === 1 ? qsTr("%1 one-shot") : qsTr("%1 one-shots")).arg(n)
+    }
+    /** What is left of the fade in seconds, in the language's numbers ("6,0 s"). */
+    function secondsLeft(ms, locale) {
+        return qsTr("%1 s left").arg(Number(ms / 1000).toLocaleString(locale || Qt.locale(), "f", 1))
+    }
     function inCollection(id) {
         return collection !== null && (collection.moods || []).indexOf(id) >= 0
     }
@@ -210,6 +225,21 @@ AppPage {
         })
         walk(list ? list.cues : [])
         return found ? [found.number, found.name].filter(x => x).join(" ") || qsTr("Cue") : qsTr("Cue (gone)")
+    }
+    /** A tile's look: composing, a member is marked (cyan, with a check
+     *  mark: not by colour alone); else the one set now (or running) is
+     *  filled; one that cannot be clicked is no button to look at. */
+    function memberEmphasis(on, member, clickable) {
+        if (!clickable) {
+            return KanteButton.Emphasis.Quiet
+        }
+        if (composing) {
+            return member ? KanteButton.Emphasis.Data : KanteButton.Emphasis.Normal
+        }
+        return on ? KanteButton.Emphasis.Primary : KanteButton.Emphasis.Normal
+    }
+    function memberTip(member) {
+        return member ? qsTr("In the collection: click to take it out") : qsTr("Click to put it in the collection")
     }
     function setMood(id) {
         shell.act({ action: "set_mood", mood: id })
@@ -319,7 +349,7 @@ AppPage {
                         Layout.fillWidth: true
                         text: modelData ? modelData.name : qsTr("All")
                         subtitle: modelData
-                            ? qsTr("%1 moods · %2 one-shots").arg((modelData.moods || []).length).arg((modelData.pads || []).length)
+                            ? root.moodCount((modelData.moods || []).length) + " · " + root.shotCount((modelData.pads || []).length)
                             : qsTr("Every mood and one-shot")
                         selected: root.shownCollectionId === cid
                         onClicked: {
@@ -352,36 +382,52 @@ AppPage {
                     Rectangle {
                         Layout.preferredWidth: Kirigami.Units.smallSpacing
                         Layout.fillHeight: true
-                        color: root.current && root.current.group.color
+                        color: root.panicked ? KanteStyle.negativeTextColor
+                            : root.current && root.current.group.color
                             ? KanteStyle.labelColor(root.current.group.color) : KanteStyle.frameColor
                     }
+                    // After a panic the panic mood is what holds now, not a mood.
                     ColumnLayout {
                         Layout.fillWidth: true
                         spacing: 0
                         KanteSectionLabel {
-                            text: root.now.layers && root.now.layers.some(l => l.origin.kind === "panic")
-                                ? qsTr("Panic mood") : qsTr("Now")
+                            text: qsTr("Now")
                         }
                         QQC2.Label {
                             objectName: "nowName"
-                            text: root.current ? root.placeName(root.current) : qsTr("No mood set")
+                            Layout.fillWidth: true
+                            elide: Text.ElideRight
+                            text: root.panicked ? qsTr("Panic mood")
+                                : root.current ? root.placeName(root.current)
+                                : root.currentGone ? qsTr("Mood (gone)") : qsTr("No mood set")
                             font.pointSize: Kirigami.Theme.defaultFont.pointSize * 1.6
                             font.bold: true
-                            color: root.current ? KanteStyle.strongTextColor : KanteStyle.mutedTextColor
+                            color: root.panicked ? KanteStyle.negativeTextColor
+                                : root.current ? KanteStyle.strongTextColor : KanteStyle.mutedTextColor
                         }
                     }
+                    // Always its room, shown or not: the name beside it keeps
+                    // its width while a change fades.
                     ColumnLayout {
-                        visible: root.fading
-                        Layout.preferredWidth: Kirigami.Units.gridUnit * 10
+                        objectName: "fadeColumn"
+                        readonly property real fixedWidth: Kirigami.Units.gridUnit * 10
+                        opacity: root.fading ? 1 : 0
+                        Layout.preferredWidth: fixedWidth
+                        Layout.minimumWidth: fixedWidth
+                        Layout.maximumWidth: fixedWidth
                         KanteProgressBar {
                             objectName: "fade"
                             Layout.fillWidth: true
+                            // Unseen while nothing fades: not read out either.
+                            Accessible.ignored: !root.fading
                             segments: 20
                             value: root.fadeProgress
                         }
                         QQC2.Label {
-                            text: root.now.fading
-                                ? qsTr("%1 s left").arg((root.now.fading.duration_ms * (1 - root.fadeProgress) / 1000).toFixed(1)) : ""
+                            objectName: "fadeLeft"
+                            Layout.fillWidth: true
+                            Accessible.ignored: !root.fading
+                            text: root.now.fading ? root.secondsLeft(root.now.fading.duration_ms * (1 - root.fadeProgress)) : ""
                             color: KanteStyle.mutedTextColor
                         }
                     }
@@ -461,16 +507,19 @@ AppPage {
                                         readonly property bool member: root.inCollection(groupCard.group.id)
                                         Layout.fillWidth: true
                                         size: KanteButton.Size.Large
-                                        emphasis: on && !root.composing ? KanteButton.Emphasis.Primary : KanteButton.Emphasis.Normal
+                                        // Not in the collection: only the group's name, no
+                                        // button to look at (it holds only variants).
+                                        emphasis: root.memberEmphasis(on, member, enabled)
                                         enabled: root.composing || !root.collection || member
                                         checkable: root.composing
                                         checked: root.composing && member
+                                        icon.name: root.composing && member ? "checkmark" : ""
                                         text: (groupCard.index < 9 ? (groupCard.index + 1) + "  " : "") + groupCard.group.name
                                         Accessible.name: qsTr("Set %1").arg(groupCard.group.name)
                                         QQC2.ToolTip.visible: hovered
-                                        QQC2.ToolTip.text: root.composing
-                                            ? (member ? qsTr("In the collection: click to take it out") : qsTr("Click to put it in the collection"))
-                                            : qsTr("Base: %1").arg(root.layers.map(l => l.name + " " + root.describe(root.contentOf({ group: groupCard.group, variant: null }, l.id).content)).join(" · "))
+                                        QQC2.ToolTip.text: groupCard.group.name + "\n" + (root.composing
+                                            ? root.memberTip(member)
+                                            : qsTr("Base: %1").arg(root.layers.map(l => l.name + " " + root.describe(root.contentOf({ group: groupCard.group, variant: null }, l.id).content)).join(" · ")))
                                         onClicked: root.composing ? root.toggleMember(groupCard.group.id) : root.setMood(groupCard.group.id)
                                     }
                                 }
@@ -493,15 +542,18 @@ AppPage {
                                             readonly property var own: root.layers.filter(l => variant.layers && variant.layers[l.id] !== undefined).map(l => l.name)
                                             objectName: "variant:" + groupCard.group.name + "/" + variant.name
                                             width: Kirigami.Units.gridUnit * 10
-                                            emphasis: on && !root.composing ? KanteButton.Emphasis.Primary : KanteButton.Emphasis.Normal
+                                            emphasis: root.memberEmphasis(on, member, true)
                                             checkable: root.composing
                                             checked: root.composing && member
+                                            icon.name: root.composing && member ? "checkmark" : ""
                                             text: variant.name
                                             Accessible.name: qsTr("Set %1").arg(groupCard.group.name + " / " + variant.name)
+                                            // The whole name: a long one is cut on the tile.
+                                            readonly property string tip: variant.name + "\n" + (root.composing ? root.memberTip(member)
+                                                : own.length > 0 ? qsTr("Changes %1; the rest from the base").arg(own.join(", "))
+                                                : qsTr("Same as the base"))
                                             QQC2.ToolTip.visible: hovered
-                                            QQC2.ToolTip.text: own.length > 0
-                                                ? qsTr("Changes %1; the rest from the base").arg(own.join(", "))
-                                                : qsTr("Same as the base")
+                                            QQC2.ToolTip.text: tip
                                             onClicked: root.composing ? root.toggleMember(variant.id) : root.setMood(variant.id)
                                         }
                                     }
@@ -541,10 +593,13 @@ AppPage {
                                 readonly property bool member: root.collection !== null && (root.collection.pads || []).indexOf(cue.id) >= 0
                                 objectName: "pad:" + cue.name
                                 width: Kirigami.Units.gridUnit * 9
-                                emphasis: runs && !root.composing ? KanteButton.Emphasis.Primary : KanteButton.Emphasis.Normal
+                                emphasis: root.memberEmphasis(runs, member, true)
                                 checkable: root.composing
                                 checked: root.composing && member
+                                icon.name: root.composing && member ? "checkmark" : ""
                                 text: cue.name !== "" ? cue.name : cue.kind
+                                QQC2.ToolTip.visible: hovered
+                                QQC2.ToolTip.text: text + (root.composing ? "\n" + root.memberTip(member) : "")
                                 Accessible.name: runs ? qsTr("Stop %1").arg(text) : qsTr("Start %1").arg(text)
                                 onClicked: root.composing
                                     ? root.toggleMember("", cue.id)
@@ -597,10 +652,13 @@ AppPage {
                         objectName: "layer:" + modelData.name
                         /** Where the layer comes from, as the page says it. */
                         readonly property string kind: origin ? origin.origin.kind : ""
+                        // A mood removed since (lmix-core may still hold its
+                        // layers): no base or variant to name.
                         readonly property string source: kind === "" ? ""
                             : kind === "panic" ? qsTr("Panic")
                             : kind === "cue" ? qsTr("Cue")
-                            : has && has.own ? root.current.variant.name : qsTr("Base")
+                            : has === null ? qsTr("Mood (gone)")
+                            : has.own ? root.current.variant.name : qsTr("Base")
                         Layout.fillWidth: true
                         spacing: 0
 
@@ -615,15 +673,19 @@ AppPage {
                                 visible: layerRow.source !== ""
                                 text: layerRow.source
                                 status: layerRow.kind === "panic" ? KantePill.State.Failed
-                                    : layerRow.kind === "cue" ? KantePill.State.Review : KantePill.State.Running
+                                    : layerRow.kind === "cue" ? KantePill.State.Review
+                                    : layerRow.has === null ? KantePill.State.Off : KantePill.State.Running
                             }
                         }
                         QQC2.Label {
+                            objectName: "layerText:" + layerRow.modelData.name
                             Layout.fillWidth: true
                             elide: Text.ElideMiddle
+                            visible: text !== ""
                             text: layerRow.kind === "cue" ? root.cueLabel(layerRow.origin.origin)
+                                : layerRow.kind === "panic" ? qsTr("Panic mood")
                                 : layerRow.origin && layerRow.has ? root.describe(layerRow.has.content)
-                                : layerRow.origin ? qsTr("Panic mood") : qsTr("Off")
+                                : layerRow.origin ? "" : qsTr("Off")
                             color: layerRow.has && !layerRow.has.own && root.current.variant ? KanteStyle.mutedTextColor : KanteStyle.textColor
                         }
                     }
