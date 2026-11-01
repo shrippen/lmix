@@ -828,7 +828,7 @@ fn plain_host(authority: &str) -> bool {
 
 /// Mask every URL and every secret `name=value` or `name: value` in free text:
 /// an engine error, a log line, a gst-launch string, a `{:?}` dump. A port of
-/// strom's `redact::text` (`workspace/strom/backend/src/redact.rs`), same
+/// strom's `redact::text` (`workspace/strom/backend/src/redact/mod.rs`), same
 /// rules and the same test vectors; only the mask differs (`…`).
 ///
 /// A word is a run of non-blanks; quotes do not end it.
@@ -1917,7 +1917,7 @@ mod tests {
         }
     }
 
-    // Shared test vectors: keep identical in strom `backend/src/redact.rs` and
+    // Shared test vectors: keep identical in strom `backend/src/redact/tests.rs` and
     // lmix `lmix-types/src/srt.rs`. Every input of every review round, each
     // also checked as a `{:?}` dump and a dump of a dump.
 
