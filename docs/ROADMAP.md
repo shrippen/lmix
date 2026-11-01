@@ -423,7 +423,8 @@ CUE/RUN/SSH.1) ✅ bis auf Ausblenden (mit Stufe 2) und die 4-h-Messung
 Stufe 6 (Drehbuch-Import, IMP) ✅ vorgezogen: `lmix-script`, `docs/DREHBUCH.md`;
 DECISIONS „Drehbuch-Import“. Offen: SSH.2 (Show speichert nur den Ordner).
 Stufe 4 (Ausgabeziele, EXT.1–5) ✅ für HTTP und Home Assistant; DECISIONS
-„Ausgabeziele“.
+„Ausgabeziele“. Aus S2 vorgezogen: OSC-Cue (EXT.6) ✅ 1.11., DECISIONS
+„OSC-Cue“.
 Stufe 5, Teil Sicherheit (SAF): Panik, harter Stopp, Notfall-Liste, Standby
 nach Neustart ✅ ohne Ausblenden (mit Stufe 2); DECISIONS „Panik“.
 Stufe 5, Teil Bedienung: Restzeit als Ereignis (CTL.2) und feste OSC-Abonnenten

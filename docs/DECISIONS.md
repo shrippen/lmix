@@ -7354,3 +7354,69 @@ GStreamer-Streaming-Threads einem Flow zu: x264 rechnet in eigenen Threads
 Ausgang wäre damit um mehr als die Hälfte zu niedrig; bleibt offen, bis strom
 sie misst. Verlässlich wäre nur die Auslastung des NVENC-Encoders der GPU
 (`encoder_utilization`, für die ganze Maschine).
+
+## 2026-11-01 — OSC-Cue (EXT.6)
+
+**Kontext**: OSC-Ziele (`osc_udp`, `osc_tcp`) ließen sich seit S1 anlegen,
+gesendet haben nur die festen Abonnenten (CTL.4, nur UDP). Ein Cue konnte
+einem Lichtpult (P9) oder Companion (P8) also kein GO schicken, außer über
+HTTP. Ohne Änderung an strom umzusetzen; strom ist nicht beteiligt.
+
+**Optionen für die Argumente**:
+1. JSON-Liste (`[50, 0.5, "Szene 2"]`): JSON und JavaScript unterscheiden
+   `1` und `1.0` nicht, ein Float `1.0` käme als Int an; manche Empfänger
+   nehmen nur Floats. Bräuchte getypte Objekte (`{"float": 1}`), umständlich
+   von Hand und in der Oberfläche. Verworfen.
+2. **Text wie getippt**: `50 0.5 "Szene 2" true nil`; die Art folgt aus der
+   Schreibweise.
+
+**Entscheidung**: Option 2. Neue Aktion `osc_send {target, address, args}`
+(Gruppe `targets`), wie `http_request` in Aktions-Cues, Kurzbefehlen,
+Auslösern und Stimmungs-Ebenen; keine eigene Cue-Art (wie DECISIONS
+„Ausgabeziele“).
+- **Argumente** (`lmix_types::osc`): durch Leerzeichen getrennt; ganze Zahl
+  (32 Bit) → `i`, mit Punkt oder Exponent → `f`, `true`/`false` → `T`/`F`,
+  `nil` → `N`, `"…"` → Text mit Leerzeichen (`\"` und `\\` darin), jedes
+  andere Wort → Text. Zu große ganze Zahlen werden Float, `inf`/`NaN` Text.
+  Höchstens 32 Argumente und 4096 Bytes.
+- **Adresse**: beginnt mit `/`, ohne Leerzeichen, `#` und `,`, höchstens
+  256 Bytes.
+- **Geprüft beim Lesen**: Adresse und Argumente sind eigene Typen
+  (`OscAddress`, `OscArgs`), die beim Einlesen der Aktion geprüft werden.
+  Eine falsche Nachricht lehnt die API mit Grund ab (422), sie kommt nie in
+  einen Cue; im JSON bleibt der Text, wie er getippt wurde.
+- **Senden** wie HTTP (EXT.3): kehrt sofort zurück, je Adresse eine
+  Warteschlange (Reihenfolge bleibt), Zeitlimit des Ziels, Ergebnis als
+  Ereignis `target`. OSC antwortet nicht: Über UDP gilt eine Nachricht als
+  erreicht, wenn sie gesendet ist; über TCP, wenn die Verbindung sie
+  angenommen hat.
+- **TCP mit SLIP** (OSC 1.1), wie es `TargetKind::OscTcp` schon nannte;
+  je Nachricht eine Verbindung (verbinden, Rahmen schreiben, schließen).
+  Eine dauerhafte Verbindung spart im LAN eine Rundreise, braucht aber
+  Wiederaufbau und Zustand; erst, wenn ein Pult es verlangt. Pulte, die nur
+  den Längen-Präfix von OSC 1.0 lesen, gehen über UDP.
+- **Falsches Protokoll**: `http_request` an ein OSC-Ziel oder `osc_send` an
+  ein HTTP-Ziel scheitert als Ereignis (`… speaks OSC: use osc_send`), nie
+  der Cue; die Prüfung der Cue-Listen warnt vorher (`target_mismatch`,
+  SUI.5).
+- **Ziel testen** (EXT.5) bei OSC: Name auflösen, bei TCP verbinden; es
+  wird nichts gesendet, ein Test darf am Pult nichts auslösen.
+- **Console**: Im Aktionseditor (Cues, Kurzbefehle, Auslöser, Stimmungen)
+  die Zeile „OSC-Nachricht“ mit Ziel (nur OSC-Ziele), Adresse und
+  Argumenten, Erklärung der Schreibweise als Tooltip. Ein Ziel, das der
+  Rechner nicht hat, bleibt in der Liste stehen. Die Console prüft nur die
+  Adresse; die Argumente prüft lmix-core beim Speichern.
+
+**Personas**: P9 schickt dem Lichtpult aus derselben Cue-Liste ein GO
+(`/eos/cue/1/12/fire`) und fährt Ton und Licht mit einem GO; P8 setzt über
+Companions OSC-Eingang Variablen oder drückt Tasten, ohne HTTP-API.
+
+**Gemessen** mit lmix-core (`--engine none`) über die HTTP-API: `osc_send`
+an ein `osc_udp`-Ziel kam als ein Datagramm an
+(`/eos/chan/1/at ,ifsTN 50 0.5 "Szene 2"`), an ein `osc_tcp`-Ziel als
+SLIP-Rahmen `c0 … c0`; `test_target` öffnete die TCP-Verbindung ohne Daten
+und meldete für einen geschlossenen Port `cannot connect`. `eos/go` und ein
+offenes Anführungszeichen lehnte die API mit 422 und Grund ab.
+
+**Offen**: Platzhalter für Live-Werte (EXT.7), feste Abonnenten auch über
+TCP (CTL.4 sendet nur UDP).
