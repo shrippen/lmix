@@ -555,7 +555,7 @@ fn recording_file_names_checked(show: &mut Show) {
         };
         let trimmed = file_name.trim();
         if let Some(problem) = lmix_types::output::file_name_problem(trimmed) {
-            tracing::info!(%problem, "recording file name dropped");
+            tracing::info!(output = %output.id, %problem, "recording file name dropped");
             file_name.clear();
         } else if trimmed != file_name {
             *file_name = trimmed.to_string();
