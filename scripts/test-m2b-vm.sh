@@ -197,12 +197,34 @@ settled '[[ "$(curl -sf "$CORE/tally")" == "[2,1]" ]]' || fail "tally $(curl -sf
 pass "preview, cut, fade; tally"
 
 MIXER_ID="$(curl -sf "$STROM/api/flows" | jq -r '.flows[] | select(.name | startswith("lmix mixer")) | .id')"
+# strom's own tap behind a picture path (program, inputs/<name or preview>).
+tap_url() {
+    local path="$1" slot
+    if [[ "$path" == program ]]; then
+        echo "$STROM/api/flows/$MIXER_ID/blocks/tap_pgm/thumbnail"
+        return
+    fi
+    slot="$(curl -sf "$CORE/state" | jq -er --arg n "${path#inputs/}" \
+        '(if $n == "preview" then .preview else null end) as $id
+         | .inputs[] | select(if $id then .id == $id else .name == $n end) | .slot')" || return 1
+    echo "$STROM/api/flows/$(curl -sf "$STROM/api/flows" \
+        | jq -r --arg n "lmix slot $slot" '.flows[] | select(.name == $n) | .id')/blocks/tap/thumbnail"
+}
+# The tap has a frame of its own (HTTP 200). A tap that was idle for
+# 10 s is detached; when asked again it answers 504 until a new frame
+# arrives (strom #66).
+tap_fresh() { local url; url="$(tap_url "$1")" && [[ "$(curl -s -o /dev/null -w '%{http_code}' --max-time 10 "$url")" == 200 ]]; }
 # Pictures through lmix-core (503 until the tap has a frame; the first
-# request switches it on).
+# request switches it on). Only fresh ones: while the tap answers 504,
+# lmix-core gives out its last picture (signal loss "hold", for program
+# always), which may be from minutes ago: "paused clip held" passed on
+# the Ball from the source swap a minute before, and "moves" could
+# compare an old picture with a new one. So the tap is asked first;
+# lmix-core then passes on the tap's frame.
 picture() {
     local path="$1" out="$2" deadline=$((SECONDS + SETTLE_S))
     rm -f "$out"
-    until curl -sf --max-time 10 "$CORE/pictures/$path" -o "$out"; do
+    until tap_fresh "$path" && curl -sf --max-time 10 "$CORE/pictures/$path" -o "$out"; do
         ((SECONDS < deadline)) || break
         sleep 1
     done

@@ -8225,3 +8225,43 @@ strom `dev` gemergt, daran hängt das Submodul).
   pausierter oder am Ende gehaltener Clip wiederholt sein letztes Bild (`hold_still`), liefert
   also auch nach dem Anhängen wieder ein Bild. Beleg: strom-Test
   `test_reattached_tap_does_not_serve_a_picture_from_before` (vorher altes JPEG, jetzt Timeout).
+
+## 2026-11-01 — vm-check: „paused clip not held on program“, Bilder nur frisch
+
+Branch `vm-paused-clip`, strom unverändert (Submodul bleibt auf `dev` c426a7e).
+
+- **CI-Verlauf seit 25.10.:** 5 Fehlschläge mit „paused clip not held on program“ (40261817405,
+  40668775295, 40960842473, 40968188881, 41012411347, 26.–30.10.), alle mit strom vor #55 (Pins
+  067862d, d4c588f, 78efa1a): 5 in rund 250 Läufen. Seit dem ersten Lauf mit #55 (31.10. 12:13)
+  165 fertige Läufe, 0 Fehlschläge an dieser Stelle (die 8 roten scheiterten danach, ein erster
+  Versuch davor); 21 davon mit #63, 9 mit #65/#66, diese 9 alle grün. In allen fünf antwortete
+  der Program-Abgriff direkt nach der Pause 504 (Andocken; das Muster von #55), in 40968188881
+  und 41012411347 standen dazu die Multiview- und Kachel-Queues voll (das Muster von #65).
+  **Entscheidung:** der Punkt gilt als durch strom #55 und #65 behoben, todo geschlossen.
+- **Was der Test prüfte:** `held_bright` holt Program zweimal im Abstand von 2 s über lmix-core
+  und will beide hell. lmix-core gibt für Program immer (und für Inputs unter „hold“) sein
+  letztes Bild aus, solange strom 504 antwortet. Der Program-Abgriff war bis dahin über 10 s
+  unbenutzt und abgehängt; der erste Abruf hängt ihn an (seit strom #66 504 bis zum nächsten
+  Bild), lmix-core lieferte also das Program-Bild vom Quellentausch eine Minute vorher (Ball,
+  hell). Nachgewiesen lokal: das erste `hold.jpg` war byte-gleich mit `b.jpg` aus
+  `moving_bright`. Die erste Hälfte der Prüfung war damit wertlos, und `program_moves`/
+  `clips_move` konnten ein altes gegen ein neues Bild vergleichen und „bewegt sich“ melden.
+  **Entscheidung:** `picture` fragt zuerst den strom-Abgriff dahinter (Program: `tap_pgm`,
+  Input: `tap` des Slot-Flows) und holt das Bild erst, wenn der 200 sagt; 504 ist ein weiterer
+  Versuch, kein Fehler. Verworfen: im Test länger warten (prüft weiter alte Bilder) und den
+  Speicher von lmix-core ändern (Höchstalter, Branch `picture-age`, eigene Arbeit).
+- **Warum das Video in CI Sekunden hinter der Uhr lag:** Lokal nachgestellt mit dem ganzen
+  VM-Test auf `taskset -c 0` (3 von 3 rot) bzw. `0,1` (2 von 6 rot), der Rechner daneben mit
+  anderen Builds belegt; mit aktuellem strom, auch mit frischen Bildern. Program zeigt dann bis
+  20 s lang dasselbe Bild aus Clip a. Ohne `taskset` läuft der ganze Test mit der Änderung grün.
+  Grund laut `videoaggregator:5`/`aggregator:6`: der CPU-Mischer schafft keine 30 Bilder/s mehr,
+  und der Live-Compositor rechnet trotzdem jedes Ausgabebild; wartet er nicht auf die Uhr („all
+  pads have data“), läuft seine Ausgabe immer weiter hinter ihr her (0,2–0,55 s je Sekunde, bis
+  62 s; auf `0-3` in einem grünen Lauf 0 s). Nichts meldet ihm die Verspätung (die Senken in
+  strom verwerfen QoS), also überspringt er keine Bilder; er holt nur auf, wenn die CPU wieder
+  Luft hat (62 → 28 s). Alle Quellen stempeln mit der Uhr, ihre Bilder liegen für den Mischer
+  dann so weit in der Zukunft, und das Pad hält bis dahin sein altes Bild (Log: „Keeping buffer
+  until …“, 27 s voraus). Das erklärt wohl auch die „bis 6 s“ in CI (dort ohne Log nicht
+  nachgewiesen), ist aber Überlast, kein Fehler im Test oder in lmix-core. Ob strom den Mischer
+  bei Verspätung Bilder auslassen lässt (eigene QoS am Compositor), ist eine Entscheidung für
+  upstream (todo).
