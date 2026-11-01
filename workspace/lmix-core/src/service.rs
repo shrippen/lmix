@@ -1356,7 +1356,7 @@ impl Service {
         }
         let mut sw = self.switcher.lock().await;
         for id in running {
-            sw.set_output_status(id, OutputStatus::Running { since_ms: now_ms() });
+            sw.adopt_running_output(id, now_ms());
         }
         // A card output on air keeps the cards on, also when the engine
         // could not say it uses them (`adopt_cards`).
@@ -5407,6 +5407,7 @@ mod tests {
                     uri: "srt://cdn:9000".into(),
                     video_kbps: 6000,
                     encoding: Default::default(),
+                    delay_s: 0,
                 },
                 source: lmix_types::OutputSource::Program,
                 bus: None,
@@ -6118,6 +6119,7 @@ mod tests {
                     uri: "srt://cdn:9000".into(),
                     video_kbps: 6000,
                     encoding: Default::default(),
+                    delay_s: 0,
                 },
                 source: lmix_types::OutputSource::Program,
                 bus: None,

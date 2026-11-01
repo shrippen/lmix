@@ -1612,6 +1612,8 @@ pub enum ActionError {
     BadRecording { reason: String },
     #[error("no recording runs")]
     NoRecording,
+    #[error("send delay: {reason}")]
+    BadDelay { reason: String },
     #[error("sample rate {hz} Hz: 48000 or 44100")]
     BadSampleRate { hz: u32 },
     #[error("no input matches {reference}")]

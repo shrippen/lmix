@@ -68,7 +68,7 @@ pub use output::normal_folder;
 pub use output::{
     Container, DisplayMode, Framerate, MasterFormat, MultiviewLayout, MultiviewMeters, Output,
     OutputGroup, OutputId, OutputRef, OutputSource, OutputSpec, OutputStats, OutputStatus,
-    ProgramSide, RateMode, SrtLink, VideoCodec, VideoEncoding,
+    ProgramSide, RateMode, SrtLink, VideoCodec, VideoEncoding, MAX_SEND_DELAY_S,
 };
 pub use ptz::{PtzFocus, PtzProtocol, PtzSpec};
 pub use shortcut::{Shortcut, ShortcutSpec};

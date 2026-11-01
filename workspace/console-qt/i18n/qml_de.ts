@@ -608,7 +608,7 @@
       <translation>Karte %1 (nicht gefunden)</translation>
     </message>
     <message>
-      <location line="+66" />
+      <location line="+69" />
       <source>folder in the engine's media directory</source>
       <translation>Ordner im Medienverzeichnis der Engine</translation>
     </message>
@@ -639,7 +639,7 @@
       <translation>Speichern</translation>
     </message>
     <message>
-      <location line="+173" />
+      <location line="+177" />
       <source>The output is sending. Stop it first to change its settings.</source>
       <translation>Der Ausgang sendet. Erst stoppen, dann lassen sich seine Einstellungen ändern.</translation>
     </message>
@@ -757,6 +757,26 @@
       <location line="+1" />
       <source>0: one file. A new file starts at the next keyframe; no frame is lost.</source>
       <translation>0: eine Datei. Die neue Datei beginnt am nächsten Keyframe; kein Bild geht verloren.</translation>
+    </message>
+    <message>
+      <location line="+7" />
+      <source>Send delay (s)</source>
+      <translation>Sendeverzögerung (s)</translation>
+    </message>
+    <message>
+      <location line="+10" />
+      <source>Send delay</source>
+      <translation>Sendeverzögerung</translation>
+    </message>
+    <message>
+      <location line="+1" />
+      <source>Help on the send delay</source>
+      <translation>Hilfe zur Sendeverzögerung</translation>
+    </message>
+    <message>
+      <location line="+1" />
+      <source>0: live. Picture and sound wait this long before they go out, e.g. against spoilers or for a moment to react. A stop ends the stream at once; what still waits is lost.</source>
+      <translation>0: live. Bild und Ton warten so lange, bevor sie hinausgehen, etwa gegen Spoiler oder für einen Moment zum Reagieren. Ein Stopp beendet den Stream sofort; was noch wartet, geht verloren.</translation>
     </message>
     <message>
       <location line="+4" />
@@ -4477,7 +4497,7 @@
       <translation>Ausgänge</translation>
     </message>
     <message>
-      <location line="+36" />
+      <location line="+38" />
       <source>Running</source>
       <translation>Läuft</translation>
     </message>
@@ -4497,12 +4517,17 @@
       <translation>Wartet auf die Karten</translation>
     </message>
     <message>
+      <location line="+2" />
+      <source>Send delay %1</source>
+      <translation>Sendeverzögerung %1</translation>
+    </message>
+    <message>
       <location line="+1" />
       <source>Click: start or stop. Right click: menu.</source>
       <translation>Klick: starten oder stoppen. Rechtsklick: Menü.</translation>
     </message>
     <message>
-      <location line="+38" />
+      <location line="+41" />
       <source>Stop all streams</source>
       <translation>Alle Streams stoppen</translation>
     </message>
@@ -4679,12 +4704,12 @@
     </message>
     <message>
       <location line="+1" />
-      <location line="+54" />
+      <location line="+57" />
       <source>Kind</source>
       <translation>Art</translation>
     </message>
     <message>
-      <location line="-53" />
+      <location line="-56" />
       <source>State</source>
       <translation>Zustand</translation>
     </message>
@@ -4695,17 +4720,17 @@
     </message>
     <message>
       <location line="+1" />
-      <location line="+64" />
+      <location line="+82" />
       <source>Link</source>
       <translation>Verbindung</translation>
     </message>
     <message>
-      <location line="-51" />
+      <location line="-69" />
       <source>No outputs yet: + Output adds a recording, stream, NDI or screen</source>
       <translation>Noch keine Ausgänge: + Ausgang fügt Aufnahme, Stream, NDI oder Bildschirm hinzu</translation>
     </message>
     <message>
-      <location line="+33" />
+      <location line="+36" />
       <source>Settings…</source>
       <translation>Einstellungen…</translation>
     </message>
@@ -4721,6 +4746,11 @@
     </message>
     <message>
       <location line="+11" />
+      <source>Delay</source>
+      <translation>Verzögerung</translation>
+    </message>
+    <message>
+      <location line="+15" />
       <source>Rate</source>
       <translation>Rate</translation>
     </message>
@@ -4730,7 +4760,7 @@
       <translation>der Quelle</translation>
     </message>
     <message>
-      <location line="-63" />
+      <location line="-78" />
       <source>Target</source>
       <translation>Ziel</translation>
     </message>
@@ -4745,7 +4775,7 @@
       <translation>%1 kbit/s</translation>
     </message>
     <message>
-      <location line="+11" />
+      <location line="+26" />
       <source>Failed</source>
       <translation>Fehlgeschlagen</translation>
     </message>
@@ -4786,7 +4816,7 @@
       <translation>Programm</translation>
     </message>
     <message>
-      <location line="+68" />
+      <location line="+73" />
       <source>running</source>
       <translation>läuft</translation>
     </message>
@@ -4806,7 +4836,7 @@
       <translation>Karten aus</translation>
     </message>
     <message>
-      <location line="+18" />
+      <location line="+21" />
       <source>Stop</source>
       <translation>Stopp</translation>
     </message>
@@ -7252,12 +7282,12 @@
     <message>
       <location line="+1" />
       <location line="+63" />
-      <location line="+158" />
+      <location line="+175" />
       <source>NDI</source>
       <translation>NDI</translation>
     </message>
     <message>
-      <location line="-220" />
+      <location line="-237" />
       <source>WHIP (browser, OBS)</source>
       <translation>WHIP (Browser, OBS)</translation>
     </message>
@@ -7429,12 +7459,12 @@
     </message>
     <message>
       <location line="+1" />
-      <location line="+156" />
+      <location line="+173" />
       <source>Recording</source>
       <translation>Aufnahme</translation>
     </message>
     <message>
-      <location line="-154" />
+      <location line="-171" />
       <source>Screen: window</source>
       <translation>Bildschirm: Fenster</translation>
     </message>
@@ -7637,7 +7667,17 @@
       <translation>%1 · verloren %2 · verworfen %3 · %4</translation>
     </message>
     <message>
-      <location line="+8" />
+      <location line="+18" />
+      <source>%1 s, on air in %2 s</source>
+      <translation>%1 s, auf Sendung in %2 s</translation>
+    </message>
+    <message>
+      <location line="+0" />
+      <source>%1 s</source>
+      <translation>%1 s</translation>
+    </message>
+    <message>
+      <location line="+7" />
       <source>Stream SRT</source>
       <translation>Stream SRT</translation>
     </message>
@@ -7845,6 +7885,11 @@
       <location line="+1" />
       <source>No recording runs</source>
       <translation>Keine Aufnahme läuft</translation>
+    </message>
+    <message>
+      <location line="+1" />
+      <source>Send delay: %1</source>
+      <translation>Sendeverzögerung: %1</translation>
     </message>
     <message>
       <location line="+1" />

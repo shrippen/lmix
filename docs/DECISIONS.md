@@ -7020,6 +7020,71 @@ Umstellung der Skripte (CPU-Mischer, ohne Hardware) fanden
 `measure-mixer-growth` ihre Aufnahmen; die übrigen brauchen SDI-Karte,
 GPU oder Bildschirm und sind nur mit `bash -n` geprüft.
 
+## 2026-11-01 — Sendeverzögerung je Stream (STR.5)
+
+**Kontext**: STR.5 verlangt eine Sendeverzögerung von n Sekunden mit Puffer
+im RAM und Countdown (vMix: Stream-Verzögerung, etwa gegen Spoiler bei
+Turnieren oder als Schutz bei Live-Anrufen). Ohne Änderung an strom
+(a0ac38f9) umzusetzen.
+
+**Optionen**:
+1. Rohbild verzögern (Puffer am `inter`-Eingang des Ausgangs-Flows, wie der
+   Ton einer Karte): 1080p30 roh sind rund 90 MB je Sekunde, eine Minute
+   über 5 GB. Verworfen.
+2. Zeitversatz (`builtin.time_offset`) vor dem Stream-Block: verschiebt nur
+   Zeitstempel; RTMP sendet ohne Takt (`sync=false`), dort hielte nichts die
+   Daten zurück, und gepuffert werden müsste trotzdem. Verworfen.
+3. **Je eine `queue` hinter dem Encoder** (kodiertes Bild) und vor dem
+   Stream-Block (Ton roh, den kodiert der Block selbst) mit
+   `min-threshold-time` = Verzögerung: Die Queue lässt nichts heraus, bevor
+   sie so viel hält, danach läuft der Strom im Takt des Encoders weiter.
+   Wenige MB je Sekunde (6 Mbit/s Bild plus 384 kB/s Ton). Eine `queue`
+   meldet `min-threshold-time` als Latenz; so warten der TS-Muxer und der
+   taktende `srtsink` auf die späten Daten, statt sie zu verwerfen.
+
+**Entscheidung**: Option 3. `OutputSpec::Srt` und `::Rtmp` haben `delay_s`
+(0 = live, Standard; fehlt in älteren Shows und wird bei 0 nicht
+geschrieben), höchstens `MAX_SEND_DELAY_S` = 60 s (bei 50 Mbit/s rund
+400 MB); mehr lehnt `add_output`/`update_output` mit `bad_delay` ab. Die
+Queues haben 2 s Luft über der Verzögerung (ein kurz stockendes Netz hält
+den Encoder nicht sofort an) und keine Grenze in Puffern oder Bytes. Die
+Verzögerung gilt für den ganzen Ausgang, Bild und Ton gleich; ändern lässt
+sie sich wie die übrigen Einstellungen nur, solange der Ausgang nicht
+sendet (eine Änderung im Lauf risse ein Loch oder wiederholte Sekunden).
+Ein Stopp beendet den Stream sofort; was noch wartet, geht verloren: Ein
+verzögerter Stream stoppt ohne EOS (`eos_on_stop` aus). Verworfen: das
+Leeren mit EOS. strom wartet darauf höchstens 5 s
+(`EOS_ON_STOP_TIMEOUT_MS`), der taktende `srtsink` gäbe die wartenden
+Sekunden aber in Echtzeit aus; bei 30 s Verzögerung kämen 5 s an, der Rest
+(die Verabschiedung) nicht, und jeder Stopp hinge 5 s. Wirklich ausspielen
+hieße ein Zeitlimit je Flow in strom (Upstream-Kandidat) und einen Status
+„stoppt, sendet noch n s“. Eine Show-Datei mit mehr als 60 s (von Hand
+bearbeitet; geladene Shows werden nicht geprüft) baut höchstens 60 s auf.
+
+**Countdown**: Die Oberfläche rechnet ihn aus `since_ms` und `delay_s`
+(Ausgänge-Seite: in der Zeile „−0:07“ statt der Laufzeit, im Detail die
+Zeile „Verzögerung“ mit „10 s, auf Sendung in 7 s“, danach „10 s“;
+Ausgangsleiste: Countdown im Knopf, Verzögerung im Tooltip). Kein eigener
+Zustand im Kern: Der Startzeitpunkt steht schon im Status. Ein Ausgang, den
+der Kern nach einem Neustart laufend vorfindet, kennt seinen Start nicht;
+ein verzögerter gilt dann als auf Sendung (`since_ms` um die Verzögerung
+zurück), sonst zeigte ein seit Stunden sendender Stream wieder einen
+Countdown.
+
+**Gemessen** (`scripts/measure-send-delay.sh`, CPU-Mischer, Empfänger
+ffmpeg, Zeit von der Stummschaltung bis zur Stille beim Empfänger): SRT
+live 0,27 s, mit 5 s 5,26 s, mit 10 s 10,27 s (10,00 s Unterschied); RTMP
+an ffmpeg als Server live 0,14 s, mit 5 s 5,10 s. Stopp eines verzögerten
+Streams kurz nach dem Wiedereinschalten des Tons: SRT mit 5 s kehrt nach
+1,04 s zurück (so lange wie live), RTMP mit 10 s nach 0,04 s; der Empfänger
+hört den Ton danach nicht mehr (er wartete noch und ist verworfen).
+
+**Bekannt**: strom warnt im eigenen Log alle 5 s je Queue „Queue level
+exceeds threshold“ (Grenze fest 2 s, `pipeline_monitor.rs`), solange ein
+Stream verzögert. Nur Log, nichts für die Bedienung; ein Kandidat für
+upstream (Grenze über `min-threshold-time` der Queue hinaus), nicht Teil
+dieser Änderung. STR.7 „Puffer“ (Füllstand im Status) bleibt offen.
+
 ## 2026-11-01 — SRT-Input mit Feldern statt URI (SRC.12)
 
 **Anlass**: Ein SRT-Input ließ sich in der Console nur als URI anlegen;

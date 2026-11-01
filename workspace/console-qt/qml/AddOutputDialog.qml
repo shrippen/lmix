@@ -104,6 +104,9 @@ KanteDialog {
     readonly property bool encodes: kind === "srt" || kind === "rtmp" || kind === "record"
     /** A recording's split ranges (REC.4). */
     readonly property var recordLimits: JSON.parse(core.choices("record_limits"))
+    /** Streams can go out late (STR.5). */
+    readonly property bool streams: kind === "srt" || kind === "rtmp"
+    readonly property int sendDelayMax: JSON.parse(core.choices("stream_limits")).delay_s_max || 0
     /** Screens show picture only. */
     readonly property bool carriesSound: kind !== "window" && kind !== "fullscreen" && kind !== "drm"
     readonly property var hints: ({
@@ -150,6 +153,8 @@ KanteDialog {
         cardBox.currentIndex = 0
         cardChannelsBox.currentIndex = 0
         cardDelay.value = 0
+        // Unlike codec and bitrate, a delay is not carried to the next one.
+        sendDelay.value = 0
         cardModeBox.currentIndex = Math.max(0, cardModes.findIndex(m => m.value === defaultCardMode))
         textField.text = ""
         nameField.text = ""
@@ -196,6 +201,7 @@ KanteDialog {
         codecBox.currentIndex = encoding.codec === "h265" ? 1 : 0
         rateBox.currentIndex = encoding.rate === "cbr" ? 1 : 0
         keyframes.value = encoding.keyframe_ms !== undefined ? Math.round(encoding.keyframe_ms / 1000) : 2
+        sendDelay.value = spec.delay_s || 0
         containerBox.currentIndex = Math.max(0, containers.findIndex(c => c.value === (spec.container || "mkv")))
         splitMinutes.value = spec.split_minutes || 0
         splitMb.value = spec.split_mb || 0
@@ -242,7 +248,8 @@ KanteDialog {
             bus: dialog.chosenBus(),
             split_minutes: dialog.kind === "record" ? splitMinutes.value : 0,
             // Below the smallest size: the smallest (0 stays off).
-            split_mb: dialog.kind === "record" && splitMb.value > 0 ? Math.max(splitMb.value, dialog.recordLimits.split_mb_min) : 0
+            split_mb: dialog.kind === "record" && splitMb.value > 0 ? Math.max(splitMb.value, dialog.recordLimits.split_mb_min) : 0,
+            delay_s: dialog.streams ? sendDelay.value : 0
         })
     }
     /** Bus id of the sound choice; empty: the source's own. */
@@ -486,6 +493,25 @@ KanteDialog {
                     term: qsTr("New file")
                     accessibleName: qsTr("Help on new files")
                     info: qsTr("0: one file. A new file starts at the next keyframe; no frame is lost.")
+                }
+            }
+
+            // STR.5: the stream waits in memory and goes out this much later.
+            RowLayout {
+                visible: dialog.streams
+                KanteSectionLabel { text: qsTr("Send delay (s)") }
+                QQC2.SpinBox {
+                    id: sendDelay
+                    objectName: "sendDelay"
+                    from: 0
+                    to: dialog.sendDelayMax
+                    editable: true
+                    KanteFieldSkin { control: sendDelay }
+                }
+                KanteInfoTip {
+                    term: qsTr("Send delay")
+                    accessibleName: qsTr("Help on the send delay")
+                    info: qsTr("0: live. Picture and sound wait this long before they go out, e.g. against spoilers or for a moment to react. A stop ends the stream at once; what still waits is lost.")
                 }
             }
 
