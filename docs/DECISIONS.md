@@ -7053,7 +7053,8 @@ Verzögerung gilt für den ganzen Ausgang, Bild und Ton gleich; ändern lässt
 sie sich wie die übrigen Einstellungen nur, solange der Ausgang nicht
 sendet (eine Änderung im Lauf risse ein Loch oder wiederholte Sekunden).
 Ein Stopp beendet den Stream sofort; was noch wartet, geht verloren: Ein
-verzögerter Stream stoppt ohne EOS (`eos_on_stop` aus). Verworfen: das
+verzögerter Stream stoppt ohne EOS (`eos_on_stop` aus; abgelöst, siehe
+„Sendeverzögerung: Stopp mit Abmelden“). Verworfen: das
 Leeren mit EOS. strom wartet darauf höchstens 5 s
 (`EOS_ON_STOP_TIMEOUT_MS`), der taktende `srtsink` gäbe die wartenden
 Sekunden aber in Echtzeit aus; bei 30 s Verzögerung kämen 5 s an, der Rest
@@ -7853,3 +7854,75 @@ als `alert` mit dem Text und „Close“. Mit einem modalen Dialog
 („Shortcuts…“) liegt sie in `panel 'Messages'` (deutsch „Meldungen“),
 neben `dialog 'Shortcuts'` direkt unter dem Fenster, nicht als zweiter
 Dialog. Nichts zu ändern.
+
+## 2026-11-01 — Sendeverzögerung: Stopp mit Abmelden (STR.5)
+
+**Anlass**: Ein verzögerter Stream stoppte ohne EOS (siehe
+„Sendeverzögerung je Stream“). RTMP schickt sein Abmelden (FCUnpublish,
+deleteStream) aber nur auf EOS; YouTube oder Twitch sahen einen
+Verbindungsabbruch statt eines Endes.
+
+**Bedeutung des Stopps**: bleibt wie entschieden (LASTENHEFT STR.5): Stopp
+heißt sofort aufhören, was noch wartet, geht verloren. Ausspielen der
+wartenden Sekunden wäre die Gegenoption; sie hielte den Stopp bis zu 60 s
+auf und bräuchte einen eigenen Status. Verworfen.
+
+**Optionen**:
+1. EOS wie bei Live-Ausgängen: Bei EOS setzt die `queue` ihre
+   `min-threshold-time` auf 0 und gibt alles auf einmal heraus. RTMP
+   (`sync=false`) sendete die wartenden Sekunden im Schwall hinterher
+   (Gegenteil der Entscheidung, bei langsamer Leitung nach 5 s
+   abgeschnitten), der taktende `srtsink` spielte sie in Echtzeit aus,
+   der Stopp hinge bis 5 s. Verworfen.
+2. In strom: EOS direkt an die Sinks oder die Queues vor dem EOS leeren.
+   Braucht eine neue Stopp-Art in strom (Upstream-Thema) und kennt die
+   Queues nicht, die lmix baut. Verworfen.
+3. **Ein `valve` hinter jeder Verzögerungs-Queue** (`send_gate_video`,
+   `send_gate_sound`, `drop-mode=transform-to-gap`). Beim Stopp
+   schließt `lmix-core` die Ventile (`drop=true`, Element-Eigenschaft über
+   die strom-API), dann löscht es den Flow wie bisher. Das Ventil verwirft
+   alle Puffer (als Lücken-Events), lässt EOS aber durch; die Queue gibt
+   nach EOS alles heraus, das Ventil wirft es weg, EOS erreicht `flvmux`
+   und `rtmp2sink` sofort, RTMP meldet sich ab.
+
+**Entscheidung**: Option 3, ohne Änderung an strom. Alle Ausgänge stoppen
+jetzt mit EOS (`eos_on_stop` immer an). Ob ein Flow Ventile hat, liest
+`lmix-core` aus dem Flow selbst (`GET /flows/{id}`), so auch bei einem
+Ausgang, den ein neu gestarteter Kern übernommen hat. Schlägt das Schließen
+fehl, stoppt der Ausgang trotzdem: strom begrenzt das Leeren auf 5 s
+(`EOS_ON_STOP_TIMEOUT_MS`), RTMP sendet dann den Rest im Schwall. Nicht
+abgedeckt: `put_flow` ersetzt einen noch laufenden Ausgangs-Flow ohne die
+Ventile zu schließen (nur bei einem Start über einen laufenden Ausgang).
+`drop-mode` gibt es ab GStreamer 1.24 (Mindestversion laut BUILD.md).
+
+**Stopp im Countdown** (Review #231): Hat das Ventil noch nichts
+durchgelassen, gibt `flvmux` EOS unter Umständen nicht weiter, solange auf
+keinem Pad Zeit vergangen ist (gemessen mit einer nachgebauten Pipeline
+und GStreamer 1.28: mit `forward-sticky-events` kein EOS, 5 s bis zum
+Abbruch, kein Abmelden; im lmix-Flow selbst trat es nicht auf). Mit
+`transform-to-gap` werden verworfene Puffer zu Lücken-Events; damit kommt
+EOS in beiden Fällen sofort durch, RTMP meldet sich auch im Countdown ab,
+ohne dass ein Bild hinausgeht. Ein Flow, der nicht mehr läuft, bekommt
+keine Ventil-Befehle (strom lehnt sie ab, leert ihn aber auch nicht).
+Offen, nicht geändert: `Service::execute` hält den Switcher während
+`engine.run`; ein Stopp, der strom 5 s warten lässt (Schließen der Ventile
+gescheitert), hält so lange auch Schnitte auf (gilt für jeden Stopp mit EOS).
+
+**Geprüft**: `scripts/test-m2b-vm.sh` (CI) startet einen RTMP-Ausgang mit
+2 s Verzögerung über ein Relais (`scripts/rtmp-unpublish.cjs`, meldet
+`publish` und `deleteStream` des Senders) zu ffmpeg und verlangt nach dem
+Stopp `unpublish`; vor der Änderung kam nur `publish`. Lokal mit
+GStreamer 1.28: RTMP 2 s, 3 s und 10 s Verzögerung: Abmelden gesendet,
+Stopp in 0,06 s, strom meldet „drained with EOS before stop“.
+`scripts/measure-send-delay.sh` (Verzögerung 0 und 5 s): SRT Stopp 1,05 s
+(wie live), RTMP 0,05 s; danach kam beim Empfänger nichts mehr an (die
+wartenden Sekunden sind verworfen). Tests in `lmix-core`:
+`a_delayed_stream_waits_in_memory` (Ventile, EOS an),
+`a_delayed_stream_closes_its_gates_before_it_stops` (Ventile zu vor dem
+Löschen, ein Live-Stream ohne).
+Countdown (Nachtrag Review #231), lokal: RTMP mit 30 s Verzögerung, Stopp
+gleich nach dem Anmelden und 4 s danach: Aktion 0,19 s bzw. 0,06 s, der
+nächste Schnitt 0,02 s, Abmelden gesendet, keine Daten hinaus; SRT mit
+30 s im Countdown: Stopp 1,09 s (wie live), mit EOS geleert. Der VM-Check
+prüft beide Fälle (`late_stream`: auf Sendung erst nach der Zeile `data`
+des Relais, Countdown nach `publish` und ohne `data`).
