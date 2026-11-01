@@ -6684,18 +6684,11 @@ fn check_source(source: &SourceSpec) -> Result<(), ActionError> {
         SourceSpec::Srt {
             uri,
             decoder_delay_ms,
-        } => {
-            use lmix_types::srt::{SrtAddress, SRT_DECODER_DELAY_MAX_MS};
-            SrtAddress::parse(uri)
-                .and_then(|address| address.check())
-                .and_then(|()| match decoder_delay_ms {
-                    Some(ms) if *ms > SRT_DECODER_DELAY_MAX_MS => Err(format!(
-                        "decoder delay {ms} ms is above {SRT_DECODER_DELAY_MAX_MS}"
-                    )),
-                    _ => Ok(()),
-                })
-                .map_err(|reason| ActionError::BadSrt { reason })
-        }
+        } => lmix_types::srt::check_srt(uri, *decoder_delay_ms)
+            .map(|_| ())
+            .map_err(|problem| ActionError::BadSrt {
+                reason: problem.to_string(),
+            }),
         SourceSpec::Card { pair, .. } if CardChannels::holding(*pair).is_none() => {
             Err(ActionError::BadCard {
                 reason: format!("channel pair {pair}, 1 to 8"),
@@ -13218,8 +13211,12 @@ mod tests {
         for (uri, delay) in [
             ("rtmp://host:9000", None),
             ("srt://host", None),
-            ("srt://:9000", None),
+            ("srt://:9000?mode=caller", None),
+            ("srt://cam.local:9000:9000", None),
+            ("srt://[cam.local:9000]:9000", None),
+            ("srt://cam%20local:9000", None),
             ("srt://host:9000?passphrase=short", None),
+            ("srt://host:9000?passphrase=%C3%A4%C3%A4%C3%A4%C3%A4", None),
             ("srt://host:9000?pbkeylen=32", None),
             ("srt://host:9000?latency=20000", None),
             ("srt://host:9000", Some(20_000)),
@@ -13230,6 +13227,8 @@ mod tests {
             );
         }
         assert!(sw.apply(srt("srt://:9000?mode=listener", None)).is_ok());
+        // Without mode or host: a listener, as srtsrc takes it.
+        assert!(sw.apply(srt("srt://:9001", None)).is_ok());
         assert!(sw
             .apply(srt(
                 "srt://cam:9000?latency=400&passphrase=0123456789&pbkeylen=16",

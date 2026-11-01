@@ -7110,11 +7110,19 @@ regeln gebraucht.
   Schlüssellänge (16/24/32 Byte, sonst die des Senders), Stream-ID, übrige
   Parameter in ihrer Reihenfolge. `parse` und `uri` sind umkehrbar; Werte
   sind prozentkodiert (`srtsrc` dekodiert sie, mit GStreamer 1.28 geprüft,
-  `+` bleibt `+`). Vorgaben (Caller, keine Passphrase) bleiben aus der URI.
-- Der Kern prüft beim Anlegen und Ersetzen (`bad_srt`): `srt://`, Port
-  1–65535, Host außer beim Listener, Passphrase 10–79 Zeichen (Grenzen von
-  SRT), Schlüssellänge nur mit Passphrase, Latenz und Decoder-Verzögerung
-  höchstens 10 s, Stream-ID höchstens 512 Zeichen.
+  `+` bleibt `+`). Vorgaben (Caller, keine Passphrase, Latenz 125 ms) bleiben
+  aus der URI; ein Caller ohne Host behält `mode=caller`, sonst läse er sich
+  als Listener. Ohne `mode` und ohne Host ist eine Adresse ein Listener, wie
+  `srtsrc` sie nimmt (`srt://:9000` ging vorher und geht weiter).
+- Der Kern prüft beim Anlegen und Ersetzen (`bad_srt`, `srt::check_srt`):
+  `srt://`, Port 1–65535, Host außer beim Listener; der Host ist ein Name
+  (Buchstaben, Ziffern, `-`, `_`, `.`), eine IPv4- oder IPv6-Adresse (mit
+  Zone nach `%`), also kein `cam:9000`, kein `user@`, kein Pfad, keine
+  Leerzeichen; Passphrase 10–79 **Bytes** (SRT zählt Bytes, ein Umlaut sind
+  zwei; mit `srtsrc` nachgeprüft: 42 × `ä` bricht mit „Bad parameters“ ab),
+  Schlüssellänge nur mit Passphrase, Latenz und Decoder-Verzögerung
+  höchstens 10 s, Stream-ID höchstens 512 Bytes. Gründe als `SrtProblem`
+  (Code mit Werten), die Console übersetzt sie.
 - Engine: steht `latency` in der URI, geht es zusätzlich als
   Block-Eigenschaft `latency` an strom; `decoder_delay_ms` (neues,
   optionales Feld von `SourceSpec::Srt`, 0 wird nicht gespeichert) als
@@ -7125,17 +7133,29 @@ regeln gebraucht.
   und Port, Latenz, Passphrase (verdeckt), Schlüssellänge, Stream-ID,
   Decoder-Verzögerung. Darunter die fertige Adresse zum Kopieren, ohne
   Passphrase. Fügt man `srt://…` ins Adressfeld ein, füllt das die Felder.
-  Was fehlt (Port, Host, Länge der Passphrase), sagt eine Zeile, „Hinzufügen“
-  bleibt bis dahin gesperrt. Zusammensetzen und Zerlegen in Rust
-  (`forms::srt_uri`, `forms::srt_fields`), die Grenzen aus `srt_limits`.
+  Der Dialog prüft nicht selbst, sondern fragt die Prüfung des Kerns
+  (`forms::srt_check`: Felder → `srt_uri` → `check_srt`), so sagen Dialog
+  und Kern dasselbe. Was nicht geht, sagt eine Zeile, „Hinzufügen“ bleibt
+  bis dahin gesperrt. Eine eingefügte Adresse, die sich nicht liest,
+  bleibt im Feld mit „Diese Adresse liest sich nicht: …“. Eingefügt heißt:
+  mehr als ein Zeichen auf einmal oder beim Verlassen des Felds; wer
+  `srt://…` Zeichen für Zeichen tippt, dem springen die Felder nicht nach
+  der ersten Ziffer des Ports um. Hat ein ersetzter Input eine Latenz über
+  10 s, zeigt das Feld sie und die Zeile den Fehler, statt sie stumm zu
+  kappen. Zusammensetzen und Zerlegen in Rust (`forms::srt_uri`,
+  `forms::srt_fields`), die Grenzen aus `srt_limits`.
 - **Passphrase**: Der Name eines neuen SRT-Inputs und die Quelle in den
   Input-Einstellungen zeigen die Adresse ohne Abfrage, also ohne
   Passphrase. Gespeichert wird sie weiter in der Show (wie der Schlüssel
   eines SRT- oder RTMP-Ausgangs). In die Rechner-Einstellungen
   (Geheimnisse dort, Entscheidung 7) gehört sie erst mit den Ausgabezielen
-  für Inputs; das bleibt offen. strom schreibt die URI samt Passphrase ins
+  für Inputs; das bleibt offen. lmix-core schreibt einen gescheiterten
+  Engine-Befehl ins Log ohne den Wert von `passphrase=` (`srt::redact`; gilt
+  auch für SRT-Ausgänge). strom schreibt die URI samt Passphrase ins
   Log (`SRT source configured: uri=…`); ein Kandidat für ein Issue bei
   Eyevinn, hier nicht geändert.
+- Inputs, die vorher mit einer URI samt Passphrase als Namen angelegt
+  wurden, behalten diesen Namen (keine Migration; umbenennen genügt).
 
 **Gemessen** mit strom `a0ac38f9` (vorgebautes Paket), lmix-core als
 Release, CPU-Mischer: Listener-Input
@@ -7152,8 +7172,11 @@ Abbruch und Wiederkehr) bleibt offen.
 jetzt wirksam einstellbar (mehr Puffer gegen Verluste), die Adresse aus der
 Sender-App lässt sich einfügen, und ein Listener braucht nur den Port.
 
-**Bricht**: nichts. `SourceSpec::Srt` hat ein neues optionales Feld; alte
-Shows laden unverändert. Der vorgeschlagene Name eines neuen SRT-Inputs ist
+**Bricht**: Über API, OSC, TCP oder Skripte nimmt der Kern SRT-Adressen
+nicht mehr an, die `srtsrc` ohnehin nicht öffnen konnte (Host mit Port oder
+Leerzeichen, Passphrase außerhalb 10–79 Bytes); vorher blieb der Input
+still schwarz. `SourceSpec::Srt` hat ein neues optionales Feld; alte Shows
+laden unverändert (Laden prüft nicht). Der vorgeschlagene Name eines neuen SRT-Inputs ist
 jetzt `srt://host:port` ohne Abfrage.
 
 **Offen** (SRC.12): Wahl des Hardware-Decoders, HEVC mit echtem Sender

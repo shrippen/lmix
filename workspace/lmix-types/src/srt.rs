@@ -52,6 +52,43 @@ impl SrtMode {
     }
 }
 
+/// Why an SRT address cannot be used; the Console names it in its own
+/// words (`problem` with the values), the core's refusals in these.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema, thiserror::Error)]
+#[serde(tag = "problem", rename_all = "snake_case")]
+pub enum SrtProblem {
+    #[error("the address starts with srt://")]
+    NoSrt,
+    #[error("an IPv6 address ends with ]")]
+    OpenBracket,
+    #[error("the address needs a port, 1 to 65535")]
+    NoPort,
+    #[error("mode {mode}: caller, listener or rendezvous")]
+    BadMode { mode: String },
+    #[error("latency {value} is no number of ms")]
+    BadLatency { value: String },
+    #[error("key length {value}: 16, 24 or 32")]
+    BadKeyLength { value: String },
+    #[error("a {} needs the address of the other side", .mode.word())]
+    NeedsHost { mode: SrtMode },
+    #[error("{host} is no host name or IP address")]
+    BadHost { host: String },
+    #[error("latency {ms} ms is above {max}")]
+    LatencyTooHigh { ms: u32, max: u32 },
+    #[error("decoder delay {ms} ms is above {max}")]
+    DecoderDelayTooHigh { ms: u32, max: u32 },
+    #[error("a passphrase has {min} to {max} bytes (umlauts count twice), not {bytes}")]
+    PassphraseLength {
+        bytes: usize,
+        min: usize,
+        max: usize,
+    },
+    #[error("a key length needs a passphrase")]
+    KeyNeedsPassphrase,
+    #[error("a stream id has at most {max} bytes")]
+    StreamIdTooLong { max: usize },
+}
+
 /// The parts of an SRT input's URI.
 #[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(default)]
@@ -77,20 +114,19 @@ pub struct SrtAddress {
 }
 
 impl SrtAddress {
-    /// The parts of `uri`; `Err` says why it is no SRT address.
-    pub fn parse(uri: &str) -> Result<Self, String> {
+    /// The parts of `uri`; `Err` says why it is no SRT address. Without a
+    /// `mode`, an address without host is a listener, as `srtsrc` takes it.
+    pub fn parse(uri: &str) -> Result<Self, SrtProblem> {
         let uri = uri.trim();
         let rest = uri
             .get(..6)
             .filter(|s| s.eq_ignore_ascii_case("srt://"))
             .map(|_| &uri[6..])
-            .ok_or_else(|| "the address starts with srt://".to_string())?;
+            .ok_or(SrtProblem::NoSrt)?;
         let (authority, query) = rest.split_once('?').unwrap_or((rest, ""));
         let authority = authority.trim_end_matches('/');
         let (host, port) = if let Some(v6) = authority.strip_prefix('[') {
-            let (host, after) = v6
-                .split_once(']')
-                .ok_or_else(|| "an IPv6 address ends with ]".to_string())?;
+            let (host, after) = v6.split_once(']').ok_or(SrtProblem::OpenBracket)?;
             (host, after.strip_prefix(':').unwrap_or(""))
         } else {
             authority.rsplit_once(':').unwrap_or((authority, ""))
@@ -99,53 +135,67 @@ impl SrtAddress {
             .parse::<u16>()
             .ok()
             .filter(|p| *p > 0)
-            .ok_or_else(|| "the address needs a port, 1 to 65535".to_string())?;
+            .ok_or(SrtProblem::NoPort)?;
         let mut address = SrtAddress {
             host: decode(host),
             port,
             ..Default::default()
         };
+        let mut mode = None;
         for pair in query.split('&').filter(|p| !p.is_empty()) {
             let (key, value) = pair.split_once('=').unwrap_or((pair, ""));
             let (key, value) = (decode(key), decode(value));
             match key.as_str() {
                 "mode" => {
-                    address.mode = SrtMode::ALL
-                        .into_iter()
-                        .find(|m| m.word().eq_ignore_ascii_case(&value))
-                        .ok_or_else(|| format!("mode {value}: caller, listener or rendezvous"))?
+                    mode = Some(
+                        SrtMode::ALL
+                            .into_iter()
+                            .find(|m| m.word().eq_ignore_ascii_case(&value))
+                            .ok_or(SrtProblem::BadMode { mode: value })?,
+                    )
                 }
                 "latency" => {
                     address.latency_ms = Some(
                         value
                             .parse()
-                            .map_err(|_| format!("latency {value} is no number of ms"))?,
+                            .map_err(|_| SrtProblem::BadLatency { value })?,
                     )
                 }
                 "passphrase" => address.passphrase = value,
                 "pbkeylen" => {
                     let length: u32 = value
                         .parse()
-                        .map_err(|_| format!("key length {value}: 16, 24 or 32"))?;
+                        .map_err(|_| SrtProblem::BadKeyLength { value })?;
                     address.key_length = (length != 0).then_some(length);
                 }
                 "streamid" => address.stream_id = value,
                 _ => address.extra.push((key, value)),
             }
         }
+        address.mode = mode.unwrap_or(if address.host.is_empty() {
+            SrtMode::Listener
+        } else {
+            SrtMode::Caller
+        });
         Ok(address)
     }
 
+    /// The host as it stands in a URI: IPv6 in brackets.
+    fn uri_host(&self, encoded: bool) -> String {
+        match (self.host.contains(':'), encoded) {
+            (true, true) => format!("[{}]", self.host.replace('%', "%25")),
+            (true, false) => format!("[{}]", self.host),
+            (false, true) => encode(&self.host),
+            (false, false) => self.host.clone(),
+        }
+    }
+
     /// The URI of these parts, values percent-encoded; parameters at their
-    /// defaults (caller, no latency, no passphrase …) left out.
+    /// defaults (caller, no latency, no passphrase …) left out. A caller
+    /// without host says so: without `mode` it would read as a listener.
     pub fn uri(&self) -> String {
-        let host = if self.host.contains(':') {
-            format!("[{}]", self.host)
-        } else {
-            encode(&self.host)
-        };
         let mut query: Vec<(String, String)> = Vec::new();
-        if self.mode != SrtMode::Caller {
+        if self.mode != SrtMode::Caller || self.host.is_empty() {
             query.push(("mode".into(), self.mode.word().into()));
         }
         if let Some(latency) = self.latency_ms {
@@ -165,7 +215,7 @@ impl SrtAddress {
             .iter()
             .map(|(k, v)| format!("{}={}", encode(k), encode(v)))
             .collect();
-        let mut uri = format!("srt://{host}:{}", self.port);
+        let mut uri = format!("srt://{}:{}", self.uri_host(true), self.port);
         if !query.is_empty() {
             uri.push('?');
             uri.push_str(&query.join("&"));
@@ -173,34 +223,45 @@ impl SrtAddress {
         uri
     }
 
-    /// What strom cannot use, or a passphrase SRT refuses.
-    pub fn check(&self) -> Result<(), String> {
+    /// What strom cannot use, or what SRT refuses: a host that is no name
+    /// or address, a passphrase outside 10–79 bytes (SRT counts bytes).
+    pub fn check(&self) -> Result<(), SrtProblem> {
         if self.host.is_empty() && self.mode != SrtMode::Listener {
-            return Err(format!("a {} needs a host", self.mode.word()));
+            return Err(SrtProblem::NeedsHost { mode: self.mode });
         }
-        if let Some(latency) = self.latency_ms.filter(|l| *l > SRT_LATENCY_MAX_MS) {
-            return Err(format!(
-                "latency {latency} ms is above {SRT_LATENCY_MAX_MS}"
-            ));
+        if !self.host.is_empty() && !is_host(&self.host) {
+            return Err(SrtProblem::BadHost {
+                host: self.host.clone(),
+            });
         }
-        let length = self.passphrase.chars().count();
-        if length > 0 && !(SRT_PASSPHRASE_MIN..=SRT_PASSPHRASE_MAX).contains(&length) {
-            return Err(format!(
-                "a passphrase has {SRT_PASSPHRASE_MIN} to {SRT_PASSPHRASE_MAX} characters"
-            ));
+        if let Some(ms) = self.latency_ms.filter(|l| *l > SRT_LATENCY_MAX_MS) {
+            return Err(SrtProblem::LatencyTooHigh {
+                ms,
+                max: SRT_LATENCY_MAX_MS,
+            });
+        }
+        let bytes = self.passphrase.len();
+        if bytes > 0 && !(SRT_PASSPHRASE_MIN..=SRT_PASSPHRASE_MAX).contains(&bytes) {
+            return Err(SrtProblem::PassphraseLength {
+                bytes,
+                min: SRT_PASSPHRASE_MIN,
+                max: SRT_PASSPHRASE_MAX,
+            });
         }
         if let Some(length) = self.key_length {
             if !SRT_KEY_LENGTHS.contains(&length) {
-                return Err(format!("key length {length}: 16, 24 or 32"));
+                return Err(SrtProblem::BadKeyLength {
+                    value: length.to_string(),
+                });
             }
             if self.passphrase.is_empty() {
-                return Err("a key length needs a passphrase".into());
+                return Err(SrtProblem::KeyNeedsPassphrase);
             }
         }
-        if self.stream_id.chars().count() > SRT_STREAM_ID_MAX {
-            return Err(format!(
-                "a stream id has at most {SRT_STREAM_ID_MAX} characters"
-            ));
+        if self.stream_id.len() > SRT_STREAM_ID_MAX {
+            return Err(SrtProblem::StreamIdTooLong {
+                max: SRT_STREAM_ID_MAX,
+            });
         }
         Ok(())
     }
@@ -208,13 +269,35 @@ impl SrtAddress {
     /// `srt://host:port` without the query: for names and lists, never
     /// showing a passphrase.
     pub fn public(&self) -> String {
-        let host = if self.host.contains(':') {
-            format!("[{}]", self.host)
-        } else {
-            self.host.clone()
-        };
-        format!("srt://{host}:{}", self.port)
+        format!("srt://{}:{}", self.uri_host(false), self.port)
     }
+}
+
+/// An SRT input as the core takes it: an address that reads and that SRT
+/// accepts, and a decoder delay of at most 10 s.
+pub fn check_srt(uri: &str, decoder_delay_ms: Option<u32>) -> Result<SrtAddress, SrtProblem> {
+    let address = SrtAddress::parse(uri)?;
+    address.check()?;
+    match decoder_delay_ms {
+        Some(ms) if ms > SRT_DECODER_DELAY_MAX_MS => Err(SrtProblem::DecoderDelayTooHigh {
+            ms,
+            max: SRT_DECODER_DELAY_MAX_MS,
+        }),
+        _ => Ok(address),
+    }
+}
+
+/// A host name (letters, digits, `-`, `_`, `.`), an IPv4 address or an
+/// IPv6 address (with a zone after `%`). Not `user@host`, a path, a port
+/// or blanks.
+fn is_host(host: &str) -> bool {
+    if host.contains(':') {
+        let address = host.split_once('%').map_or(host, |(a, _)| a);
+        return address.parse::<std::net::Ipv6Addr>().is_ok();
+    }
+    host.bytes()
+        .all(|b| b.is_ascii_alphanumeric() || b"-_.".contains(&b))
+        && !host.starts_with(['.', '-'])
 }
 
 /// `uri` without its query (and so without a passphrase), also when it
@@ -224,6 +307,25 @@ pub fn public_uri(uri: &str) -> String {
         Ok(address) => address.public(),
         Err(_) => uri.split('?').next().unwrap_or_default().trim().to_string(),
     }
+}
+
+/// `text` (a logged command, a URI) with the value of every `passphrase=`
+/// replaced by `…`, so no log shows it.
+pub fn redact(text: &str) -> String {
+    const KEY: &str = "passphrase=";
+    let mut out = String::with_capacity(text.len());
+    let mut rest = text;
+    while let Some(at) = rest.find(KEY) {
+        out.push_str(&rest[..at + KEY.len()]);
+        rest = &rest[at + KEY.len()..];
+        let end = rest
+            .find(|c: char| c == '&' || c == '"' || c == '\'' || c.is_whitespace())
+            .unwrap_or(rest.len());
+        out.push('…');
+        rest = &rest[end..];
+    }
+    out.push_str(rest);
+    out
 }
 
 /// Percent-encode all but RFC 3986's unreserved characters.
@@ -321,7 +423,7 @@ mod tests {
             ("srt://host:9000?latency=soon", "latency soon"),
             ("srt://host:9000?pbkeylen=x", "key length"),
         ] {
-            let error = SrtAddress::parse(uri).unwrap_err();
+            let error = SrtAddress::parse(uri).unwrap_err().to_string();
             assert!(error.contains(why), "{uri}: {error}");
         }
     }
@@ -332,14 +434,14 @@ mod tests {
         let with = |f: fn(&mut SrtAddress)| {
             let mut a = base.clone();
             f(&mut a);
-            a.check()
+            a.check().map_err(|e| e.to_string())
         };
         assert!(with(|a| a.host.clear())
             .unwrap_err()
-            .contains("caller needs a host"));
+            .contains("caller needs the address"));
         assert!(with(|a| a.passphrase = "short".into())
             .unwrap_err()
-            .contains("10 to 79"));
+            .contains("10 to 79 bytes"));
         assert!(with(|a| a.passphrase = "x".repeat(80)).is_err());
         assert_eq!(with(|a| a.passphrase = "x".repeat(79)), Ok(()));
         assert!(with(|a| a.key_length = Some(32))
@@ -352,6 +454,137 @@ mod tests {
         .is_err());
         assert!(with(|a| a.latency_ms = Some(SRT_LATENCY_MAX_MS + 1)).is_err());
         assert!(with(|a| a.stream_id = "s".repeat(SRT_STREAM_ID_MAX + 1)).is_err());
+    }
+
+    #[test]
+    fn a_host_is_a_name_or_an_address() {
+        let host = |h: &str| {
+            SrtAddress {
+                host: h.into(),
+                port: 9000,
+                ..Default::default()
+            }
+            .check()
+        };
+        for good in [
+            "cam.local",
+            "cam-2",
+            "10.0.0.5",
+            "fd00::5",
+            "fe80::1%eth0",
+            "a_b",
+        ] {
+            assert_eq!(host(good), Ok(()), "{good}");
+        }
+        for bad in [
+            "cam.local:9000",
+            "srt://cam",
+            "cam local",
+            "user@cam",
+            "cam/x",
+            "cam?x",
+            "cam#x",
+            "fd00::zz",
+            " cam",
+            ".cam",
+        ] {
+            assert!(
+                matches!(host(bad), Err(SrtProblem::BadHost { .. })),
+                "{bad}"
+            );
+        }
+        // Round trip of what the review found: none of these reads back
+        // as an address that passes.
+        for uri in ["srt://[cam.local:9000]:9000", "srt://cam%20local:9000"] {
+            let address = SrtAddress::parse(uri).unwrap();
+            assert!(address.check().is_err(), "{uri}");
+        }
+        // An IPv6 zone keeps its % encoded.
+        let zone = SrtAddress::parse("srt://[fe80::1%25eth0]:9000").unwrap();
+        assert_eq!(zone.host, "fe80::1%eth0");
+        assert_eq!(zone.uri(), "srt://[fe80::1%25eth0]:9000");
+    }
+
+    #[test]
+    fn a_passphrase_counts_bytes_as_srt_does() {
+        let with = |p: &str| {
+            SrtAddress {
+                host: "cam".into(),
+                port: 9000,
+                passphrase: p.into(),
+                ..Default::default()
+            }
+            .check()
+        };
+        // 5 umlauts are 10 bytes: enough; 42 are 84: too many.
+        assert_eq!(with("äääää"), Ok(()));
+        assert!(matches!(
+            with("ääää"),
+            Err(SrtProblem::PassphraseLength { bytes: 8, .. })
+        ));
+        // 75 letters and 2 umlauts: 79 bytes, one more umlaut: 81.
+        assert_eq!(with(&format!("{}ää", "x".repeat(75))), Ok(()));
+        assert!(matches!(
+            with(&format!("{}äää", "x".repeat(75))),
+            Err(SrtProblem::PassphraseLength { bytes: 81, .. })
+        ));
+        assert!(with(&"ä".repeat(42)).is_err());
+        assert!(with("ääää")
+            .unwrap_err()
+            .to_string()
+            .contains("umlauts count twice"));
+    }
+
+    #[test]
+    fn without_mode_or_host_it_listens_as_srtsrc_does() {
+        let address = SrtAddress::parse("srt://:9000").unwrap();
+        assert_eq!(address.mode, SrtMode::Listener);
+        assert_eq!(address.check(), Ok(()));
+        assert_eq!(address.uri(), "srt://:9000?mode=listener");
+        assert_eq!(
+            SrtAddress::parse("srt://:9000?mode=caller")
+                .unwrap()
+                .check(),
+            Err(SrtProblem::NeedsHost {
+                mode: SrtMode::Caller
+            })
+        );
+    }
+
+    #[test]
+    fn decoder_delay_and_address_checked_together() {
+        assert!(check_srt("srt://cam:9000", Some(SRT_DECODER_DELAY_MAX_MS)).is_ok());
+        assert!(matches!(
+            check_srt("srt://cam:9000", Some(SRT_DECODER_DELAY_MAX_MS + 1)),
+            Err(SrtProblem::DecoderDelayTooHigh { .. })
+        ));
+        assert_eq!(check_srt("srt://cam", None), Err(SrtProblem::NoPort));
+    }
+
+    #[test]
+    fn logs_never_show_a_passphrase() {
+        assert_eq!(
+            redact(
+                r#"SetSlot { source: Srt { uri: "srt://:1?passphrase=geheim%20x&pbkeylen=32" } }"#
+            ),
+            r#"SetSlot { source: Srt { uri: "srt://:1?passphrase=…&pbkeylen=32" } }"#
+        );
+        assert_eq!(redact("no secret"), "no secret");
+        assert_eq!(redact("passphrase="), "passphrase=…");
+    }
+
+    #[test]
+    fn problems_go_to_the_console_as_tagged_json() {
+        let json = serde_json::to_string(&SrtProblem::PassphraseLength {
+            bytes: 8,
+            min: 10,
+            max: 79,
+        })
+        .unwrap();
+        assert_eq!(
+            json,
+            r#"{"problem":"passphrase_length","bytes":8,"min":10,"max":79}"#
+        );
     }
 
     #[test]

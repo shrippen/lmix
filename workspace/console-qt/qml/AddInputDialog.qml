@@ -111,48 +111,59 @@ KanteDialog {
     /** Parameters of a replaced or pasted address that have no field: kept. */
     property var srtExtra: []
     readonly property int srtPortNumber: /^\d{1,5}$/.test(srtPort.text.trim()) ? parseInt(srtPort.text.trim()) : 0
-    /** `SrtAddress` as JSON; without the passphrase for the line that shows it. */
+    /** `SrtAddress` as JSON; without the passphrase for the line that shows
+     *  it. The latency at its default stays out of the address. */
     function srtFieldsJson(withPassphrase) {
         const key = srtKeyLengths[Math.max(0, srtKeyBox.currentIndex)].value
         return JSON.stringify({
             mode: srtMode, host: srtHost.text.trim(), port: srtPortNumber,
-            latency_ms: srtLatency.value, passphrase: withPassphrase ? srtPassphrase.text : "",
+            latency_ms: srtLatency.value === srtLimits.latency_ms ? undefined : srtLatency.value,
+            passphrase: withPassphrase ? srtPassphrase.text : "",
             key_length: key > 0 ? key : undefined, stream_id: srtStreamId.text, extra: srtExtra
         })
     }
     readonly property string srtAddress: picksSrt ? core.srtUri(srtFieldsJson(true)) : ""
     readonly property string srtShown: picksSrt ? core.srtUri(srtFieldsJson(false)) : ""
-    /** Why the fields make no address SRT accepts; empty when they do. */
-    readonly property string srtProblem: {
+    /** A latency or decoder delay above the limits that a replaced input
+     *  has: the boxes go that high, so the check can say so. */
+    property int srtLatencyKept: 0
+    property int srtDelayKept: 0
+    /** Why a pasted srt:// address does not read (`SrtProblem`), or null. */
+    property var srtPasteProblem: null
+    /** What lmix-core would refuse in these fields (its own check,
+     *  `forms::srt_check`), as `SrtProblem`; null when it takes them. */
+    readonly property var srtRefusal: {
         if (!picksSrt)
-            return ""
-        if (srtPortNumber < 1 || srtPortNumber > 65535)
-            return qsTr("Enter a port from 1 to 65535.")
-        if (srtHost.text.trim() === "" && srtMode !== "listener")
-            return qsTr("A caller or rendezvous needs the address of the other side.")
-        const length = srtPassphrase.text.length
-        if (length > 0 && (length < srtLimits.passphrase_min || length > srtLimits.passphrase_max))
-            return qsTr("A passphrase has %1 to %2 characters.").arg(srtLimits.passphrase_min).arg(srtLimits.passphrase_max)
-        if (length === 0 && srtKeyBox.currentIndex > 0)
-            return qsTr("A key length needs a passphrase.")
-        if (srtStreamId.text.length > srtLimits.stream_id_max)
-            return qsTr("A stream id has at most %1 characters.").arg(srtLimits.stream_id_max)
-        return ""
+            return null
+        const fields = JSON.parse(srtFieldsJson(true))
+        fields.decoder_delay_ms = srtDecoderDelay.value
+        const problem = String(core.srtCheck(JSON.stringify(fields)))
+        return problem.charAt(0) === "{" ? JSON.parse(problem) : null
     }
+    /** Why the fields make no address SRT accepts; empty when they do. */
+    readonly property string srtProblem: !picksSrt ? ""
+        : srtPasteProblem ? qsTr("This address does not read: %1").arg(Texts.srtProblem(srtPasteProblem))
+        : srtRefusal ? Texts.srtProblem(srtRefusal) : ""
     readonly property var srtModeHints: ({
         caller: qsTr("lmix calls the sender at this address."),
         listener: qsTr("lmix waits on this port until the sender calls. Without an address it listens on all of this machine's."),
         rendezvous: qsTr("Both sides call each other at once, through firewalls; the sender uses the same port.")
     })
-    /** The fields of `uri` (true), or false when it is no SRT address. */
+    /** The fields of `uri` (true), or false when it is no SRT address; then
+     *  `srtPasteProblem` says why. */
     function applySrt(uri) {
-        const json = core.srtFields(uri)
-        if (json === "")
+        const json = String(core.srtFields(uri))
+        const a = json.charAt(0) === "{" ? JSON.parse(json) : { problem: "no_srt" }
+        if (a.problem) {
+            srtPasteProblem = a
             return false
-        const a = JSON.parse(json)
+        }
+        srtPasteProblem = null
         srtModeIndex = Math.max(0, srtModes.findIndex(m => m.value === a.mode))
         srtHost.text = a.host || ""
+        srtHost.lastLength = srtHost.text.length
         srtPort.text = a.port ? String(a.port) : ""
+        srtLatencyKept = a.latency_ms || 0
         srtLatency.value = a.latency_ms !== undefined ? a.latency_ms : srtLimits.latency_ms
         srtPassphrase.text = a.passphrase || ""
         srtKeyBox.currentIndex = Math.max(0, srtKeyLengths.findIndex(k => k.value === (a.key_length || 0)))
@@ -170,6 +181,10 @@ KanteDialog {
         srtStreamId.text = ""
         srtDecoderDelay.value = 0
         srtExtra = []
+        srtLatencyKept = 0
+        srtDelayKept = 0
+        srtPasteProblem = null
+        srtHost.lastLength = 0
     }
 
     readonly property var patterns: Texts.choices("patterns", core.choices("patterns"))
@@ -295,6 +310,7 @@ KanteDialog {
                 cardPairBox.currentIndex = (source.pair || 1) - 1
             } else if (source.kind === "srt") {
                 applySrt(source.uri)
+                srtDelayKept = source.decoder_delay_ms || 0
                 srtDecoderDelay.value = source.decoder_delay_ms || 0
             }
         }
@@ -573,9 +589,25 @@ KanteDialog {
                         objectName: "srtHost"
                         Layout.fillWidth: true
                         placeholderText: dialog.srtMode === "listener" ? qsTr("all") : qsTr("host or IP, or paste srt://…")
-                        invalid: dialog.srtMode !== "listener" && text.trim() === "" && srtPort.text.trim() !== ""
-                        // A pasted srt:// address fills the fields.
-                        onTextEdited: if (/^srt:\/\//i.test(text.trim())) dialog.applySrt(text.trim())
+                        invalid: !!dialog.srtPasteProblem || (!!dialog.srtRefusal && dialog.srtRefusal.problem === "bad_host")
+                        // A pasted srt:// address fills the fields: on a paste
+                        // (more than one character at once) or when the field
+                        // is left, not on each key, or typing one by hand
+                        // would fill the port after its first digit.
+                        property int lastLength: 0
+                        function takeAddress(pasted) {
+                            if (pasted && /^srt:\/\//i.test(text.trim()))
+                                dialog.applySrt(text.trim())
+                            else
+                                dialog.srtPasteProblem = null
+                        }
+                        onTextEdited: {
+                            const pasted = text.length - lastLength > 1
+                            lastLength = text.length
+                            takeAddress(pasted)
+                        }
+                        onEditingFinished: if (/^srt:\/\//i.test(text.trim())) dialog.applySrt(text.trim())
+                        onTextChanged: if (!activeFocus) lastLength = text.length
                     }
                     QQC2.Label { text: qsTr("Port") }
                     KanteTextField {
@@ -592,7 +624,7 @@ KanteDialog {
                     id: srtLatency
                     objectName: "srtLatency"
                     from: 0
-                    to: dialog.srtLimits.latency_max_ms
+                    to: Math.max(dialog.srtLimits.latency_max_ms, dialog.srtLatencyKept)
                     stepSize: 20
                     value: dialog.srtLimits.latency_ms
                     editable: true
@@ -605,7 +637,7 @@ KanteDialog {
                     Layout.fillWidth: true
                     echoMode: TextInput.Password
                     placeholderText: qsTr("none: unencrypted")
-                    invalid: text.length > 0 && (text.length < dialog.srtLimits.passphrase_min || text.length > dialog.srtLimits.passphrase_max)
+                    invalid: !!dialog.srtRefusal && dialog.srtRefusal.problem === "passphrase_length"
                 }
                 QQC2.Label { text: qsTr("Key length") }
                 KanteComboBox {
@@ -627,7 +659,7 @@ KanteDialog {
                     id: srtDecoderDelay
                     objectName: "srtDecoderDelay"
                     from: 0
-                    to: dialog.srtLimits.decoder_delay_max_ms
+                    to: Math.max(dialog.srtLimits.decoder_delay_max_ms, dialog.srtDelayKept)
                     stepSize: 50
                     editable: true
                     KanteFieldSkin { control: srtDecoderDelay }

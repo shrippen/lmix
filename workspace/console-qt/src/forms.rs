@@ -241,12 +241,47 @@ pub fn srt_uri(fields: &str) -> String {
 }
 
 /// The fields of an SRT address as JSON (`SrtAddress`), for the form to
-/// show what an input has or what was pasted; empty when it does not read.
+/// show what an input has or what was pasted; when it does not read, why:
+/// `{"problem": …}` (`SrtProblem`).
 pub fn srt_fields(uri: &str) -> String {
-    SrtAddress::parse(uri)
-        .ok()
-        .and_then(|address| serde_json::to_string(&address).ok())
-        .unwrap_or_default()
+    let json = match SrtAddress::parse(uri) {
+        Ok(address) => serde_json::to_string(&address),
+        Err(problem) => serde_json::to_string(&problem),
+    };
+    json.unwrap_or_default()
+}
+
+/// The fields of an SRT input with its decoder delay, as the form sends
+/// them to `srt_check`.
+#[derive(Deserialize)]
+struct SrtForm {
+    #[serde(flatten)]
+    address: SrtAddress,
+    #[serde(default)]
+    decoder_delay_ms: u32,
+}
+
+/// Why lmix-core would refuse the SRT input of the form's fields, as
+/// `SrtProblem` JSON; empty when it takes it. The core's own check
+/// (`check_srt`) on the address `srt_uri` makes, so form and core agree.
+pub fn srt_check(fields: &str) -> String {
+    let problem = match serde_json::from_str::<SrtForm>(fields) {
+        // Only a port outside u16 fails to read here.
+        Err(_) => lmix_types::SrtProblem::NoPort,
+        Ok(form) => {
+            let delay = (form.decoder_delay_ms > 0).then_some(form.decoder_delay_ms);
+            let checked = form
+                .address
+                .check()
+                .and_then(|()| lmix_types::srt::check_srt(&form.address.uri(), delay));
+            match checked {
+                Ok(_) if form.address.port == 0 => lmix_types::SrtProblem::NoPort,
+                Ok(_) => return String::new(),
+                Err(problem) => problem,
+            }
+        }
+    };
+    serde_json::to_string(&problem).unwrap_or_default()
 }
 
 /// `#rrggbb` in lower case, from QML's colour text (`#RRGGBB` or
@@ -688,7 +723,58 @@ mod tests {
         // Fields left out take their defaults: a caller without latency.
         assert_eq!(srt_uri(r#"{"host":"cam","port":7001}"#), "srt://cam:7001");
         assert_eq!(srt_uri("not json"), "");
-        assert_eq!(srt_fields("rtmp://cam"), "");
+        assert_eq!(srt_fields("rtmp://cam"), r#"{"problem":"no_srt"}"#);
+        assert_eq!(srt_fields("srt://cam"), r#"{"problem":"no_port"}"#);
+    }
+
+    /// Field JSON → address → the core's check, with what the review of
+    /// SRC.12 found: hosts that are no host, passphrases in bytes.
+    #[test]
+    fn srt_check_is_the_cores_check_of_the_address_the_fields_make() {
+        let check = |fields: serde_json::Value| -> Option<String> {
+            let problem = srt_check(&fields.to_string());
+            (!problem.is_empty()).then(|| {
+                let v: serde_json::Value = serde_json::from_str(&problem).unwrap();
+                v["problem"].as_str().unwrap().to_string()
+            })
+        };
+        let base = |host: &str, passphrase: &str| serde_json::json!({"mode": "caller", "host": host, "port": 9000, "passphrase": passphrase});
+        assert_eq!(check(base("cam.local", "")), None);
+        for host in ["cam.local:9000", "srt://cam", "cam local", "user@cam"] {
+            assert_eq!(check(base(host, "")).as_deref(), Some("bad_host"), "{host}");
+            // And the core refuses the address the fields make.
+            let uri = srt_uri(&base(host, "").to_string());
+            assert!(lmix_types::srt::check_srt(&uri, None).is_err(), "{uri}");
+        }
+        assert_eq!(check(base("cam", "äääää")), None, "10 bytes");
+        assert_eq!(
+            check(base("cam", "ääää")).as_deref(),
+            Some("passphrase_length")
+        );
+        assert_eq!(
+            check(base("cam", &format!("{}äää", "x".repeat(75)))).as_deref(),
+            Some("passphrase_length"),
+            "78 characters, 81 bytes"
+        );
+        assert_eq!(check(base("", "")).as_deref(), Some("needs_host"));
+        assert_eq!(
+            check(serde_json::json!({"mode": "listener", "port": 0})).as_deref(),
+            Some("no_port")
+        );
+        assert_eq!(
+            check(serde_json::json!({"mode": "listener", "port": 70000})).as_deref(),
+            Some("no_port")
+        );
+        assert_eq!(
+            check(serde_json::json!({"mode": "listener", "port": 9000, "latency_ms": 20000}))
+                .as_deref(),
+            Some("latency_too_high")
+        );
+        assert_eq!(
+            check(serde_json::json!({"mode": "listener", "port": 9000, "decoder_delay_ms": 20000}))
+                .as_deref(),
+            Some("decoder_delay_too_high")
+        );
     }
 
     #[test]
