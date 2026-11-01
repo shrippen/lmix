@@ -162,6 +162,9 @@ AppPage {
                     anchors.margins: Kirigami.Units.largeSpacing
                     readonly property var output: root.selected
                     readonly property var spec: output ? output.spec : ({})
+                    property int delayLeft: 0
+                    // Another output picked: its own countdown at once.
+                    onOutputChanged: delayLeft = Texts.sendDelayLeft(output, Date.now())
                     RowLayout {
                         Layout.fillWidth: true
                         KanteSectionLabel {
@@ -186,6 +189,21 @@ AppPage {
                         visible: detail.spec.video_kbps !== undefined
                         label: qsTr("Video")
                         value: detail.spec.video_kbps !== undefined ? qsTr("%1 kbit/s").arg(detail.spec.video_kbps) : ""
+                    }
+                    // STR.5: how late it sends; while it fills, when it is on air.
+                    Detail {
+                        objectName: "delayDetail"
+                        visible: (detail.spec.delay_s || 0) > 0
+                        label: qsTr("Delay")
+                        value: Texts.sendDelay(detail.spec.delay_s || 0, detail.delayLeft)
+                    }
+                    Timer {
+                        running: detail.output !== null && detail.output.status.state === "running" && (detail.spec.delay_s || 0) > 0
+                        repeat: true
+                        triggeredOnStart: true
+                        interval: 1000
+                        onTriggered: detail.delayLeft = Texts.sendDelayLeft(detail.output, Date.now())
+                        onRunningChanged: if (!running) detail.delayLeft = 0
                     }
                     Detail {
                         visible: detail.output !== null && root.links[detail.output.id] !== undefined
@@ -283,6 +301,8 @@ AppPage {
         readonly property bool isWaiting: output.status.state === "cards_off"
         readonly property var link: root.links[output.id]
         property string elapsed: ""
+        /** Seconds until a delayed stream is on air (STR.5). */
+        property int delayLeft: 0
         width: ListView.view ? ListView.view.width : 0
         implicitHeight: rowLayout.implicitHeight + Kirigami.Units.smallSpacing * 2
         color: root.selected !== null && root.selected.id === output.id ? KanteStyle.sunkenColor : "transparent"
@@ -295,7 +315,10 @@ AppPage {
             repeat: true
             triggeredOnStart: true
             interval: 1000
-            onTriggered: row.elapsed = root.backend.runningTime(row.output.status.since_ms)
+            onTriggered: {
+                row.elapsed = root.backend.runningTime(row.output.status.since_ms)
+                row.delayLeft = Texts.sendDelayLeft(row.output, Date.now())
+            }
         }
 
         RowLayout {
@@ -326,9 +349,12 @@ AppPage {
                 }
             }
             QQC2.Label {
+                objectName: "elapsed"
                 Layout.preferredWidth: Kirigami.Units.gridUnit * 5
-                text: row.isRunning ? row.elapsed : "—"
+                // A delayed stream counts down until it is on air.
+                text: !row.isRunning ? "—" : row.delayLeft > 0 ? Texts.countdown(row.delayLeft) : row.elapsed
                 font.family: KanteStyle.monoFamily
+                color: row.isRunning && row.delayLeft > 0 ? KanteStyle.mutedTextColor : KanteStyle.textColor
             }
             QQC2.Label {
                 Layout.fillWidth: true

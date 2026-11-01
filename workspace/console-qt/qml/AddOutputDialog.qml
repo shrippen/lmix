@@ -102,6 +102,9 @@ KanteDialog {
     /** Channel pairs of the chosen channels: 1, 4 or 8. */
     readonly property int cardPairs: cardChannels[cardChannelsBox.currentIndex] ? Number(cardChannels[cardChannelsBox.currentIndex].value) / 2 : 1
     readonly property bool encodes: kind === "srt" || kind === "rtmp" || kind === "record"
+    /** Streams can go out late (STR.5). */
+    readonly property bool streams: kind === "srt" || kind === "rtmp"
+    readonly property int sendDelayMax: JSON.parse(core.choices("stream_limits")).delay_s_max || 0
     /** Screens show picture only. */
     readonly property bool carriesSound: kind !== "window" && kind !== "fullscreen" && kind !== "drm"
     readonly property var hints: ({
@@ -194,6 +197,7 @@ KanteDialog {
         codecBox.currentIndex = encoding.codec === "h265" ? 1 : 0
         rateBox.currentIndex = encoding.rate === "cbr" ? 1 : 0
         keyframes.value = encoding.keyframe_ms !== undefined ? Math.round(encoding.keyframe_ms / 1000) : 2
+        sendDelay.value = spec.delay_s || 0
         containerBox.currentIndex = Math.max(0, containers.findIndex(c => c.value === (spec.container || "mkv")))
         const source = output.source || { from: "program" }
         const at = source.from === "input" ? inputs.findIndex(i => i.id === source.input) : -1
@@ -235,7 +239,8 @@ KanteDialog {
                 keyframe_ms: Math.round(keyframes.value * 1000)
             },
             name: nameField.text,
-            bus: dialog.chosenBus()
+            bus: dialog.chosenBus(),
+            delay_s: dialog.streams ? sendDelay.value : 0
         })
     }
     /** Bus id of the sound choice; empty: the source's own. */
@@ -449,6 +454,25 @@ KanteDialog {
                     value: 2
                     editable: true
                     KanteFieldSkin { control: keyframes }
+                }
+            }
+
+            // STR.5: the stream waits in memory and goes out this much later.
+            RowLayout {
+                visible: dialog.streams
+                KanteSectionLabel { text: qsTr("Send delay (s)") }
+                QQC2.SpinBox {
+                    id: sendDelay
+                    objectName: "sendDelay"
+                    from: 0
+                    to: dialog.sendDelayMax
+                    editable: true
+                    KanteFieldSkin { control: sendDelay }
+                }
+                KanteInfoTip {
+                    term: qsTr("Send delay")
+                    accessibleName: qsTr("Help on the send delay")
+                    info: qsTr("0: live. Picture and sound wait this long before they go out, e.g. against spoilers or for a moment to react. A stop still sends what waits.")
                 }
             }
 

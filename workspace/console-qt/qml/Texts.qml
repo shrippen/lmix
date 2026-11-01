@@ -227,6 +227,23 @@ QtObject {
             .arg(link.packets_dropped).arg(rtt)
     }
 
+    /** Seconds until a running stream's delayed picture reaches its
+     *  receivers (STR.5); 0 when it is live, there already or not running. */
+    function sendDelayLeft(output, nowMs) {
+        const delay = output && output.spec && output.spec.delay_s ? output.spec.delay_s : 0
+        if (delay <= 0 || !output.status || output.status.state !== "running")
+            return 0
+        return Math.max(0, Math.ceil((output.status.since_ms + delay * 1000 - nowMs) / 1000))
+    }
+    /** The countdown of a delayed stream in the running time's place: −0:07. */
+    function countdown(seconds) {
+        return "\u2212" + Math.floor(seconds / 60) + ":" + String(seconds % 60).padStart(2, "0")
+    }
+    /** A stream's send delay with its countdown while it fills (STR.5). */
+    function sendDelay(delayS, left) {
+        return left > 0 ? qsTr("%1 s, on air in %2 s").arg(delayS).arg(left) : qsTr("%1 s").arg(delayS)
+    }
+
     /** An output's kind (`spec.kind`). */
     function outputKind(spec) {
         switch (spec.kind) {
@@ -309,6 +326,7 @@ QtObject {
         case "unknown_data_source": return qsTr("No data source matches %1").arg(e.reference)
         case "bad_data_source": return qsTr("Data source: %1").arg(e.reason)
         case "bad_encoding": return qsTr("Encoding: %1").arg(e.reason)
+        case "bad_delay": return qsTr("Send delay: %1").arg(e.reason)
         case "bad_sample_rate": return qsTr("Sample rate %1 Hz: 48000 or 44100").arg(e.hz)
         case "layouts_full": return qsTr("All %1 layouts are in use").arg(e.max)
         case "unknown_layout": return qsTr("No layout %1").arg(e.reference)

@@ -53,7 +53,9 @@ RowLayout {
 
             // Running time ticks with the clock below.
             property string elapsed: ""
-            text: modelData.name + (running ? "  " + elapsed : "") + (link ? "  " + Texts.linkRate(link) : "")
+            /** Seconds until a delayed stream is on air (STR.5). */
+            property int delayLeft: 0
+            text: modelData.name + (running ? "  " + (delayLeft > 0 ? Texts.countdown(delayLeft) : elapsed) : "") + (link ? "  " + Texts.linkRate(link) : "")
             emphasis: running ? KanteButton.Emphasis.Primary
                 : (status.state === "failed" ? KanteButton.Emphasis.Destructive : KanteButton.Emphasis.Normal)
             enabled: bar.core.connected
@@ -77,7 +79,9 @@ RowLayout {
                 var state = running ? qsTr("Running")
                     : (status.state === "failed" ? qsTr("Failed: %1").arg(status.message)
                     : (status.state === "cards_off" ? qsTr("Waiting for the cards") : qsTr("Stopped")))
-                return state + (link ? "\n" + Texts.linkDetail(link) : "") + "\n" + qsTr("Click: start or stop. Right click: menu.")
+                const delay = modelData.spec && modelData.spec.delay_s ? modelData.spec.delay_s : 0
+                return state + (delay > 0 ? "\n" + qsTr("Send delay %1").arg(Texts.sendDelay(delay, running ? delayLeft : 0)) : "")
+                    + (link ? "\n" + Texts.linkDetail(link) : "") + "\n" + qsTr("Click: start or stop. Right click: menu.")
             }
 
             Timer {
@@ -85,7 +89,10 @@ RowLayout {
                 repeat: true
                 triggeredOnStart: true
                 interval: 1000
-                onTriggered: button.elapsed = bar.core.runningTime(button.status.since_ms)
+                onTriggered: {
+                    button.elapsed = bar.core.runningTime(button.status.since_ms)
+                    button.delayLeft = Texts.sendDelayLeft(button.modelData, Date.now())
+                }
             }
 
             TapHandler {

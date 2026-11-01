@@ -90,6 +90,13 @@ const CARD_SOUND: &str = "card_sound";
 const CARD_PAIRS: &str = "card_pairs";
 /// Plays a card output's sound later (lip sync).
 const CARD_SOUND_DELAY: &str = "card_sound_delay";
+/// Queues that hold a delayed stream (STR.5): its encoded picture and
+/// its sound.
+const SEND_DELAY_VIDEO: &str = "send_delay_video";
+const SEND_DELAY_SOUND: &str = "send_delay_sound";
+/// Room in them beyond the delay: a stream block that stalls for a moment
+/// (a slow network) does not hold up the encoder at once.
+const SEND_DELAY_HEADROOM_S: u32 = 2;
 /// Picks a card input's channel pair.
 const CARD_PAIR: &str = "card_pair";
 /// Banner on a card input's slot while the cards are off.
@@ -880,8 +887,10 @@ pub fn output_flow(
             uri,
             video_kbps,
             encoding,
+            delay_s,
         } => {
             add_encoder(&mut flow, *video_kbps, encoding, framerate);
+            let (video, sound_out) = add_send_delay(&mut flow, *delay_s, sound);
             flow.blocks.push(block(
                 "srt",
                 SRT_OUTPUT_BLOCK,
@@ -891,11 +900,9 @@ pub fn output_flow(
                     ("wait_for_connection", PropertyValue::Bool(false)),
                 ],
             ));
-            flow.links
-                .push(link("enc:encoded_out".into(), "srt:video_in".into()));
-            if sound {
-                flow.links
-                    .push(link(OUTPUT_SOUND_TIMED.into(), "srt:audio_in_0".into()));
+            flow.links.push(link(video, "srt:video_in".into()));
+            if let Some(sound_out) = sound_out {
+                flow.links.push(link(sound_out, "srt:audio_in_0".into()));
             }
         }
         OutputSpec::Rtmp {
@@ -903,8 +910,10 @@ pub fn output_flow(
             key,
             video_kbps,
             encoding,
+            delay_s,
         } => {
             add_encoder(&mut flow, *video_kbps, encoding, framerate);
+            let (video, sound_out) = add_send_delay(&mut flow, *delay_s, sound);
             flow.blocks.push(block(
                 "rtmp",
                 RTMP_OUTPUT_BLOCK,
@@ -919,12 +928,10 @@ pub fn output_flow(
                     ("sync", PropertyValue::Bool(false)),
                 ],
             ));
-            flow.links
-                .push(link("enc:encoded_out".into(), "rtmp:video_in".into()));
+            flow.links.push(link(video, "rtmp:video_in".into()));
             // The block encodes raw sound to AAC itself.
-            if sound {
-                flow.links
-                    .push(link(OUTPUT_SOUND_TIMED.into(), "rtmp:audio_in".into()));
+            if let Some(sound_out) = sound_out {
+                flow.links.push(link(sound_out, "rtmp:audio_in".into()));
             }
         }
         OutputSpec::Record {
@@ -994,6 +1001,48 @@ pub fn output_flow(
         }
     }
     flow
+}
+
+/// Pads a stream's encoded picture and its sound leave from, `delay_s`
+/// seconds late (STR.5): each waits in a queue that lets nothing out
+/// before it holds that much. The picture waits encoded, the sound raw
+/// (the stream blocks encode it): both in memory, a few MB per second at
+/// most. Both queues report the delay as latency, so the TS muxer and a
+/// syncing sink wait for the late data instead of dropping it. A live
+/// stream (0) goes straight on.
+///
+/// ```text
+///   enc:encoded_out ─► send_delay_video ─► (stream) video
+///   sound ─────────────► send_delay_sound ─► (stream) audio
+/// ```
+fn add_send_delay(flow: &mut Flow, delay_s: u32, sound: bool) -> (String, Option<String>) {
+    let encoded = "enc:encoded_out".to_string();
+    let timed = sound.then(|| OUTPUT_SOUND_TIMED.to_string());
+    if delay_s == 0 {
+        return (encoded, timed);
+    }
+    let video = add_delay_queue(flow, SEND_DELAY_VIDEO, encoded, delay_s);
+    let sound = timed.map(|from| add_delay_queue(flow, SEND_DELAY_SOUND, from, delay_s));
+    (video, sound)
+}
+
+/// A queue `id` after `from` that holds `delay_s` seconds before it lets
+/// anything out, with room for `SEND_DELAY_HEADROOM_S` more; no limit in
+/// buffers or bytes (the time is the limit).
+fn add_delay_queue(flow: &mut Flow, id: &str, from: String, delay_s: u32) -> String {
+    let ns = |s: u32| PropertyValue::UInt(u64::from(s) * 1_000_000_000);
+    flow.elements.push(element(
+        id,
+        "queue",
+        vec![
+            ("min-threshold-time", ns(delay_s)),
+            ("max-size-time", ns(delay_s + SEND_DELAY_HEADROOM_S)),
+            ("max-size-buffers", PropertyValue::UInt(0)),
+            ("max-size-bytes", PropertyValue::UInt(0)),
+        ],
+    ));
+    flow.links.push(link(from, id.into()));
+    id.into()
 }
 
 /// An output flow's inter input `id` of `channel`, buffering `extra_ms`
@@ -2870,6 +2919,7 @@ mod tests {
             uri: "srt://:9000?mode=listener".into(),
             video_kbps: 6000,
             encoding: Default::default(),
+            delay_s: 0,
         };
         let flow = output_flow(
             OutputId::new(),
@@ -3078,6 +3128,7 @@ mod tests {
             uri: "srt://cdn:9000".into(),
             video_kbps: 6000,
             encoding: Default::default(),
+            delay_s: 0,
         };
         let flow = output_flow(
             OutputId::new(),
@@ -3103,6 +3154,7 @@ mod tests {
             key: "abcd-1234".into(),
             video_kbps: 4500,
             encoding: Default::default(),
+            delay_s: 0,
         };
         let flow = output_flow(
             OutputId::new(),
@@ -3137,6 +3189,86 @@ mod tests {
         }
     }
 
+    /// STR.5: a delayed stream's picture and sound each wait in a queue
+    /// that lets nothing out before it holds the delay; a live one has
+    /// none.
+    #[test]
+    fn a_delayed_stream_waits_in_memory() {
+        let streams = [
+            (
+                OutputSpec::Srt {
+                    uri: "srt://cdn:9000".into(),
+                    video_kbps: 6000,
+                    encoding: Default::default(),
+                    delay_s: 10,
+                },
+                "srt:video_in",
+                "srt:audio_in_0",
+            ),
+            (
+                OutputSpec::Rtmp {
+                    url: "rtmp://a.rtmp.example.com/live2".into(),
+                    key: String::new(),
+                    video_kbps: 6000,
+                    encoding: Default::default(),
+                    delay_s: 10,
+                },
+                "rtmp:video_in",
+                "rtmp:audio_in",
+            ),
+        ];
+        let flow_of = |spec: &OutputSpec| {
+            output_flow(
+                OutputId::new(),
+                spec,
+                Feed::Program,
+                None,
+                MixerBackend::Cpu,
+                Framerate::default(),
+                LiveMkv::Yes,
+            )
+        };
+        let uint = |q: &Element, name: &str| match q.properties.get(name) {
+            Some(PropertyValue::UInt(v)) => Some(*v),
+            _ => None,
+        };
+        let ns = |s: u64| Some(s * 1_000_000_000);
+        for (spec, video_in, audio_in) in streams {
+            let flow = flow_of(&spec);
+            for (queue, from, to) in [
+                (SEND_DELAY_VIDEO, "enc:encoded_out", video_in),
+                (SEND_DELAY_SOUND, OUTPUT_SOUND_TIMED, audio_in),
+            ] {
+                let q = flow.elements.iter().find(|e| e.id == queue).unwrap();
+                assert_eq!(q.element_type, "queue");
+                assert_eq!(uint(q, "min-threshold-time"), ns(10));
+                assert_eq!(uint(q, "max-size-time"), ns(12));
+                for limit in ["max-size-buffers", "max-size-bytes"] {
+                    assert_eq!(uint(q, limit), Some(0));
+                }
+                for (a, b) in [(from, queue), (queue, to)] {
+                    assert!(
+                        flow.links.iter().any(|l| l.from == a && l.to == b),
+                        "{a} -> {b}"
+                    );
+                }
+                // Nothing goes around the queue.
+                assert!(!flow.links.iter().any(|l| l.from == from && l.to == to));
+            }
+
+            let mut live = spec.clone();
+            if let OutputSpec::Srt { delay_s, .. } | OutputSpec::Rtmp { delay_s, .. } = &mut live {
+                *delay_s = 0;
+            }
+            let flow = flow_of(&live);
+            assert!(flow.elements.iter().all(|e| e.element_type != "queue"));
+            assert!(flow
+                .links
+                .iter()
+                .any(|l| l.from == "enc:encoded_out" && l.to == video_in));
+        }
+    }
+
     #[test]
     fn an_output_encodes_as_it_is_told() {
         let spec = OutputSpec::Srt {
@@ -3147,6 +3279,7 @@ mod tests {
                 rate: RateMode::Cbr,
                 keyframe_ms: 2000,
             },
+            delay_s: 0,
         };
         let flow = output_flow(
             OutputId::new(),
@@ -3564,12 +3697,14 @@ mod tests {
                 uri: "srt://cdn:9000".into(),
                 video_kbps: 4000,
                 encoding: Default::default(),
+                delay_s: 0,
             },
             OutputSpec::Rtmp {
                 url: "rtmp://a.rtmp.example.com/live2/".into(),
                 key: "k".into(),
                 video_kbps: 4000,
                 encoding: Default::default(),
+                delay_s: 0,
             },
             OutputSpec::Record {
                 folder: "rec".into(),

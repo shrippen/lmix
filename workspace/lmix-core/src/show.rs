@@ -1013,6 +1013,7 @@ mod tests {
                     uri: "srt://cdn:9000".into(),
                     video_kbps: 6000,
                     encoding: Default::default(),
+                    delay_s: 0,
                 },
                 source: OutputSource::Input(id),
                 bus: Some(in_ear),

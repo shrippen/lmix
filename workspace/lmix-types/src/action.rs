@@ -1600,6 +1600,8 @@ pub enum ActionError {
     OutputSending { reference: String },
     #[error("encoding: {reason}")]
     BadEncoding { reason: String },
+    #[error("send delay: {reason}")]
+    BadDelay { reason: String },
     #[error("sample rate {hz} Hz: 48000 or 44100")]
     BadSampleRate { hz: u32 },
     #[error("no input matches {reference}")]

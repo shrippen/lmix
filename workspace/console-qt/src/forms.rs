@@ -51,6 +51,12 @@ pub fn values(list: &str) -> Option<String> {
                     .to_string(),
             )
         }
+        // A stream's longest send delay (STR.5).
+        "stream_limits" => {
+            return Some(
+                serde_json::json!({ "delay_s_max": lmix_types::MAX_SEND_DELAY_S }).to_string(),
+            )
+        }
         // How many buses a show has at most, and how long their names are.
         "bus_limits" => {
             return Some(
@@ -226,6 +232,9 @@ pub struct OutputForm {
     /// A card output's sound beyond its mode.
     #[serde(default)]
     pub card: CardSoundForm,
+    /// A stream's send delay in seconds (STR.5); other outputs ignore it.
+    #[serde(default)]
+    pub delay_s: u32,
 }
 
 /// A card output's sound as the form sends it.
@@ -267,6 +276,15 @@ pub fn with_card_sound(mut spec: OutputSpec, form: &CardSoundForm) -> OutputSpec
     spec
 }
 
+/// `spec` sending `seconds` late if it is a stream (STR.5); other
+/// outputs as they are.
+fn with_send_delay(mut spec: OutputSpec, seconds: u32) -> OutputSpec {
+    if let OutputSpec::Srt { delay_s, .. } | OutputSpec::Rtmp { delay_s, .. } = &mut spec {
+        *delay_s = seconds;
+    }
+    spec
+}
+
 /// The output the "add output" form describes; `None` while a needed
 /// field is empty.
 pub fn output_of(
@@ -293,12 +311,14 @@ pub fn output_of(
             uri: text,
             video_kbps,
             encoding,
+            delay_s: 0,
         },
         "rtmp" => OutputSpec::Rtmp {
             url: text,
             key: key.trim().to_string(),
             video_kbps,
             encoding,
+            delay_s: 0,
         },
         "record" => OutputSpec::Record {
             folder: text,
@@ -369,6 +389,7 @@ fn output_parts(form: &OutputForm) -> Option<(OutputSpec, OutputSource, Option<S
         &form.mode,
     )?;
     let spec = with_card_sound(spec, &form.card);
+    let spec = with_send_delay(spec, form.delay_s);
     let name = form.name.trim().to_string();
     Some((
         spec,
@@ -643,6 +664,29 @@ mod tests {
         // A needed field empty, or no form at all.
         assert_eq!(update_output_action("o1", &form.replace("Desk", "")), None);
         assert_eq!(update_output_action("o1", "{"), None);
+    }
+
+    // STR.5: a stream takes the delay; other outputs have none.
+    #[test]
+    fn a_stream_form_delays() {
+        let form = r#"{"kind":"rtmp","text":"rtmp://a/live","key":"k","source":"program","video_kbps":0,"delay_s":7}"#;
+        let Some(Action::AddOutput { spec, .. }) = add_output_action(form) else {
+            panic!("an output");
+        };
+        assert_eq!(spec.send_delay_s(), 7);
+        let srt = form.replace(r#""kind":"rtmp""#, r#""kind":"srt""#);
+        let Some(Action::UpdateOutput { spec, .. }) = update_output_action("o1", &srt) else {
+            panic!("an update");
+        };
+        assert!(matches!(spec, OutputSpec::Srt { delay_s: 7, .. }));
+        let record = form.replace(r#""kind":"rtmp""#, r#""kind":"record""#);
+        let Some(Action::AddOutput { spec, .. }) = add_output_action(&record) else {
+            panic!("an output");
+        };
+        assert_eq!(spec.send_delay_s(), 0);
+        let limits: serde_json::Value =
+            serde_json::from_str(&values("stream_limits").unwrap()).unwrap();
+        assert_eq!(limits["delay_s_max"], lmix_types::MAX_SEND_DELAY_S);
     }
 
     #[test]

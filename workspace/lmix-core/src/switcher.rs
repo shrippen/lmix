@@ -5770,6 +5770,9 @@ impl Switcher {
         if let Some(reason) = spec.card_problem() {
             return Err(ActionError::BadCard { reason });
         }
+        if let Some(reason) = spec.delay_problem() {
+            return Err(ActionError::BadDelay { reason });
+        }
         if let Some(bus) = pair_buses(&spec).find(|b| !self.show.buses.iter().any(|s| s.id == *b)) {
             return Err(ActionError::UnknownBus {
                 reference: bus.to_string(),
@@ -8859,6 +8862,7 @@ mod tests {
             uri: "srt://cdn:9000".into(),
             video_kbps: 6000,
             encoding: Default::default(),
+            delay_s: 0,
         };
         sw.apply(Action::AddOutput {
             spec: srt,
@@ -8898,6 +8902,7 @@ mod tests {
                     uri: "srt://cdn:9001".into(),
                     video_kbps: 6000,
                     encoding: Default::default(),
+                    delay_s: 0,
                 },
                 source: OutputSource::Program,
                 name: None,
@@ -8978,6 +8983,7 @@ mod tests {
             uri: format!("srt://cdn:{port}"),
             video_kbps: 6000,
             encoding: Default::default(),
+            delay_s: 0,
         };
         sw.apply(Action::AddOutput {
             spec: srt(9000),
@@ -10461,6 +10467,7 @@ mod tests {
             uri: format!("srt://cdn:{port}"),
             video_kbps: 6000,
             encoding: Default::default(),
+            delay_s: 0,
         }
     }
 
@@ -11047,6 +11054,7 @@ mod tests {
             key: String::new(),
             video_kbps: 6000,
             encoding: Default::default(),
+            delay_s: 0,
         };
         assert!(sw.apply(update(rtmp, Some(None))).is_err());
         assert_eq!(sw.state().outputs[0].bus, Some(stream));
@@ -11188,6 +11196,7 @@ mod tests {
             key: String::new(),
             video_kbps: 6000,
             encoding: Default::default(),
+            delay_s: 0,
         };
         assert!(matches!(
             sw.apply(update(rtmp, OutputSource::Program)),
@@ -11204,6 +11213,20 @@ mod tests {
         assert!(matches!(
             sw.apply(update(card(vec![Some(stream)]), OutputSource::Program)),
             Err(ActionError::BadCard { .. })
+        ));
+        // STR.5: a delay past the limit would fill the memory.
+        let delayed = |delay_s| OutputSpec::Srt {
+            uri: "srt://cdn:9000".into(),
+            video_kbps: 6000,
+            encoding: Default::default(),
+            delay_s,
+        };
+        assert!(matches!(
+            sw.apply(update(
+                delayed(lmix_types::MAX_SEND_DELAY_S + 1),
+                OutputSource::Program
+            )),
+            Err(ActionError::BadDelay { .. })
         ));
         assert!(matches!(
             sw.apply(update(srt_at(9000), OutputSource::Input(InputId::new()))),
@@ -11222,6 +11245,15 @@ mod tests {
         // Refused, nothing changed and nothing to bring back.
         assert_eq!(sw.state().outputs[0], before);
         assert_eq!(restorable(&sw), None);
+        sw.apply(update(
+            delayed(lmix_types::MAX_SEND_DELAY_S),
+            OutputSource::Program,
+        ))
+        .unwrap();
+        assert_eq!(
+            sw.state().outputs[0].spec.send_delay_s(),
+            lmix_types::MAX_SEND_DELAY_S
+        );
     }
 
     #[test]
@@ -11231,6 +11263,7 @@ mod tests {
             uri: format!("srt://cdn:{port}"),
             video_kbps: 6000,
             encoding: Default::default(),
+            delay_s: 0,
         };
         for port in [9000, 9001] {
             sw.apply(Action::AddOutput {
@@ -11316,6 +11349,7 @@ mod tests {
                 uri: "srt://cdn:9000".into(),
                 video_kbps: 6000,
                 encoding: Default::default(),
+                delay_s: 0,
             },
             source: OutputSource::Program,
             name: Some("CDN".into()),
@@ -11441,6 +11475,7 @@ mod tests {
                 uri: "srt://cdn:9000".into(),
                 video_kbps: 6000,
                 encoding: Default::default(),
+                delay_s: 0,
             },
             source: OutputSource::Program,
             name: Some("CDN".into()),
@@ -12541,6 +12576,7 @@ mod tests {
             uri: "srt://cdn:9000".into(),
             video_kbps: 6000,
             encoding: Default::default(),
+            delay_s: 0,
         };
         sw.apply(Action::AddOutput {
             spec: srt.clone(),
@@ -12659,6 +12695,7 @@ mod tests {
                 codec,
                 ..Default::default()
             },
+            delay_s: 0,
         };
         let add = |spec| Action::AddOutput {
             spec,
@@ -12731,6 +12768,7 @@ mod tests {
             uri: format!("srt://cdn:{port}"),
             video_kbps: 6000,
             encoding: Default::default(),
+            delay_s: 0,
         };
         let record = OutputSpec::Record {
             folder: "show".into(),

@@ -1,5 +1,6 @@
 import QtQuick
 import QtTest
+import QtQuick.Controls as QQC2
 import "../../qml"
 
 /**
@@ -17,6 +18,9 @@ TestCase {
     property var sent: []
     property var settings: []
     property var state: "stopped"
+    /** The output's send delay and start (STR.5). */
+    property int delay: 0
+    property real since: 0
 
     QtObject {
         id: fakeCore
@@ -37,8 +41,8 @@ TestCase {
             show: ({ outputs: [] })
             act: action => test.sent.push(action.action)
             outputs: keys
-            outputById: id => ({ id: id, number: 1, name: "Stream", spec: { kind: "srt", uri: "srt://:9000" },
-                status: { state: test.state, since_ms: 0 } })
+            outputById: id => ({ id: id, number: 1, name: "Stream", spec: { kind: "srt", uri: "srt://:9000", delay_s: test.delay },
+                status: { state: test.state, since_ms: test.since } })
             confirmStop: false
             onSettingsRequested: outputId => test.settings.push(outputId)
         }
@@ -48,6 +52,8 @@ TestCase {
         sent = []
         settings = []
         state = "stopped"
+        delay = 0
+        since = 0
     }
 
     function menuOf(bar) {
@@ -78,6 +84,20 @@ TestCase {
         state = "running"
         menu.stopRequested()
         compare(sent, ["start_output", "stop_output", "stop_output"])
+    }
+
+    // STR.5: a delayed stream counts down in place of its running time,
+    // then runs; the tooltip names the delay.
+    function test_a_delayed_stream_counts_down() {
+        delay = 10
+        since = Date.now() - 3000
+        state = "running"
+        const bar = createTemporaryObject(barComponent, test.Window.contentItem)
+        const button = bar.children.find(c => c.modelData !== undefined)
+        tryVerify(() => /^Stream  \u22120:0[67]$/.test(button.text), 1000, button.text)
+        verify(button.QQC2.ToolTip.text.indexOf("Send delay 10 s, on air in ") >= 0, button.QQC2.ToolTip.text)
+        since = Date.now() - 60000
+        tryCompare(button, "text", "Stream  00:00:01", 2000)
     }
 
     function test_settings_names_the_output() {

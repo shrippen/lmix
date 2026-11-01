@@ -30,6 +30,7 @@ TestCase {
             case "card_modes": return JSON.stringify(["1080p25", "1080i50"])
             case "card_channels": return JSON.stringify(["2", "8", "16"])
             case "card_limits": return JSON.stringify({ sound_delay_ms: 500 })
+            case "stream_limits": return JSON.stringify({ delay_s_max: 60 })
             }
             return "[]"
         }
@@ -201,5 +202,31 @@ TestCase {
         compare(form.bus, "")
         compare(form.video_kbps, 6000)
         compare(form.encoding.codec, "h264")
+        compare(form.delay_s, 0)
+    }
+
+    // STR.5: a stream's send delay is in the form and back; other
+    // outputs neither show nor send it.
+    function test_a_stream_keeps_its_send_delay() {
+        outputs = [Object.assign(output("stopped"), {
+            spec: { kind: "rtmp", url: "rtmp://a/live", key: "k", delay_s: 10 } })]
+        const dialog = createTemporaryObject(dialogComponent, test)
+        dialog.edit("o1")
+        opened(dialog)
+        const delay = findChild(dialog.contentItem, "sendDelay")
+        verify(delay.visible)
+        compare(delay.value, 10)
+        compare(delay.to, 60)
+        compare(JSON.parse(dialog.form()).delay_s, 10)
+        delay.value = 25
+        dialog.accept()
+        compare(updates[0].action.form.delay_s, 25)
+
+        outputs = [Object.assign(output("stopped"), {
+            spec: { kind: "record", folder: "show", delay_s: 10 } })]
+        dialog.edit("o1")
+        opened(dialog)
+        verify(!delay.visible)
+        compare(JSON.parse(dialog.form()).delay_s, 0)
     }
 }

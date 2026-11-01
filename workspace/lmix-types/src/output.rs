@@ -184,6 +184,10 @@ impl VideoEncoding {
     }
 }
 
+/// Longest send delay of a stream (STR.5). The delayed stream waits in
+/// memory, encoded: a minute at 50 Mbit/s is about 400 MB.
+pub const MAX_SEND_DELAY_S: u32 = 60;
+
 /// What an output does with program.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
 #[serde(tag = "kind", rename_all = "snake_case")]
@@ -197,6 +201,9 @@ pub enum OutputSpec {
         /// Codec, rate control and keyframe interval (STR.3).
         #[serde(default, skip_serializing_if = "VideoEncoding::is_default")]
         encoding: VideoEncoding,
+        /// Sends everything this many seconds late (STR.5); 0: live.
+        #[serde(default, skip_serializing_if = "is_zero")]
+        delay_s: u32,
     },
     /// Recording, H.264 + AAC, into `folder` below the engine's media
     /// directory (REC.1).
@@ -223,6 +230,9 @@ pub enum OutputSpec {
         /// keyframe interval (STR.3).
         #[serde(default, skip_serializing_if = "VideoEncoding::is_default")]
         encoding: VideoEncoding,
+        /// Sends everything this many seconds late (STR.5); 0: live.
+        #[serde(default, skip_serializing_if = "is_zero")]
+        delay_s: u32,
     },
     /// NDI on the network, uncompressed program (OUT.6).
     Ndi { name: String },
@@ -270,6 +280,22 @@ impl OutputSpec {
             | OutputSpec::Record { encoding, .. } => Some(encoding),
             _ => None,
         }
+    }
+
+    /// Seconds a stream sends late (STR.5); 0 for live streams and for
+    /// outputs that are no stream.
+    pub fn send_delay_s(&self) -> u32 {
+        match self {
+            OutputSpec::Srt { delay_s, .. } | OutputSpec::Rtmp { delay_s, .. } => *delay_s,
+            _ => 0,
+        }
+    }
+
+    /// What is wrong with a stream's send delay: more than
+    /// `MAX_SEND_DELAY_S` (STR.5).
+    pub fn delay_problem(&self) -> Option<String> {
+        let delay_s = self.send_delay_s();
+        (delay_s > MAX_SEND_DELAY_S).then(|| format!("{delay_s} s, at most {MAX_SEND_DELAY_S} s"))
     }
 
     /// Why the engine could not send this, if it could not (STR.2, STR.3).
@@ -536,5 +562,40 @@ mod tests {
             sound_delay_ms: 0,
         };
         assert_eq!(card.default_name(), "Card 4294967296 720p50");
+    }
+
+    fn srt(delay_s: u32) -> OutputSpec {
+        OutputSpec::Srt {
+            uri: "srt://host:9000".into(),
+            video_kbps: DEFAULT_VIDEO_KBPS,
+            encoding: VideoEncoding::default(),
+            delay_s,
+        }
+    }
+
+    // STR.5: shows from before the delay read as live, and a live stream
+    // writes nothing new.
+    #[test]
+    fn a_stream_is_live_unless_delayed() {
+        let old: OutputSpec =
+            serde_json::from_str(r#"{"kind":"srt","uri":"srt://host:9000"}"#).unwrap();
+        assert_eq!(old, srt(0));
+        let json = serde_json::to_string(&old).unwrap();
+        assert!(!json.contains("delay"), "{json}");
+        let json = serde_json::to_value(srt(10)).unwrap();
+        assert_eq!(json["delay_s"], 10);
+        let rtmp: OutputSpec =
+            serde_json::from_str(r#"{"kind":"rtmp","url":"rtmp://a/live","delay_s":7}"#).unwrap();
+        assert_eq!(rtmp.send_delay_s(), 7);
+    }
+
+    #[test]
+    fn a_send_delay_stays_in_memory_bounds() {
+        assert_eq!(srt(0).delay_problem(), None);
+        assert_eq!(srt(MAX_SEND_DELAY_S).delay_problem(), None);
+        assert!(srt(MAX_SEND_DELAY_S + 1).delay_problem().is_some());
+        let ndi = OutputSpec::Ndi { name: "x".into() };
+        assert_eq!(ndi.send_delay_s(), 0);
+        assert_eq!(ndi.delay_problem(), None);
     }
 }
