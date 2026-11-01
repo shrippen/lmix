@@ -8268,9 +8268,9 @@ ungenutzt). Das kann lmix-core nicht sehen; eigenes Thema.
 
 Beleg: `a_tap_without_a_frame_gives_no_picture` (gegen `main` rot: altes Bild statt `NotReady`).
 
-## 2026-11-01 — vm-check: „paused clip not held on program“ erledigt, Mischer hinter der Uhr
+## 2026-11-01 — vm-check: „paused clip not held on program“ erledigt
 
-Branch `vm-paused-clip`, nur Doku; strom unverändert (Submodul bleibt auf `dev` c426a7e).
+, Mischer hinter der Uhr Branch `vm-paused-clip`, nur Doku; strom unverändert (Submodul bleibt auf `dev` c426a7e).
 
 - **CI-Verlauf seit 25.10.:** 5 Fehlschläge mit „paused clip not held on program“ (40261817405,
   40668775295, 40960842473, 40968188881, 41012411347, 26.–30.10.), alle mit strom vor #55 (Pins
@@ -8296,11 +8296,16 @@ Branch `vm-paused-clip`, nur Doku; strom unverändert (Submodul bleibt auf `dev`
   ganze Test grün. Grund laut `videoaggregator:5`/`aggregator:6`: der CPU-Mischer schafft keine
   30 Bilder/s mehr, und der Live-Compositor rechnet trotzdem jedes Ausgabebild; wartet er nicht
   auf die Uhr („all pads have data“), läuft seine Ausgabe immer weiter hinter ihr her (0,2–0,55
-  s je Sekunde, bis 62 s; auf `0-3` in einem grünen Lauf 0 s). Nichts meldet ihm die Verspätung
-  (die Senken in strom verwerfen QoS), also überspringt er keine Bilder; er holt nur auf, wenn
-  die CPU wieder Luft hat (62 → 28 s). Alle Quellen stempeln mit der Uhr, ihre Bilder liegen für
-  den Mischer dann so weit in der Zukunft, und das Pad hält bis dahin sein altes Bild (Log:
-  „Keeping buffer until …“, 27 s voraus). Das erklärt wohl auch die „bis 6 s“ in CI (dort ohne
-  Log nicht nachgewiesen), ist aber Überlast, kein Fehler im Test oder in lmix-core. Ob strom
-  den Mischer bei Verspätung Bilder auslassen lässt (eigene QoS am Compositor), ist eine
-  Entscheidung für upstream (todo).
+  s je Sekunde, bis 62 s; auf `0-3` in einem grünen Lauf 0 s). Nichts meldet ihm die Verspätung,
+  also überspringt er keine Bilder: Program verlässt den Mischer-Flow nur über `intersink` und
+  den Vorschaubild-Abgriff, beides `appsink`s mit `qos=false`; die Senken mit `qos=true` (RTMP,
+  SRT, Aufnahme) stehen in eigenen Ausgangs-Flows hinter `intersrc`, und Upstream-Events laufen
+  nicht über die inter-Grenze zurück. strom #58 (`block-sink-qos`) wirkt nur in diesen
+  Ausgangs-Flows; es spielte hier nur hinein, wenn man am Program-`intersink` `qos=true` setzte,
+  dann schluckte seine Probe genau diese Events. Er holt nur auf, wenn die CPU wieder Luft hat
+  (62 → 28 s). Alle Quellen stempeln mit der Uhr, ihre Bilder liegen für den Mischer dann so
+  weit in der Zukunft, und das Pad hält bis dahin sein altes Bild (Log: „Keeping buffer until
+  …“, 27 s voraus). Das erklärt wohl auch die „bis 6 s“ in CI (dort ohne Log nicht
+  nachgewiesen), ist aber Überlast, kein Fehler im Test oder in lmix-core. Der Mischer muss
+  seine Verspätung darum selbst gegen die Uhr messen und verspätete Ausgabebilder auslassen; das
+  wird in strom gebaut (todo), dann Issue/PR bei Eyevinn.
