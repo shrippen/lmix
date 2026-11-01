@@ -321,7 +321,9 @@ KanteDialog {
 
     /** What a source points at, in a word or a path. */
     function sourceText(source) {
-        const value = source.path || source.url || source.uri || source.name || source.id || source.color
+        // An SRT address without its query: it can hold a passphrase.
+        const uri = source.uri ? source.uri.split("?")[0] : ""
+        const value = source.path || source.url || uri || source.name || source.id || source.color
             || source.endpoint || source.pattern || (source.paths ? source.paths.join(", ") : "")
         return value || ""
     }

@@ -24,7 +24,7 @@ TestCase {
     QtObject {
         id: fakeCore
         property string devices: ""
-        function choices(kind) { return [] }
+        function choices(kind) { return "[]" }
         function refreshLists() {}
         function addInput(kind, value, options, name) {
             test.added.push(name)

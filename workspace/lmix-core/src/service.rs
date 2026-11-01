@@ -2728,7 +2728,7 @@ impl Service {
             if matches!(command, Command::TBar { .. }) {
                 bar_fix = sw.t_bar_refused();
             }
-            tracing::warn!(?command, error = %e, "engine command failed");
+            tracing::warn!(command = %lmix_types::srt::redact(&format!("{command:?}")), error = %e, "engine command failed");
             first_error.get_or_insert(ActionError::Engine {
                 message: e.to_string(),
             });
@@ -2736,7 +2736,7 @@ impl Service {
 
         for command in &bar_fix {
             if let Err(e) = self.engine.run(command).await {
-                tracing::warn!(?command, error = %e, "engine command failed");
+                tracing::warn!(command = %lmix_types::srt::redact(&format!("{command:?}")), error = %e, "engine command failed");
             }
         }
 
