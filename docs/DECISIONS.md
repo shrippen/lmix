@@ -8342,8 +8342,51 @@ Bilder der API.
 - Speicher behalten, Alter im Header melden (`Age` oder `X-Picture-Age`): `<img>` und `curl -f`
   sehen keine Header, das alte Bild sähe weiter live aus.
 
-**Offen (strom):** Solange ein Abgriff angehängt ist und abgefragt wird, gibt strom sein letztes
-Bild aus, auch wenn die Quelle keins mehr liefert (`ThumbnailTap::get_thumbnail`, `cache_ttl`
-ungenutzt). Das kann lmix-core nicht sehen; eigenes Thema.
+**Offen (strom), erledigt:** Solange ein Abgriff angehängt ist und abgefragt wird, gab strom sein
+letztes Bild aus, auch wenn die Quelle keins mehr lieferte (`ThumbnailTap::get_thumbnail`,
+`cache_ttl` ungenutzt). Behoben mit strom #68, siehe „Vorschaubild-Abgriff: Höchstalter in strom“.
 
 Beleg: `a_tap_without_a_frame_gives_no_picture` (gegen `main` rot: altes Bild statt `NotReady`).
+
+## 2026-11-01 — Vorschaubild-Abgriff: Höchstalter in strom
+
+Branch `strom-tap-age`, strom #68 `thumbnail-max-age` (Submodul auf `lmix-tap-age`, `dev` + Fix).
+Erledigt den offenen strom-Punkt aus „Bilder der API ohne eigenen Speicher“ (lmix #238).
+
+**Kontext:** Solange ein Abgriff angehängt ist und abgefragt wird, gab strom sein letztes Bild aus,
+egal wie alt (`ThumbnailTap::get_thumbnail`; das Feld `cache_ttl` war dafür gedacht, aber
+ungenutzt). Hört eine Quelle auf, Bilder zu schicken (SRT-Eingang bricht ab, Live-Quelle steht),
+sah ihr letztes Bild für strom-Frontend, API und lmix-core wie ein laufendes aus. lmix-core hält
+seit #238 selbst kein Bild mehr und reicht durch, was strom liefert; erkennen kann es das alte
+Bild nicht.
+
+**Entscheidung:** `cache_ttl` wird zu `max_age`, Standard 3 s. Älter antwortet `get_thumbnail` mit
+`Timeout` (API 504, lmix-core `NotReady`/503 mit Retry-After), wie vor dem ersten Bild. 3 s sind
+drei Abgriffe bei stroms Takt von einem Bild je Sekunde: ein oder zwei verspätete Abgriffe unter
+Last lassen das Bild nicht blinken. `new_with_tee` hebt `max_age` auf mindestens zwei
+`update_interval` an, damit ein langsamer eingestellter Abgriff nicht zwischen zwei Bildern 504
+sagt. Quellen, die stillstehen, aber weiter Bilder schicken, bleiben frisch: Standbilder
+(`imagefreeze`, im Bildtakt), ein pausierter oder am Ende gehaltener Clip (`hold_still`, im
+Bildtakt), Webseiten (`cefsrc`, live im Takt), Program (der Compositor gibt immer aus). Ein
+geparkter Stinger schickt nichts und antwortet nach 3 s mit 504. Eine Quelle, die weiter Bilder
+mit eingefrorenem Inhalt schickt, bleibt frisch; das kann strom nicht sehen. Quellen, die nur bei
+Änderungen senden (Bildschirmfreigabe, manche NDI-Quellen), antworten bei ruhigem Inhalt nach 3 s
+mit 504; in lmix gibt es keine. Kosten: ein Vergleich je Abfrage, kein Timer. Schlimmster Fall für
+`/api/pictures`: ein etwa 3 s altes Bild, statt unbegrenzt.
+
+Preis: jede 504 schreibt in strom eine ERROR-Zeile (`TraceLayer` meldet jede 5xx), bei einer
+stehenden, abgefragten Quelle also eine je Abfrage. Nicht geändert: eine leisere Meldung nur für
+504 träfe auch echte Zeitüberschreitungen (Medien-Download), upstream hat dafür kein Vorbild.
+`test-m2b-vm.sh` filtert `/thumbnail`-Zeilen schon heraus.
+
+**Verworfen:**
+- `cache_ttl` mit seinen 500 ms nutzen: kürzer als der Abgriff-Takt (1 s), jedes zweite Abfragen
+  wäre 504.
+- Höchstalter allein aus `update_interval` ableiten (etwa dreifach): `update_interval` 0 (Tests)
+  ergäbe 0; darum festes Feld mit Untergrenze aus `update_interval`.
+- Bild beim Überschreiten verwerfen: unnötig, die Prüfung bei der Abfrage reicht; ein neues Bild
+  ersetzt es ohnehin.
+
+Beleg: strom-Tests `test_tap_does_not_serve_a_picture_after_frames_stop` (vorher altes JPEG nach
+1,5 s ohne Bild, jetzt Timeout; eine laufende Quelle bleibt über `max_age` hinaus ohne Lücke) und
+`test_max_age_covers_two_grabs`.

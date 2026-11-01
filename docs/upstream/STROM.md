@@ -24,7 +24,7 @@ Abgleich mit upstream: `git fetch https://github.com/Eyevinn/strom main` und
 | Thema | Commits / Gitea-PR | Weg | Stand, Hinweis |
 |---|---|---|---|
 | Media Player: Bus-Watch, die beim Stoppen entfernt wird (CRITICAL „has no signal watches“) | 21d8ec5 (kam mit #1) | – | upstream erledigt: upstream zählt die `add_signal_watch`-Aufrufe und entfernt genau so viele |
-| Vorschaubild-Abgriff liefert kein Bild älter als `max_age` | 7e40604, #68 | PR | offen; Gitea #68 noch offen, nicht auf `dev`; gehört zu Eyevinn #1187/#1189, nach dem Merge auf deren Branch stapeln |
+| Vorschaubild-Abgriff liefert kein Bild älter als `max_age` (3 s, mindestens zwei `update_interval`); eine Quelle, die keine Bilder mehr schickt, sah sonst live aus, solange der Abgriff abgefragt wird (`cache_ttl` war ungenutzt) | 7e40604, 594092c, #68 | PR | offen; Gitea #68 noch offen, nicht auf `dev`; Test vorhanden, auch upstream `main` betroffen. Branch von upstream 8fce2ee, hängt nicht an #63/#66; gehört zu Eyevinn #1187/#1189, nach dem Merge auf deren Branch stapeln. Upstream `main` hat `cache_ttl` gestrichen (#897): beim Rebase zwei triviale Konflikte (Feld und `Default`). Submodul zeigt bis zum Merge auf `lmix-tap-age` (242248c = `dev` + Fix) |
 | Panic im eigenständigen nativen Frontend | 779cc60 | PR | offen |
 | GL-Renderer-Probe auf GStreamer 1.28 | a7a2aa9 | PR | offen; prüfen, ob upstream seit #1123 (1.28-Baseline) selbst gelöst |
 | NVENC-Rate-Control auf GStreamer 1.28 | dcf2b83 | PR | offen; wie oben |
