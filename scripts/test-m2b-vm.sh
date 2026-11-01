@@ -75,8 +75,8 @@ fail() {
     # Earlier trouble scrolls out of the tails (thumbnail polls fill them).
     echo "--- last 40 warnings and errors of strom.log" >&2
     grep -E 'WARN|ERROR' "$WORK/strom.log" | grep -v '/thumbnail' | tail -n 40 >&2 || true
-    # lmix-core answers a picture request from its last picture while the
-    # engine has none (504): a frozen program may be a stuck tap.
+    # A tap without frames for 3 s answers 504 (strom max_age), so a
+    # frozen program picture means frames still come, with standing content.
     [[ -n "${MIXER_ID:-}" ]] && echo "--- strom program tap: HTTP $(curl -s -o /dev/null -w '%{http_code}' --max-time 5 \
         "$STROM/api/flows/$MIXER_ID/blocks/tap_pgm/thumbnail")" >&2
     echo "--- strom flows" >&2

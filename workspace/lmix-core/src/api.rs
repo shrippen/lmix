@@ -12,8 +12,8 @@
 //! | `GET /api/outputs/stats` | running SRT, RTMP and recording outputs: rate, SRT link health (lost, dropped, RTT), load (buffer, frames dropped, encoder) |
 //! | `GET /api/shows/recent` | recently opened or saved show files, newest first |
 //! | `GET /api/devices` | capture devices for `SourceSpec::Device` |
-//! | `GET /api/pictures/program` | program picture, JPEG |
-//! | `GET /api/pictures/inputs/{input}` | input picture (number, name, id, `preview`, `program`) |
+//! | `GET /api/pictures/program` | program picture, JPEG; 503 with Retry-After while the engine has none (a tap just attached, a flow just started) |
+//! | `GET /api/pictures/inputs/{input}` | input picture (number, name, id, `preview`, `program`); 503 as for program |
 //! | `GET /api/shows/inputs?path=` | inputs of a show file, to append some (SHW.3) |
 //! | `GET /api/templates` | title templates: built-in and from the folder (GFX.19) |
 //! | `GET /api/data/{source}` | all rows of a data source (number, name or id) |
