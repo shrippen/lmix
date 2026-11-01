@@ -397,24 +397,51 @@ fn secret_key(key: &str) -> bool {
 
 /// `text` (an engine error, a log line) with each URL in it through
 /// [`redact_url`] and each bare secret `key=value` (gst-launch style)
-/// masked. Words end at blanks, quotes and angle brackets, as in strom:
+/// masked, a quoted value whole. Words end at blanks, quotes and angle
+/// brackets (and a backslash, as in `{:?}` dumps), as in strom:
 ///
 /// ```text
 /// 400: uri=srt://h:1?passphrase=x refused -> 400: uri=srt://h:1?passphrase=… refused
 /// srtsink passphrase=x latency=120        -> srtsink passphrase=… latency=120
 /// ```
 pub fn redact_text(text: &str) -> String {
-    text.split_inclusive(word_end)
-        .map(|word| {
-            let token = word.trim_end_matches(word_end);
-            format!("{}{}", redact_word(token), &word[token.len()..])
-        })
-        .collect()
+    let mut out = String::with_capacity(text.len());
+    let mut rest = text;
+    while let Some(c) = rest.chars().next() {
+        if word_end(c) {
+            out.push(c);
+            rest = &rest[c.len_utf8()..];
+            continue;
+        }
+        let end = rest.find(word_end).unwrap_or(rest.len());
+        let word = &rest[..end];
+        rest = &rest[end..];
+
+        // `passphrase="two words"`: the value is the quoted run that follows.
+        let quote = ["\\\"", "\"", "'"]
+            .into_iter()
+            .find(|q| rest.starts_with(q));
+        let key = word.strip_suffix('=');
+        let (Some(quote), Some(key)) = (quote, key) else {
+            out.push_str(&redact_word(word));
+            continue;
+        };
+        if !secret_key(key) {
+            out.push_str(word);
+            continue;
+        }
+        let close = rest[quote.len()..]
+            .find(quote)
+            .map_or(rest.len(), |i| 2 * quote.len() + i);
+        out.push_str(&format!("{word}{quote}…{quote}"));
+        rest = &rest[close..];
+    }
+    out
 }
 
 /// Where a word of [`redact_text`] ends.
 fn word_end(c: char) -> bool {
-    c.is_whitespace() || "\"'`<>".contains(c)
+    c.is_whitespace() || "\"'`<>\\".contains(c)
 }
 
 /// One word of [`redact_text`].
@@ -722,6 +749,15 @@ mod tests {
             (
                 "<srt://h:1?streamid=feed>",
                 "<srt://h:1?streamid=…>",
+            ),
+            (
+                "srtsink passphrase=\"two secret words\" latency=120",
+                "srtsink passphrase=\"…\" latency=120",
+            ),
+            ("token='a b' x", "token='…' x"),
+            (
+                "{\"e\":\"passphrase=\\\"a b\\\" x\"}",
+                "{\"e\":\"passphrase=\\\"…\\\" x\"}",
             ),
             ("no secret  here", "no secret  here"),
         ] {
