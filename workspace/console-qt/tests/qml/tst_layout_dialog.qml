@@ -127,12 +127,61 @@ TestCase {
         compare(sent[0].layout, "l2")
     }
 
-    function test_a_layout_removed_while_open_cannot_be_saved() {
+    // Removed elsewhere while open: the work is kept as a new layout
+    // under the old name.
+    function test_a_layout_removed_while_open_saves_as_new() {
         const dialog = openOn(layouts[0])
+        dialog.edit(0, { framed: true })
         layouts = []
         verify(hint(dialog).visible)
-        compare(hint(dialog).text, "This layout was removed while the dialog was open. It can no longer be saved.")
-        verify(!dialog.acceptEnabled)
+        compare(hint(dialog).text, "This layout was removed while the dialog was open. Save it as a new layout to keep what is shown here.")
+        verify(dialog.acceptEnabled)
+        compare(dialog.acceptText, "Save as new layout")
+        dialog.accept()
+        compare(sent.length, 1)
+        compare(sent[0].action, "add_layout")
+        compare(sent[0].name, "Interview")
+        compare(sent[0].background, "a")
+        compare(sent[0].boxes.map(b => b.input), ["b", "c"])
+        compare(sent[0].boxes.map(b => b.border_px), [4, 0])
+        compare(sent[0].boxes[0].crop.left, 0.1)
+    }
+
+    // Its name taken meanwhile (without case): numbered as a second input is.
+    function test_a_removed_layout_saved_as_new_gets_a_free_name() {
+        const dialog = openOn(layouts[0])
+        const named = name => ({ id: name, number: 1, name: name, background: null, boxes: [] })
+        layouts = [named("interview"), named("Interview (2)")]
+        dialog.accept()
+        compare(sent[0].action, "add_layout")
+        compare(sent[0].name, "Interview (3)")
+    }
+
+    // Another console saves the same boxes in another order: matched by
+    // place in the list, the frame set here would land on the other box.
+    function test_boxes_reordered_elsewhere_are_not_mixed() {
+        const dialog = openOn(layouts[0])
+        dialog.edit(0, { framed: true })
+        layouts = [interview([box("c", 0.6), box("b", 0.1, { left: 0.1, top: 0, right: 0, bottom: 0 })])]
+        verify(dialog.replacesLive)
+        compare(hint(dialog).text, "This layout was changed elsewhere while the dialog was open. Saving replaces it with what is shown here.")
+        dialog.accept()
+        compare(sent[0].boxes.map(b => b.input), ["b", "c"])
+        compare(sent[0].boxes.map(b => b.rect.x), [0.1, 0.6])
+        compare(sent[0].boxes.map(b => b.border_px), [4, 0])
+    }
+
+    // Another console removes box 1 and adds one: as many boxes, but box 2
+    // is another. Hiding box 2 here must not hide the added one.
+    function test_a_box_removed_and_one_added_elsewhere_are_not_mixed() {
+        const dialog = openOn(layouts[0])
+        dialog.edit(1, { hidden: true })
+        layouts = [interview([box("c", 0.6), box("d", 0.3)])]
+        verify(dialog.replacesLive)
+        dialog.accept()
+        compare(sent[0].boxes.map(b => b.input), ["b", "c"])
+        compare(sent[0].boxes.map(b => b.hidden), [false, true])
+        compare(sent[0].boxes.map(b => b.rect.x), [0.1, 0.6])
     }
 
     function test_unchanged_layout_saves_as_edited_without_notice() {
