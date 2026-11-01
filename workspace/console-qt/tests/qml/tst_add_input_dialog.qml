@@ -55,6 +55,7 @@ TestCase {
             return "srt://" + f.host + ":" + f.port + (query.length ? "?" + query.join("&") : "")
         }
         // Stands in for forms::srt_check: the rules the tests here touch.
+        // (The real check, with hosts, zones and brackets: forms.rs tests.)
         function srtCheck(fields) {
             const f = JSON.parse(fields)
             const bytes = unescape(encodeURIComponent(f.passphrase || "")).length
@@ -76,6 +77,8 @@ TestCase {
                 return JSON.stringify({ mode: "listener", host: "", port: 9100, passphrase: "", stream_id: "" })
             if (uri === "srt://cam:9000")
                 return JSON.stringify({ mode: "caller", host: "cam", port: 9000, passphrase: "", stream_id: "" })
+            if (uri === "srt://cams:9000")
+                return JSON.stringify({ mode: "caller", host: "cams", port: 9000, passphrase: "", stream_id: "" })
             if (uri.indexOf("slow.example") >= 0)
                 return JSON.stringify({ mode: "caller", host: "slow.example", port: 9000, latency_ms: 20000, passphrase: "", stream_id: "" })
             return JSON.stringify({ problem: "no_port" })
@@ -135,10 +138,12 @@ TestCase {
         verify(host && port && problem)
         verify(host.visible)
         verify(!dialog.acceptEnabled, "no port yet")
-        verify(problem.visible)
+        verify(!problem.visible, "nothing wrong on a form not yet filled in")
+        verify(!named(dialog.contentItem, "srtAddress").visible)
 
         port.text = "9000"
         verify(!dialog.acceptEnabled, "a caller needs a host")
+        verify(problem.visible)
         verify(problem.text.length > 0)
 
         host.text = "cam.local"
@@ -283,5 +288,42 @@ TestCase {
         compare(named(dialog.contentItem, "srtLatency").value, 20000)
         verify(!dialog.acceptEnabled)
         verify(named(dialog.contentItem, "srtProblem").text.indexOf("20000") >= 0)
+    }
+
+    function test_a_paste_over_a_selection_fills_the_fields() {
+        var dialog = openSrt()
+        var host = named(dialog.contentItem, "srtHost")
+        host.forceActiveFocus()
+        host.text = "cam.example.org"
+        host.textEdited()
+        compare(host.text, "cam.example.org")
+        // The whole old host selected, an address of the same length pasted.
+        host.text = "srt://cams:9000"
+        compare(host.text.length, "cam.example.org".length)
+        host.textEdited()
+        compare(host.text, "cams")
+        compare(named(dialog.contentItem, "srtPort").text, "9000")
+    }
+
+    function test_typing_over_a_selected_character_fills_nothing() {
+        var dialog = openSrt()
+        var host = named(dialog.contentItem, "srtHost")
+        host.forceActiveFocus()
+        var typed = "srt://cam:9001"
+        for (var i = 0; i < typed.length; i++)
+            keyClick(typed[i])
+        compare(host.text, "srt://cam:9001")
+        // A typo fixed by selecting it and typing over it: same length, and
+        // the result reads as an address (the stand-in knows srt://cam:9000).
+        host.select(host.text.length - 1, host.text.length)
+        keyClick(Qt.Key_0)
+        compare(host.text, "srt://cam:9000", "nothing taken apart while typing")
+        compare(named(dialog.contentItem, "srtPort").text, "")
+    }
+
+    function test_a_core_refusal_names_the_srt_problem() {
+        compare(Texts.message(JSON.stringify({ error: { error: "bad_srt",
+            problem: { problem: "passphrase_length", bytes: 8, min: 10, max: 79 } } })),
+            "SRT: A passphrase has 10 to 79 bytes, this one 8; umlauts and other special characters count twice or more.")
     }
 }

@@ -7154,7 +7154,7 @@ regeln gebraucht.
   eines SRT- oder RTMP-Ausgangs). In die Rechner-Einstellungen
   (Geheimnisse dort, Entscheidung 7) gehört sie erst mit den Ausgabezielen
   für Inputs; das bleibt offen. lmix-core schreibt einen gescheiterten
-  Engine-Befehl ins Log ohne den Wert von `passphrase=` (`srt::redact`; gilt
+  Engine-Befehl ins Log ohne den Wert von `passphrase=` (siehe Nachtrag; gilt
   auch für SRT-Ausgänge). strom schreibt die URI samt Passphrase ins
   Log (`SRT source configured: uri=…`); ein Kandidat für ein Issue bei
   Eyevinn, hier nicht geändert.
@@ -7186,3 +7186,54 @@ jetzt `srt://host:port` ohne Abfrage.
 **Offen** (SRC.12): Wahl des Hardware-Decoders, HEVC mit echtem Sender
 prüfen, mehrere Tonspuren zu Mehrkanal (strom kann `num_audio_tracks`, der
 Slot nimmt eine Spur).
+
+## 2026-11-01 — SRT-Input: Nacharbeiten aus dem Review (SRC.12)
+
+Nachtrag zu „SRT-Input mit Feldern statt URI“, aus dem Abschluss-Review
+von #217:
+- **Hosts in anderen Schriften**: Buchstaben jeder Schrift gelten wieder
+  (`char::is_alphabetic`, Ziffern nur ASCII, also kein `x²`). Geprüft mit
+  GStreamer 1.28: `srtsrc` dekodiert den prozentkodierten Host und löst über
+  GLib auf, das ihn in Punycode wandelt (`bücher.example` →
+  `xn--bcher-kva.example`). Das trägt im DNS. Ein mDNS-Name wie
+  `kamera-büro.local` löst so wahrscheinlich **nicht** auf: Avahi
+  veröffentlicht `.local`-Namen in UTF-8 (RFC 6762), gefragt wird nach
+  `xn--…`. lmix nimmt ihn trotzdem an (die Prüfung kennt das Netz nicht);
+  wer so einen Namen hat, nimmt die IP-Adresse. Abgelehnt bleiben `:`
+  außer in IPv6, `@`, `/`, `?`, `#`, Leerraum. `[]` gilt als kein Host.
+- **IPv6 in Klammern** (`[fd00::5]` im Feld „Adresse“) gilt wie ohne; die
+  Zone nach `%` nur aus `A–Z a–z 0–9 _ . -` (ein Schnittstellenname), sonst
+  stünde ein rohes Leerzeichen in der URI.
+- **Geheimnisse im Log nach Struktur**: Statt den Text eines Befehls nach
+  `passphrase=` zu durchsuchen (endete bei `"` oder Leerzeichen, der Rest
+  einer Passphrase stand im Log), ersetzen `Command::without_secrets` (Kern,
+  gescheiterter Engine-Befehl) und `Action::without_secrets` (Console,
+  abgelehnte oder nicht zustellbare Aktion) vor dem Loggen die Felder:
+  - in Adressen (`srt::redact_url`): `user:passwort@` und die Werte von
+    `passphrase`, `password`, `pass`, `pwd`, `token`, `access_token`,
+    `auth`, `key`, `api_key`, `secret`, `sig` … (bis zum nächsten `&`,
+    gleich welche Zeichen); gilt für SRT-, URL-, Web- und WHIP-Inputs,
+    SRT- und RTMP-Ausgänge, Adressen von Ausgabezielen und den Pfad von
+    `http_request`;
+  - der RTMP-Schlüssel; ohne eigenen Schlüssel der letzte Teil der Adresse
+    (`rtmp://host/app/…`);
+  - das Geheimnis eines Ausgabeziels und die Werte aller Header von
+    `http_request` (`Authorization` …).
+  Ungültiges JSON aus QML loggt die Console nur mit seiner Länge. Die
+  HTTP-Tally-Ziele loggen ihre Adresse ebenso geschwärzt. Vorgeschlagene
+  Namen neuer Inputs (URL, Web) und SRT-Ausgänge zeigen die Adresse ohne
+  Passwort und Tokens; sie stehen im Multiview, bei Tally und Fernbedienung.
+  **Offen**: Meldet strom einen Fehler mit dem Text seiner Antwort
+  (`EngineError::Refused`), steht darin, was strom zurückgibt; ob das
+  Property-Werte samt URI sein können, ist nicht geprüft.
+- **Ablehnungen übersetzt**: `ActionError::BadSrt` trägt das `SrtProblem`
+  (`{"error":"bad_srt","problem":{"problem":"…",…}}` statt `reason`); die
+  Console nennt es in ihren Worten, auch wenn es über API, OSC oder Skript
+  kam. Bricht die Form dieser einen Ablehnung; kein Release, kein Client
+  außer der Console liest sie.
+- **Leeres Formular**: Ohne Host und Port sperrt der Dialog nur den Knopf,
+  statt gleich „braucht die Adresse der Gegenseite“ in Rot zu zeigen.
+- **Einfügen**: Als Einfügen gilt, wenn der Text um zwei oder mehr Zeichen
+  wächst oder jetzt eine `srt://`-Adresse ist und vorher keine war (Einfügen
+  über eine Auswahl). Ein Zeichen über eine markierte Stelle getippt oder
+  gelöscht füllt nichts; die Felder füllen sich dann beim Verlassen.
