@@ -168,6 +168,8 @@ pub struct MoodCollection {
     pub name: String,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub moods: Vec<MoodId>,
+    /// Cues of the show: one-shots while their list has pads; a list
+    /// switched off keeps them here for when it is on again.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub pads: Vec<CueId>,
 }

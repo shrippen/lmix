@@ -673,8 +673,8 @@ fn check_cue(cue: &Cue, depth: usize) -> Result<(), ActionError> {
 
 /// Moods of a show (MOOD): limits, names to find them by, layers that
 /// are there, contents a cue could have, a panic mood of actions only,
-/// collections of moods and pads (cues of `lists` with pads) that are
-/// there, each once.
+/// collections of moods and pads (cues of `lists`, with pads or switched
+/// off) that are there, each once.
 fn check_moods(moods: &lmix_types::Moods, lists: &[ShowCueList]) -> Result<(), ActionError> {
     use lmix_types::mood::{name_key, MOOD_COLLECTIONS, MOOD_GROUPS, MOOD_LAYERS, MOOD_NAME_MAX};
     use lmix_types::{LayerContent, LayerId};
@@ -829,17 +829,16 @@ fn check_moods(moods: &lmix_types::Moods, lists: &[ShowCueList]) -> Result<(), A
     Ok(())
 }
 
-/// The pads of the show: the cues of its lists with pads (RUN.12, MOOD.8).
+/// What a collection may keep as a pad (MOOD.8): a cue of a list, which
+/// is a pad while its list has pads (RUN.12). A list switched off keeps
+/// its cues in the collections, so switching it on brings them back;
+/// the page shows only those of lists with pads.
 fn pad_cues(lists: &[ShowCueList]) -> impl Iterator<Item = lmix_types::CueId> + '_ {
-    lists
-        .iter()
-        .filter(|l| l.pads)
-        .flat_map(|l| l.cues.iter().map(|c| c.id))
+    lists.iter().flat_map(|l| l.cues.iter().map(|c| c.id))
 }
 
-/// Collections keep only pads the show still has: a pad cue removed, its
-/// list removed or no longer pads, it leaves them (MOOD.8). Whether one
-/// went.
+/// Collections keep only pads the show still has: a cue removed or its
+/// list removed, it leaves them (MOOD.8). Whether one went.
 fn prune_pads(moods: &mut lmix_types::Moods, lists: &[ShowCueList]) -> bool {
     // Most shows have no pads in collections: nothing to look up.
     if moods.collections.iter().all(|c| c.pads.is_empty()) {
@@ -1700,7 +1699,6 @@ impl Switcher {
             Action::SetCueListPads { list, on } => {
                 let index = self.find_cue_list(&list)?;
                 self.show.cue_lists[index].pads = on;
-                prune_pads(&mut self.show.moods, &self.show.cue_lists);
                 Ok(Vec::new())
             }
             Action::SetEmergencyList { list } => {
@@ -11242,8 +11240,12 @@ mod tests {
                 "{what}"
             );
         }
-        // A list no longer pads: its cues leave the collections.
+        // A list no longer pads keeps its cues in the collections; a
+        // list removed takes them out.
         lists[0].pads = false;
+        check_moods(&good, &lists).expect("kept while off");
+        assert!(!prune_pads(&mut good, &lists));
+        lists.clear();
         assert!(check_moods(&good, &lists).is_err());
         assert!(prune_pads(&mut good, &lists));
         assert!(good.collections[0].pads.is_empty());
@@ -11283,6 +11285,47 @@ mod tests {
         })
         .unwrap();
         assert!(sw.show().moods.collections[0].pads.is_empty());
+    }
+
+    #[test]
+    fn a_pad_switched_off_and_on_keeps_its_collections() {
+        let pad = Cue::actions("Tusch", vec![Action::FadeToBlack { duration_ms: 0 }]);
+        let pad_id = pad.id;
+        let mut sw = Switcher::new(SLOTS);
+        sw.apply(Action::AddCueList {
+            name: "Pads".into(),
+            cues: vec![pad],
+            source: None,
+        })
+        .unwrap();
+        let pads = |on| Action::SetCueListPads {
+            list: InputRef::Text("Pads".into()),
+            on,
+        };
+        sw.apply(pads(true)).unwrap();
+        let moods: lmix_types::Moods = serde_json::from_value(serde_json::json!({
+            "collections": [{"name": "Akt 1", "pads": [pad_id]}]
+        }))
+        .expect("moods");
+        sw.apply(Action::SetMoods {
+            moods: moods.clone(),
+        })
+        .unwrap();
+
+        // Off: the entry stays, set_moods and a reopened show take it.
+        sw.apply(pads(false)).unwrap();
+        assert_eq!(sw.show().moods, moods);
+        sw.apply(Action::SetMoods {
+            moods: moods.clone(),
+        })
+        .unwrap();
+        let show = sw.show().clone();
+        sw.replace(show, None).unwrap();
+        assert_eq!(sw.show().moods, moods);
+
+        // On again: the pad is back in its collection.
+        sw.apply(pads(true)).unwrap();
+        assert_eq!(sw.show().moods, moods);
     }
 
     #[test]
