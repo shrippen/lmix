@@ -331,7 +331,7 @@ pub fn public_uri(uri: &str) -> String {
 }
 
 /// Query parameters whose values are secrets (`SECRET_KEYS`, any case).
-const SECRET_KEYS: [&str; 15] = [
+const SECRET_KEYS: [&str; 16] = [
     "passphrase",
     "password",
     "passwd",
@@ -347,6 +347,8 @@ const SECRET_KEYS: [&str; 15] = [
     "secret",
     "sig",
     "signature",
+    // Some SRT servers take the stream id as the publish key.
+    "streamid",
 ];
 
 /// `url` without its secrets, for logs and names: the value of a
@@ -395,22 +397,27 @@ fn secret_key(key: &str) -> bool {
 
 /// `text` (an engine error, a log line) with each URL in it through
 /// [`redact_url`] and each bare secret `key=value` (gst-launch style)
-/// masked. Words end at blanks:
+/// masked. Words end at blanks, quotes and angle brackets, as in strom:
 ///
 /// ```text
 /// 400: uri=srt://h:1?passphrase=x refused -> 400: uri=srt://h:1?passphrase=… refused
 /// srtsink passphrase=x latency=120        -> srtsink passphrase=… latency=120
 /// ```
 pub fn redact_text(text: &str) -> String {
-    text.split_inclusive(char::is_whitespace)
+    text.split_inclusive(word_end)
         .map(|word| {
-            let token = word.trim_end_matches(char::is_whitespace);
+            let token = word.trim_end_matches(word_end);
             format!("{}{}", redact_word(token), &word[token.len()..])
         })
         .collect()
 }
 
-/// One blank-free word of [`redact_text`].
+/// Where a word of [`redact_text`] ends.
+fn word_end(c: char) -> bool {
+    c.is_whitespace() || "\"'`<>".contains(c)
+}
+
+/// One word of [`redact_text`].
 fn redact_word(word: &str) -> String {
     if let Some(sep) = word.find("://") {
         // Walk back over the scheme, so `uri=srt://…` keeps its `uri=`.
@@ -672,7 +679,7 @@ mod tests {
             ),
             (
                 "srt://:1?PASSPHRASE=x&streamid=a",
-                "srt://:1?PASSPHRASE=…&streamid=a",
+                "srt://:1?PASSPHRASE=…&streamid=…",
             ),
             ("srt://:1?pass%70hrase=x", "srt://:1?pass%70hrase=…"),
             ("rtsp://user:pw@cam/stream", "rtsp://…@cam/stream"),
@@ -707,6 +714,14 @@ mod tests {
             (
                 "rtsp://user:pw@cam/stream\nnext line",
                 "rtsp://…@cam/stream\nnext line",
+            ),
+            (
+                "{\"details\":\"passphrase=abcdefghij\"}",
+                "{\"details\":\"passphrase=…\"}",
+            ),
+            (
+                "<srt://h:1?streamid=feed>",
+                "<srt://h:1?streamid=…>",
             ),
             ("no secret  here", "no secret  here"),
         ] {
