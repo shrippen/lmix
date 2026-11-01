@@ -8062,8 +8062,8 @@ VM-Test prüft die Last der Aufnahme an echtem strom.
 
 ## 2026-11-01 — vm-check: Multiview staut Program, abgehängter Abgriff zeigt altes Bild (strom)
 
-Branch `vm-slot-return`, strom #65 `mixer-monitor-queues` und #66 `thumbnail-drop-stale` (zusammen auf
-`lmix-slot-return`, daran hängt das Submodul).
+Branch `vm-slot-return`, strom #65 `mixer-monitor-queues` und #66 `thumbnail-drop-stale` (beide in
+strom `dev` gemergt, daran hängt das Submodul).
 
 - **„program black after the source came back“ / „logo not on program before the loss“**
   (41284928306): Jeder Input des Mischers geht über ein Tee an den Program-Compositor und an
@@ -8083,11 +8083,17 @@ Branch `vm-slot-return`, strom #65 `mixer-monitor-queues` und #66 `thumbnail-dro
   (`latency`; macht Program träger und behebt den Stau nicht). Beleg: strom-Tests
   `a_stalled_multiview_does_not_hold_up_program` und
   `stalled_preview_and_tile_outputs_do_not_hold_up_program` (Ausgang blockiert, vorher 0 Bilder
-  von Input 0 an Program in 2 s, jetzt volle Rate); die Nachstellung läuft mit dem Fix durch.
+  von Input 0 an Program in 2 s, jetzt volle Rate); die Nachstellung läuft mit dem Fix durch. Preis: ist PVW oder die
+  Multiview auf einen Ausgang gelegt (OUT.2), ruckelt dieses Signal unter Überlast (der
+  Compositor wiederholt das letzte Bild), statt dass Program steht. Im Normalbetrieb wirft
+  nichts weg: die Aggregator-Pads puffern selbst bis zu ihrer Latenz, zwei Bilder in der Queue
+  genügen.
 - **Abgehängter Abgriff liefert sein altes Bild (Entscheidung aus dem 1.11.):** Er verwirft es
   jetzt beim Abhängen; nach dem nächsten Anhängen antwortet er 504, bis ein neues Bild da ist.
-  Ein altes Bild sieht aus wie ein laufendes und verdeckte im Test („held playlist still
-  moves“) wie in der Console, dass nichts mehr kommt. Kein Grund dagegen gefunden: ein
+  Ein altes Bild sieht aus wie ein laufendes und verdeckte in strom, dass nichts mehr kommt.
+  lmix-core hält unter „hold“ (für Program immer) weiter sein eigenes letztes Bild und gibt es
+  nach dem Wiederanhängen aus, bis ein neues kommt; ob dieser Speicher ein Höchstalter braucht,
+  steht in todo.md. Kein Grund dagegen gefunden: ein
   pausierter oder am Ende gehaltener Clip wiederholt sein letztes Bild (`hold_still`), liefert
   also auch nach dem Anhängen wieder ein Bild. Beleg: strom-Test
   `test_reattached_tap_does_not_serve_a_picture_from_before` (vorher altes JPEG, jetzt Timeout).
