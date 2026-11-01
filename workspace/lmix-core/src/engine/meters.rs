@@ -363,7 +363,7 @@ pub async fn follow(
                     }) => {
                         let file = super::marks::RecorderFile {
                             path: filename,
-                            opened_ms: unix_ms(),
+                            opened_ms: Some(unix_ms()),
                         };
                         let mut files = recorder_files.lock().expect("recorder files lock");
                         files.insert(flow_id, file);
