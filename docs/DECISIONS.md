@@ -8005,43 +8005,80 @@ sichtbar ist nur, was einer kurzen Liste schlichter Formen entspricht.
   maskiert; der erste nicht schlichte Teil samt allem danach ebenfalls.
   Userinfo bis zum letzten `@` vor der Query; ein `@` in der Query maskiert
   alles hinter dem Schema. RTMP: Anwendung bleibt, Rest des Pfads und Query
-  weg. HTTP/WebSocket (`http`, `https`, `ws`, `wss`) und `origin()`: nur
-  `scheme://host[:port]`, Pfad und Query weg, denn der Pfad kann der ganze
+  weg. HTTP/WebSocket (`http`, `https`, `ws`, `wss`): Herkunft und nur
+  Pfadsegmente, die bekannte Wörter sind oder Dateinamen daraus (`whip`,
+  `v1`, `publish`, `index.m3u8`, `segment_001.ts`, `chunk-stream0-00001.m4s`;
+  feste Wort- und Endungsliste, Zahl allein ist kein Wort), bis zum ersten
+  anderen Segment, das den Rest maskiert; Query weg. Der Pfad kann der ganze
   Schlüssel sein (Cloudflare Stream WHIP:
-  `https://customer-<id>.cloudflarestream.com/<key>/webRTC/publish`). Nur
-  Token-artige Segmente zu maskieren wäre Raten über das Schlüsselformat
-  jedes Anbieters; Preis: HTTP-Fehler verlieren Dateinamen. Die vier
-  WHIP/WHEP-Blöcke und Properties auf `endpoint` zeigen nur die Herkunft.
+  `https://customer-<id>.cloudflarestream.com/<key>/webRTC/publish` → `/***`,
+  der Schlüssel steht vorn). Eine Entropie-Regel wäre Raten über das
+  Schlüsselformat jedes Anbieters, darum eine Positivliste (seit strom #69;
+  vorher verloren HTTP-Fehler den ganzen Pfad). `origin()` zeigt weiter nur
+  die Herkunft (die vier WHIP/WHEP-Blöcke, Properties auf `endpoint`).
+  Andere Schemata (`rtsp`, `srt`, …): ein Pfadsegment, das wie ein Token
+  aussieht (16 oder mehr Zeichen aus Buchstaben, Ziffern, `-_%` mit einer
+  Ziffer oder einem Großbuchstaben), maskiert den Rest; `file:` bleibt ganz.
+  Hinter einem geheimen Query-Wert zeigen nur bekannte Parameter (Liste aus
+  SRT, RIST, GStreamer) und ganze geheime Namen, bis zum Ende der Query
+  (`passphrase=…&latency=120`, aber `passphrase=a&b=c` → `passphrase=…&…`).
+  Ein `@` hinter einem `/` gehört zum Pfad, wenn davor ein schlichter Host
+  ohne Port steht (`rtmp://h/live/a@b`), sonst endet dort ein Passwort mit
+  rohem `/` (`rtmp://user:p/ss@h`); mit Port (`srt://u:12/34@h`) ist beides
+  möglich, dann alles maskiert.
   Satzzeichen am Ende (`:`, `,`, `)`, Anführungszeichen) gehören nicht
   zur URL (`srt://h:9000: Connection refused` behält den Host). Steht die
   URL in einem offenen Anführungszeichen (`uri="srt://…`, `"uri=srt://…`),
-  ist sie der ganze Lauf bis zu dessen Partner, auch über Leerraum, wenn ihr
-  erstes Wort maskiert wird oder ein `@` folgt (`"srt://u:1 2@h"`). Ein anderes Präfix vor `scheme://` (`rtmp?://`,
+  ist sie der ganze Lauf bis zu dessen Partner, auch über Leerraum, wenn die
+  URL ihres Worts maskiert endet (bis zu einem Leerraum vor einem bekannten
+  Paar, s. u.) oder ein `@` folgt (`"srt://u:1 2@h"`). Endet die Maske in der
+  URL und folgen sichtbare Teile (`"srt://h?passphrase=…&latency=1 x"`),
+  läuft sie nicht bis zum Partner. Ist die Authority ohne `@` im Wort
+  maskiert, läuft die Maske bis zum letzten `@` der Zeile (`srt://u:a b@h`
+  → `srt://…@h`). Ein anderes Präfix vor `scheme://` (`rtmp?://`,
   `us@er://`) maskiert das Wort. `value()` maskiert einen String, der eine
   URL ist, als eine URL.
 - Paare: jedes `name=` und `name:` im Wort, auch nach `&`, `;`, `,`, `?`, `(`
   und mit Namen in Anführungszeichen. Geheim nach der Endung des Namens
   (klein, ohne Trenner und Prozent-Kodierung: `streamKey`, `auth-token`,
-  `pass%70hrase`); der Wert läuft bis Wortende, `name:` am Wortende maskiert
-  das nächste Wort, ebenso ein Wert, der genau `Bearer`/`Basic`/`Digest`
-  ist (dann eines mehr). Endungen u. a. `passphrase`, `token`, `key`,
+  `pass%70hrase`); der Wert läuft bis Wortende, `name=` am Wortende maskiert
+  das nächste Wort, `name:` am Wortende den Rest der Zeile (Header:
+  `auth-token: a b`, bis zu einem bekannten Paar), ein Wert, der genau
+  `Bearer`/`Basic`/`Digest` ist, eines mehr. Ein Wert, der mit einem
+  Anführungszeichen beginnt, ist der Lauf bis zu dessen Partner
+  (`{"passphrase":…,"latency":120}`), wenn der Wert dort endet (s. u.). Endungen u. a. `passphrase`, `token`, `key`,
   `secret`, `sig`, `auth`, `streamid`, `hash`, `hmac`, `md5`.
   `user:pass@host` ohne `//` wird ganz maskiert.
 - Öffnet in einem maskierten Teil ein Anführungszeichen (`"zwei Wörter"`,
   `(string)"a b"`, `\"` im `{:?}`-Dump), läuft die Maske bis zum Partner
-  mit gleich vielen Backslashes davor, sonst bis Textende.
+  mit gleich vielen Backslashes davor, sonst bis Textende; hinter dem
+  Partner bis Wortende, außer der Wert endet dort: Leerraum, Textende oder
+  `,;)]}` gefolgt von einem davon, einem Anführungszeichen oder Backslash
+  (`'a b'\''c'` ganz, `"a",b` bis Wortende, `"a"}` endet).
 - Anführungszeichen werden vom Textanfang an verfolgt (seit e5b75db, nach
   drei Runden mit je einer neuen Quote-Stellung: um die URL, um das ganze
   Argument, um ein geheimes Paar): `"`, `'` oder Backtick am Wortanfang
   oder hinter einem Nicht-Buchstaben öffnet (das Apostroph in `can't`
-  nicht), dasselbe Zeichen mit gleich vielen Backslashes schließt. Beginnt
+  nicht), dasselbe Zeichen mit gleich vielen Backslashes schließt, außer es
+  steht am Anfang eines Worts oder Werts (hinter Leerraum oder `([{=:,;`)
+  und ein Wort folgt: dann öffnet es (seit strom #69; ein einzelnes
+  Anführungszeichen davor, `the '90s … 'passphrase=a b'`, paart so nicht
+  mehr mit dem des Geheimnisses). Beginnt
   irgendeine Maske (URL-Teil oder geheimer Wert) in einem offenen
   Anführungszeichen, läuft sie bis zum Partner des innersten, ohne Partner
   bis Textende; weiter, wenn ein im Wert geöffnetes Anführungszeichen
   darüber hinaus läuft, ein Buchstabe folgt (Apostroph im Wert), bis
   Wortende, wenn etwas anderes als Leerraum oder `,;)]}` folgt
   (`'a'\''b'`, `"a"'b'`) oder ein `@` im selben Wort folgt; nie vor dem
-  Ende des Worts, das die Maske ohnehin erfasst hat (seit 10893ce). Das deckt `"passphrase=a b"`,
+  Ende des Worts, das die Maske ohnehin erfasst hat (seit 10893ce). Endet
+  der Wert am Partner, bleiben Partner und Rest sichtbar
+  (`{"details":"passphrase=…"}`, `String("rtmp://h/live/…")`,
+  `uri="srt://h?passphrase=…" sync=false`; seit strom #69, vorher fehlten
+  das schließende Zeichen und ein `}`). Innerhalb des Anführungszeichens
+  endet die Maske früher an einem Leerraum vor einem bekannten Paar
+  (`latency=`, `mode:`, ganzer geheimer Name) oder einem gst-launch-`!`, so
+  bleibt ein `{:?}`-Dump einer Zeile lesbar
+  (`"srtsink passphrase=… latency=120 ! fakesink"`). Das deckt `"passphrase=a b"`,
   `'passphrase=a b'`, `"uri=srt://h?passphrase=a b"` und ein in einem
   früheren Wort geöffnetes Anführungszeichen. Partner, Wortende hinter dem
   Partner und nächstes `@` stehen in einem Index, der beim ersten Nachschlagen
@@ -8071,21 +8108,37 @@ und kurze Hinweise (Pfad bleibt lesbar), mit denselben Namensendungen und
 Userinfo bis zum letzten `@` vor der Query. `streamid` gilt in beiden als
 Geheimnis (manche SRT-Server nehmen sie als Publish-Key).
 
+Seit strom #69 abgedeckt (vorher als Lücke geführt): ein Wert in
+Shell-Anführungszeichen mit Leerraum und Apostroph
+(`passphrase='a b'\''c'`), ein einzelnes Anführungszeichen vor einem
+Geheimnis in Anführungszeichen (`the '90s … 'passphrase=a b'`,
+`location=/a/"x.ts …`, auch hinter `=`/`:` wie `the '90s uri='srt://…'`),
+ein roher Leerraum im Passwort (`srt://u:a b@h`), ein rohes `&` im
+geheimen Query-Wert vor einem unbekannten Namen (`passphrase=a&b=c`),
+Token im Pfad anderer Schemata (`rtsp://h/<token>/x`), `auth-token: a b`
+und ein `@` im Pfad (`rtmp://h/live/a@b` zeigte `b` als Host).
+
 Bewusst nicht abgedeckt (Prosa nicht unterscheidbar, im Doc-Kommentar von
-`text()` genannt): ein roher Leerraum in einer URL ohne Anführungszeichen
-(`srt://u:a b@h` zeigt `b@h`), ein rohes `&` in einem geheimen Query-Wert
-vor `name=` (`passphrase=a&b=c` zeigt `b=c`), Geheimnisse im Pfad einer
-URL, die weder HTTP noch RTMP ist, Namen ohne geheime Endung oder ohne
-`=`/`:`, ein einzelnes Anführungszeichen vor einem Geheimnis in
-Anführungszeichen (`the '90s … 'passphrase=a b'`: es paart mit dem
-falschen, `b'` bleibt sichtbar). Sonst ist Leerraum in einem Geheimnis in
-Anführungszeichen (wo auch immer sie öffnen) abgedeckt. Kosten: in einem offenen Anführungszeichen
-verliert eine Zeile alles bis zu dessen Partner, sobald darin etwas
-maskiert wird (`"uri=srt://h?passphrase=x&latency=120 refused"` →
-`"uri=srt://h?passphrase=…`).
-Kosten: Werte und URL-Teile mit Sonderzeichen werden samt Rest maskiert,
-ein offenes Anführungszeichen in einem maskierten Teil maskiert bis
-Textende. Queue (strom #60): Variante (b); zurück unter die Schwelle meldet
+`text()` genannt): Namen ohne geheime Endung oder ohne `=`/`:`; ein
+Wert ohne Anführungszeichen mit rohem Leerraum (`passphrase=a b`,
+`rtmp://h/live/a b`), außer einem Passwort vor dem letzten `@` der Zeile,
+und auch das nicht, wenn das Wort vor dem Leerraum schon ein `@` hat
+(`srt://u:a@b c@h`) oder als Host mit Port gilt (`srt://u:12 34@h`); ein
+Pfad-Geheimnis in anderen Schemata als HTTP/RTMP, das kürzer als 16
+Zeichen ist oder nur Kleinbuchstaben hat (`rtsp://h/abcdef`); ein Geheimnis,
+das `&` vor einem bekannten Namen enthält (`passphrase=a&latency=1` zeigt
+`latency=1`), oder in Anführungszeichen einen Leerraum vor einem bekannten
+Paar oder `!` (`"passphrase=a latency=1"`). Sonst ist Leerraum in einem
+Geheimnis in Anführungszeichen (wo auch immer sie öffnen) abgedeckt.
+Kosten: Werte und URL-Teile mit Sonderzeichen werden samt Rest maskiert;
+ein offenes Anführungszeichen ohne Partner in einem maskierten Teil
+maskiert bis Textende, ein `'\''` in Shell-Anführungszeichen ebenso
+(`passphrase='a b'\''c' latency=1` verliert `latency=1`); eine Zeile mit
+`name: wert` verliert den Rest der Zeile bis zu einem bekannten Paar
+(`Authorization: Bearer abc next` → `Authorization: …`); ein schließendes
+Anführungszeichen am Wortanfang vor einem Wort (selten) gilt als öffnend,
+dann verschieben sich die Paare und es wird eher mehr maskiert; HTTP-Pfade zeigen nur Wörter der
+Liste. Queue (strom #60): Variante (b); zurück unter die Schwelle meldet
 `debug`.
 
 **Grenze**: Die STR.5-Queues haben 2 s Luft über der Verzögerung
@@ -8103,7 +8156,18 @@ Test-Eingaben: strom `redact::tests::shared_vectors_*`, lmix-types
 `srt::tests::shared_vectors_*` (jede Eingabe der Review-Runden, ohne
 Panic, linear auch bei 1 MB), `fuzzed_inputs_do_not_panic` und
 `long_quoted_runs_take_linear_time` (vier 256-KB-Eingaben, je unter 5 s im
-Debug-Build; vor strom #67 rot, 33 s für die erste) in beiden.
+Debug-Build; vor strom #67 rot, 33 s für die erste) in beiden. Für strom
+#69 neu: `text_behind_a_mask_stays_readable` und `former_gaps_are_masked`
+(exakte Ausgaben, in beiden; vorher rot), 39 neue Angriffs-Eingaben und 7
+unveränderte Zeilen. Nicht eingecheckt, einmalig gelaufen: ein
+Differential-Fuzz gegen die Vorversion (400 576 Eingaben, 76 588
+geänderte Ausgaben, jede Klasse begründet: mehr sichtbar nur dort, wo die
+neuen Regeln es als Nicht-Geheimnis lesen) und ein Leck-Fuzz (5,5 Mio.
+gst-artige Zeilen mit bekanntem Geheimnis in jeder Quote-Form, roh, als
+`{:?}`, doppeltem `{:?}` und in JSON: Vorversion 123 507 Lecks, jetzt 668,
+alle in den genannten Grenzen). 38 gegnerische 1-MB-Eingaben je unter 70 ms
+(Release); das nächste `://` und `:` eines Worts werden gemerkt, sonst
+brauchte ein langes Wort mit vielen maskierten Werten 6,5 s.
 
 ## 2026-11-01 — Ausgänge: Puffer und Encoder-Last (STR.7)
 
