@@ -7666,8 +7666,9 @@ Baustein, der ihn einmal hält.
 (0: Qts eigene Grenze, wie bisher `Binding on maximumLength` im NameField)
 und dem Schnitt auf ganze Zeichen. Alle fünf Stellen nehmen ihn; ihre
 eigenen `onEditingFinished`, Escape und das Wiederherstellen der Bindung
-bleiben wie sie waren (der Schnitt setzt `text` und hebt damit eine Bindung
-auf, die Stellen binden beim Fertigstellen neu). Kein Kante-Baustein: der
+bleiben wie sie waren (die Stellen binden beim Fertigstellen neu). Die
+Hälften gehen per `remove()`, nicht per `text =`: so bleibt der Verlauf, Strg+Z
+nimmt ein gekürztes Einfügen zurück (Review, Nachtrag unten). Kein Kante-Baustein: der
 Schnitt hängt an `Texts` der Console.
 Qt kürzt den eingefügten Teil, nicht das Ende: ein Emoji, mitten im Text
 getippt oder eingefügt, kann dort halb stehen bleiben. `Texts.whole` wirft
@@ -7742,3 +7743,47 @@ Entfernen des Layouts davor, entferntes Layout gesperrt mit Hinweis.
 Switcher-Test `set_layout_by_id_hits_its_layout_after_one_before_is_gone`
 (Id als Text wie aus der Console, nach Entfernen des Layouts davor; ein
 Layout, das wie die Id heißt, gewinnt nicht).
+
+## 2026-11-01 — Nachträge der Reviews: Rückgängig, TCP-Schließen, OSC gegen liblo, Toasts für Screenreader
+
+**LimitedField und Strg+Z**: Der Schnitt setzte `text`, das löscht Qts
+Verlauf; ein gekürztes Einfügen ließ sich nicht zurücknehmen. Jetzt nimmt das
+Feld jede einzelne Hälfte per `remove()` heraus (`Texts.halves` nennt ihre
+Stellen), von hinten, damit die Stellen davor gelten; `remove()` ändert den
+Text erneut, ein Merker hält den Aufruf darin kurz. Ein Strg+Z nimmt das
+Einfügen samt Schnitt zurück. Test `test_a_cut_paste_can_be_undone` (vorher
+rot: `canUndo` war falsch). Der zweite Fall von
+`test_an_insert_in_the_middle_keeps_whole_characters` schnitt nichts
+(„abcdefg“ ließ drei Einheiten, genug für „X“ und ein Emoji); mit „abcdef“
+bleiben vier, das zweite Emoji wird halbiert.
+
+**OSC über TCP, Schließen**: `send_tcp` überging einen Fehler beim
+Schließen der eigenen Seite. Hat das Pult die Verbindung zurückgesetzt, ist
+der Rahmen womöglich nicht angekommen; das zählt jetzt als
+`not sent: …`. Test `a_failed_close_is_not_sent` (vorher: `Ok`).
+
+**OSC gegen eine echte Implementierung**: Kein Pult da; auf dem Rechner
+liegt liblo 0.34 (Fedora-Paket, `oscdump`/`oscsend`, LGPL, nur als Werkzeug
+benutzt, nicht im Repo). lmix-core (`--engine none`) schickte per
+`osc_send` an `oscdump osc.udp://:9771` und `oscdump osc.tcp://:9772`:
+- UDP und TCP kamen gleich an: `/eos/chan/1/at ifsTN 50 0.500000 "Szene 2" #T Nil`.
+- SLIP-Escapes: `192 219` (Bytes `c0` und `db` im Paket) kamen über TCP
+  unverändert an, ebenso Umlaute.
+- liblo erkennt beim Empfang über TCP beide Rahmungen (SLIP und
+  Längen-Präfix), sendet selbst aber mit Längen-Präfix nach OSC 1.0
+  (`oscsend osc.tcp://…` schrieb `0000000c 2f676f00 …`).
+**Entscheidung**: bei SLIP bleiben (DECISIONS „OSC-Cue“). Dass liblo selbst
+mit Längen-Präfix sendet, zeigt, dass OSC 1.0 über TCP verbreitet ist; ein
+Empfänger, der nur das liest, bekäme von lmix nichts Lesbares. Eine zweite
+Rahmung als eigene Zielart (`osc_tcp` mit Wahl 1.0/1.1) erst, wenn ein Pult
+sie verlangt; bis dahin gehen solche Pulte über UDP. Gegen ein Hardware-Pult
+ungeprüft.
+
+**Toasts für Screenreader, geprüft über AT-SPI**: lmix (xcb auf Xvfb,
+`QT_LINUX_ACCESSIBILITY_ALWAYS_ON=1`, eigener Sitzungs- und
+Barrierefreiheits-Bus, lmix-core `--engine none`), Baum mit `gi.Atspi`
+gelesen. Eine Meldung (lmix-core beendet, dann „+ Bus“) steht im Inhalt
+als `alert` mit dem Text und „Close“. Mit einem modalen Dialog
+(„Shortcuts…“) liegt sie in `panel 'Messages'` (deutsch „Meldungen“),
+neben `dialog 'Shortcuts'` direkt unter dem Fenster, nicht als zweiter
+Dialog. Nichts zu ändern.
