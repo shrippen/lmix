@@ -604,6 +604,11 @@ fn names_without_secrets(show: &mut Show) {
         // Two of one relay may differ only in what the new name drops
         // (passphrase, `streamid`): the second gets a number, as on adding.
         let base = input.source.default_name();
+        if format!("{base}{number}") == input.name {
+            // Nothing secret in it: a name another input has too is left to
+            // `distinct_input_names`, where the first keeps it (INP.2).
+            continue;
+        }
         let new = std::iter::once(format!("{base}{number}"))
             .chain((2..).map(|n| format!("{base} ({n})")))
             .find(|n| !taken(&names, n, at))
@@ -1412,6 +1417,9 @@ mod tests {
                 "srt://relay:9000?passphrase=anders4567",
                 8
             ),
+            // Two without a secret, one name: the first keeps it.
+            input("srt://open:9000", "srt://open:9000", 9),
+            input("srt://open:9000", "srt://open:9000", 10),
         ]);
         let far_id = value["inputs"][4]["id"].clone();
         let output = |name: &str, spec: serde_json::Value, source: serde_json::Value| serde_json::json!({ "id": OutputId::new(), "name": name, "spec": spec, "source": source });
@@ -1478,6 +1486,8 @@ mod tests {
                 "srt://far:7001?passphrase=geheim0123 (B)",
                 "srt://relay:9000",
                 "srt://relay:9000 (2)",
+                "srt://open:9000",
+                "srt://open:9000",
             ]
         );
         let outputs: Vec<&str> = show.outputs.iter().map(|o| o.name.as_str()).collect();

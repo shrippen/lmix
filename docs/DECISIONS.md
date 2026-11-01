@@ -7264,7 +7264,9 @@ Geheimnis weiter: in Ausgangsliste, Multiview, Fernbedienung, Tally, API.
   nächste freie Nummer (`srt://relay:9000 (2)`): häufig, denn der neue Name
   lässt genau weg, was zwei Inputs eines Relays unterscheidet (Passphrase,
   `streamid`). Den alten Namen zu behalten, ließe gerade dort das Geheimnis
-  stehen. Ausgänge dürfen gleich heißen (auch `add_output` prüft das nicht):
+  stehen. Nur ein Name, der dabei wirklich ein Geheimnis verliert, ändert
+  sich; gleiche Namen ohne Geheimnis nummeriert wie bisher
+  `distinct_input_names`, der erste behält seinen. Ausgänge dürfen gleich heißen (auch `add_output` prüft das nicht):
   zwei Streams zu einem Dienst heißen danach beide
   `RTMP rtmp://a.example/live2/…`. Ein ISO-Ausgang, dessen Input nach dem Anlegen
   des Ausgangs umbenannt wurde, behält seinen alten Namen samt Geheimnis:
