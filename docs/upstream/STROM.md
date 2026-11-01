@@ -7,7 +7,7 @@ User es als lmix-eigen entschieden hat.
 Stand 2026-11-01: `dev` (c426a7e) hat 172 Commits ohne Merges, die upstream `main` (4479d8c) nicht
 hat (`git log --no-merges 4479d8c..gitea/dev`).
 
-Stand 2026-11-01: bei Eyevinn liegen 20 PRs von uns (#1185–#1204, unten), auf `main` 4479d8c
+Stand 2026-11-01: bei Eyevinn liegen 21 PRs von uns (#1185–#1205, unten), auf `main` 4479d8c
 rebasiert. Issue-Entwürfe liegen bereit und gehen erst nach Freigabe raus; weitere PR-Branches
 auf upstream `main` sind vorbereitet und warten auf den Review.
 
@@ -33,8 +33,8 @@ Abgleich mit upstream: `git fetch https://github.com/Eyevinn/strom main` und
 | Pipeline bleibt PLAYING, wenn ein Thumbnail-Abgriff andockt | da76592 | – | upstream erledigt: der Appsink des Abgriffs hat `async=false` |
 | Deinterlace nur bei interlaced | e23f0b5 | – | großteils upstream erledigt (3225792, #952: progressive Pads direkt). Rest ohne Branch: Pads ohne Caps (explizit gebauter Decoder in EFP/MPEG-TS) gehen noch durch deinterlace, VA ohne `vadeinterlace`; kleiner Folge-PR auf `link_raw_video`, noch nicht vorbereitet |
 | Buffer-Alter auch für Puffer vor der Uhr zählen | fb62d2b | PR | **Eyevinn #1198** (Branch `buffer-age-early-buffers`, dd59d7c) |
-| EFP-SRT-H.264-Decoder nach Rang statt Hersteller | ecd2ed6 | PR | Branch `efp-decoder-by-rank` (b3713b7): Decoder nach den Parser-Caps (`can_sink_all_caps`, einmalige CAPS-Probe), Kandidaten werden ohne Eltern bis READY geöffnet (Kontexte der Pipeline gesetzt), erst der erste, der aufgeht, kommt in den Bin, sonst `CodecNotFound`; Tests mit 4:2:2 10 bit und einem Testelement, das nicht öffnet; Text fertig, im Delta-Review. Derselbe Fehler auf `dev` (Rang ohne Caps): Gitea #74 (`efp-decoder-from-caps`, f1ef882) |
-| GL-Eingänge und Underlays auf NVIDIA ohne udmabuf | 887248d, 2e4a749, #36 | Issue | Issue-Entwurf fertig, wartet auf Freigabe (Bedingung `/dev/udmabuf` mit logind-ACL, Richtung Funktionsprobe statt Herstellername); Branch `gl-upload-udmabuf-nvidia` wird auf die Probe umgebaut, PR nach dem Issue |
+| EFP-SRT-H.264-Decoder nach Rang statt Hersteller | ecd2ed6, #74 | PR | **Eyevinn #1205** (Branch `efp-decoder-by-rank`, b3713b7): Decoder nach den Parser-Caps (`can_sink_all_caps`, einmalige CAPS-Probe), Kandidaten werden ohne Eltern bis READY geöffnet (Kontexte der Pipeline gesetzt), erst der erste, der aufgeht, kommt in den Bin, sonst `CodecNotFound`; Tests mit 4:2:2 10 bit und einem Testelement, das nicht öffnet. Auf `dev` gemergt (#74, 8bcc1f2) |
+| GL-Eingänge und Underlays auf NVIDIA ohne udmabuf | 887248d, 2e4a749, #36 | Issue | Issue-Entwurf fertig, wartet auf Freigabe (Bedingung `/dev/udmabuf` mit logind-ACL; Frage: standardmäßig an oder Einstellung). Branch `gl-upload-udmabuf-nvidia` (auf #1199 gestapelt) mit Funktionsprobe statt Herstellername, auch Stinger-`videoconvert` und Compositor-Block geschützt; PR nach dem Issue. Auf `dev`: Gitea #76 (`udmabuf-functional-probe`) |
 | Inaktive Pads in den Compositoren ignorieren | 2ccb62b, bb4fcd5 | PR | **Eyevinn #1204** (Branch `vision-mixer-ignore-inactive-pads`, 4851902) |
 | Encoder: GPU-Speicher vor Software-Konvertierung herunterladen, vor NVENC auf der GPU konvertieren | 79b3b31, 3e8301e | – | upstream erledigt: a0e32bb (#1111, Download-Front) und 1e9b9c0 (kein `autovideoconvert` mehr); übrig nur CUDA-I420 aus dem CUDA-Mischer, gehört ins CUDA-Issue |
 | DSK bleibt an, wenn er während des Ausblendens eingeschaltet wird | 04b87d1 | Issue (mit d47a50a) | gehört zum Ein-/Ausblenden der DSK-Ebenen (d47a50a), steht im DSK-Issue-Entwurf als Folgefix |
@@ -45,7 +45,7 @@ Abgleich mit upstream: `git fetch https://github.com/Eyevinn/strom main` und
 | Start, Stopp, Löschen und Update eines Flows unter einer Sperre je Flow | #45, #47 | PR | **Eyevinn #1197** (Branch `flow-lifecycle-lock`, d2bc646) |
 | Event-Filter-Test ohne Log-Zähler | #44 | PR | **Eyevinn #1195** (Branch `event-filter-test-direct`, 1fa4b3f) |
 | Thumbnail-Zweig starten, bevor das Tee ihn speist (sonst hält die Quelle an) | #55 | PR | **Eyevinn #1201** (Branch `thumbnail-attach-order`, ae9a378; auf #1189 gestapelt) |
-| Media Player hält beim Pausieren das letzte Bild | 7682d41 | Issue | Issue-Entwurf fertig, wartet auf Freigabe (Standard oder Property, Kosten je pausiertem Player); Branch `media-player-hold-last-frame` (enthält #15) wird korrigiert (nur Raw-Video, `last` leeren, Dateiwechsel in der Pause, EOS-Race), auf `dev` dieselben Fehler |
+| Media Player hält beim Pausieren das letzte Bild | 7682d41 | Issue | Issue-Entwurf fertig, wartet auf Freigabe (Standard oder Property, Kosten je pausiertem Player); Branch `media-player-hold-last-frame` (7c9ee0b, enthält #15) korrigiert (nur Raw-Video, `last` leeren, Dateiwechsel in der Pause, EOS-Race, Seek nach Playlist-Ende beendet das Halten); auf `dev` dieselben Korrekturen als Gitea #75. Das CRITICAL `gst_segment_to_stream_time` beim Dateiwechsel-Sturm (Positionsabfrage des Timers) gibt es auch auf upstream `main`, eigener kleiner Fix später |
 | DeckLink Output mit direktem Media-Timing | #50 | – | geht in #53 auf. Abgleich: upstream #1131 (f294622, Video an den Modus anpassen) und #1168 (a340f49, Audio anpassen) sind gemergt und berühren weder den Kartentakt-Seed noch den Vorlauf. Der Seed (eefe858, 56245a9, 031721f) ist auf `dev` durch #53 (decklink2sink) wieder entfernt; übrig bleibt der Vorlauf (`processing_deadline_ms`, 1e98a41), der im decklink2sink-Issue-Entwurf mitläuft |
 | CUDA-Mischer auf echter Hardware (Alpha nach Fade, Stinger, Thumbnails) | #29 | PR | offen; hängt am CUDA-Mischer |
 | Vorschaubild-Abgriff: Abhängen ohne Zustandssperre (Verklemmung mit dem Appsink-Callback) | 5f32f15, #63 | PR | **Eyevinn #1187** (Branch `thumbnail-detach-deadlock`, 523a390) |
