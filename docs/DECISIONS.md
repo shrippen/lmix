@@ -8268,9 +8268,9 @@ ungenutzt). Das kann lmix-core nicht sehen; eigenes Thema.
 
 Beleg: `a_tap_without_a_frame_gives_no_picture` (gegen `main` rot: altes Bild statt `NotReady`).
 
-## 2026-11-01 — vm-check: „paused clip not held on program“ erledigt
+## 2026-11-01 — vm-check: „paused clip not held on program“ erledigt, Mischer hinter der Uhr
 
-, Mischer hinter der Uhr Branch `vm-paused-clip`, nur Doku; strom unverändert (Submodul bleibt auf `dev` c426a7e).
+Branch `vm-paused-clip`, nur Doku; strom unverändert (Submodul bleibt auf `dev` c426a7e).
 
 - **CI-Verlauf seit 25.10.:** 5 Fehlschläge mit „paused clip not held on program“ (40261817405,
   40668775295, 40960842473, 40968188881, 41012411347, 26.–30.10.), alle mit strom vor #55 (Pins
