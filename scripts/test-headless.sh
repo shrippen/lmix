@@ -205,6 +205,15 @@ act '{"action":"save_layout_template","layout":"Corner"}'
 act '{"action":"load_layout_template","template":"Corner","name":"Corner 2"}'
 state_is '.layouts[1].name == "Corner 2" and .layouts[1].boxes[0].rect.x == 0.7' || fail "template not loaded"
 pass "layout template saved apart from the show and loaded"
+# LAY.7: two boxes trade inputs through the API, one takes another input.
+act '{"action":"set_layout","layout":"Corner 2","boxes":[{"rect":{"x":0,"y":0,"w":0.5,"h":1},"input":"Bars"},{"rect":{"x":0.5,"y":0,"w":0.5,"h":1},"input":"Ball"}]}'
+act '{"action":"swap_boxes","layout":"Corner 2","a":1,"b":2}'
+state_is ".layouts[1].boxes[0].input == \"$ball_id\" and .layouts[1].boxes[1].input == \"$bars_id\" and .layouts[1].boxes[0].rect.x == 0" \
+    || fail "boxes not swapped"
+act '{"action":"set_layout","layout":"Corner 2","boxes":[{"rect":{"x":0,"y":0,"w":0.5,"h":1},"input":"Bars","crop":{"left":0.5}}]}'
+act '{"action":"set_box_input","layout":"Corner 2","number":1,"input":"Ball"}'
+state_is ".layouts[1].boxes[0].input == \"$ball_id\" and .layouts[1].boxes[0].crop == null" || fail "box did not take another input"
+pass "layout boxes swapped and given another input"
 # CTL.3: an OSC subscription per topic and field: name and remaining time
 # of the running cue, cue events; one empty running message at the end.
 act '{"action":"add_cue_list","name":"Szene","cues":[{"number":"1","name":"Pause","kind":"wait","duration_ms":800}]}'

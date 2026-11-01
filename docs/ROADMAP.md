@@ -398,6 +398,7 @@ Stand (2026-10-12, ohne GPU; DECISIONS „M9 Anfang“):
 | Verschmelzen, Mix-Inputs, Effektkette, Karten-Ausgang, Key+Fill | offen (Engine/Hardware) |
 | Sendeverzögerung je Stream (SRT, RTMP) mit Countdown (2026-11-01) | ✅ STR.5 |
 | Dateinamen der Aufnahmen mit `{output}`/`{source}`, Standardordner (2026-11-01) | ✅ REC.5 |
+| Layout-Boxen tauschen, Input einer Box wechseln, per Aktion und Rechtsklick (2026-11-01) | ◐ LAY.7 (ohne Animation) |
 
 ### Später — Wiederholung, Gäste
 

@@ -536,6 +536,8 @@ kein zweites GO, bis er losgelassen ist (Companion: Loslassen als
 | P5 Broadcast | Companion zeigt Restzeit des Clips auf der Taste | ✅ Abspielstand im Zustand (API.4) neben dem Ereignis `position` |
 | P6 Hochschule | In-Ear-Mixe für fünf Vortragende | ✅ bis zu 16 Busse frei anlegen, je Bus vor oder nach den Fadern (AUD.2); ⚠ Bus in den Master und Bus auf ein Gerät fehlen |
 | P7 Theater | Box im Layout nur für eine Szene zeigen, ohne das Layout neu zu bauen | ✅ „Sichtbar“ je Box, `show_box` für Kurzbefehle (LAY.2) |
+| P2 Konferenz | Im Interview groß und klein tauschen, sobald der Gast spricht, auch auf Sendung | ✅ `swap_boxes` als Kurzbefehl, „Boxen tauschen“ im Rechtsklick-Menü des Layouts (LAY.7) |
+| P3 Fußball | Im Layout die zweite Kamera gegen die Torkamera wechseln, ohne das Layout neu zu bauen | ✅ `set_box_input` (LAY.7); ⚠ ohne Animation |
 
 **Befunde**: B46 lmix-core hing einmal 37 min, weil ein Engine-Aufruf
 ohne Zeitlimit unter dem Switcher-Lock wartete (behoben: #80; der VM-Check

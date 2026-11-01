@@ -2225,6 +2225,12 @@ impl Switcher {
                 number,
                 shown,
             } => self.show_box(&layout, number, shown),
+            Action::SwapBoxes { layout, a, b } => self.swap_boxes(&layout, a, b),
+            Action::SetBoxInput {
+                layout,
+                number,
+                input,
+            } => self.set_box_input(&layout, number, &input),
             Action::RemoveLayout { layout } => self.remove_layout(&layout),
             Action::PreviewLayout { layout } => self.preview_layout(&layout),
             Action::SaveLayoutTemplate { layout, name } => {
@@ -4706,19 +4712,66 @@ impl Switcher {
         shown: BoxShown,
     ) -> Result<Vec<Command>, ActionError> {
         let index = self.find_layout(layout)?;
-        let entry = &mut self.show.layouts[index];
-        let count = entry.boxes.len();
-        let found = usize::from(number)
-            .checked_sub(1)
-            .and_then(|at| entry.boxes.get_mut(at))
-            .ok_or_else(|| ActionError::BadLayout {
-                reason: format!("no box {number}; the layout has {count}"),
-            })?;
+        let at = self.box_index(index, number)?;
+        let found = &mut self.show.layouts[index].boxes[at];
         found.hidden = match shown {
             BoxShown::Shown => false,
             BoxShown::Hidden => true,
             BoxShown::Toggle => !found.hidden,
         };
+        Ok(vec![self.layout_command(&self.show.layouts[index])])
+    }
+
+    /// Box `number` (1-based) of layout `index`, as an index.
+    fn box_index(&self, index: usize, number: u8) -> Result<usize, ActionError> {
+        let count = self.show.layouts[index].boxes.len();
+        usize::from(number)
+            .checked_sub(1)
+            .filter(|at| *at < count)
+            .ok_or_else(|| ActionError::BadLayout {
+                reason: format!("no box {number}; the layout has {count}"),
+            })
+    }
+
+    /// LAY.7: two boxes trade inputs (the interview's big and small
+    /// picture); a crop frames its input, so it goes along.
+    fn swap_boxes(&mut self, layout: &InputRef, a: u8, b: u8) -> Result<Vec<Command>, ActionError> {
+        let index = self.find_layout(layout)?;
+        let (a, b) = (self.box_index(index, a)?, self.box_index(index, b)?);
+        let boxes = &mut self.show.layouts[index].boxes;
+        let (input, crop) = (boxes[a].input, boxes[a].crop);
+        boxes[a].input = boxes[b].input;
+        boxes[a].crop = boxes[b].crop;
+        boxes[b].input = input;
+        boxes[b].crop = crop;
+        Ok(vec![self.layout_command(&self.show.layouts[index])])
+    }
+
+    /// LAY.7: one box shows another input; a crop chosen for the old
+    /// input would cut the new one wrongly, so it goes.
+    fn set_box_input(
+        &mut self,
+        layout: &InputRef,
+        number: u8,
+        input: &InputRef,
+    ) -> Result<Vec<Command>, ActionError> {
+        let index = self.find_layout(layout)?;
+        let at = self.box_index(index, number)?;
+        let entry = &self.show.inputs[self.find(input)?];
+        no_video_check(entry)?;
+        let id = entry.id;
+        let place = &self.show.layouts[index];
+        if place.boxes[at].input == id {
+            return Ok(Vec::new());
+        }
+        if place.background == Some(id) || place.boxes.iter().any(|b| b.input == id) {
+            return Err(ActionError::BadLayout {
+                reason: "an input can be in a layout only once".into(),
+            });
+        }
+        let found = &mut self.show.layouts[index].boxes[at];
+        found.input = id;
+        found.crop = BoxCrop::default();
         Ok(vec![self.layout_command(&self.show.layouts[index])])
     }
 
@@ -10299,6 +10352,180 @@ mod tests {
             }),
             Err(ActionError::BadLayout { .. })
         ));
+    }
+
+    /// Background A, box 1 B (framed, cropped, locked) top right, box 2 C
+    /// bottom left; on program.
+    fn interview_on_air() -> Switcher {
+        let mut sw = with_layout();
+        add(&mut sw, "C");
+        add(&mut sw, "D");
+        let boxes = |sw: &Switcher| sw.state().layouts[0].boxes.clone();
+        let mut specs: Vec<BoxSpec> = boxes(&sw)
+            .iter()
+            .map(|b| BoxSpec {
+                rect: b.rect,
+                input: named("B"),
+                border_px: b.border_px,
+                crop: b.crop,
+                locked: b.locked,
+                hidden: b.hidden,
+            })
+            .collect();
+        specs.push(BoxSpec {
+            rect: BOTTOM_LEFT,
+            input: named("C"),
+            border_px: 0,
+            crop: BoxCrop::default(),
+            locked: false,
+            hidden: false,
+        });
+        sw.apply(Action::SetLayout {
+            layout: InputRef::Number(1),
+            background: Some(named("A")),
+            boxes: specs,
+        })
+        .unwrap();
+        sw.apply(Action::PreviewLayout {
+            layout: InputRef::Number(1),
+        })
+        .unwrap();
+        sw.apply(Action::Cut).unwrap();
+        sw
+    }
+
+    const BOTTOM_LEFT: BoxRect = BoxRect {
+        x: 0.0,
+        y: 0.5,
+        w: 0.5,
+        h: 0.5,
+    };
+
+    #[test]
+    fn two_layout_boxes_swap_their_inputs_on_air() {
+        let mut sw = interview_on_air();
+        assert_eq!(sw.tally(), [1, 1, 1, 0]);
+
+        // LAY.7: inputs and their crops trade places; place, frame and
+        // lock stay with the box. On program the picture follows at once.
+        let cmds = sw
+            .apply(Action::SwapBoxes {
+                layout: named("Interview"),
+                a: 2,
+                b: 1,
+            })
+            .unwrap();
+        assert_eq!(
+            cmds,
+            [Command::SetLayout {
+                pip: 0,
+                background: Some(0),
+                boxes: vec![
+                    EngineBox {
+                        rect: TOP_RIGHT,
+                        slot: 2,
+                        border_px: 4,
+                        crop: BoxCrop::default(),
+                    },
+                    EngineBox {
+                        rect: BOTTOM_LEFT,
+                        slot: 1,
+                        border_px: 0,
+                        crop: ZOOM,
+                    },
+                ]
+            }]
+        );
+        let boxes = &sw.state().layouts[0].boxes;
+        assert!(boxes[0].locked && !boxes[1].locked, "the lock stays put");
+        assert_eq!(sw.tally(), [1, 1, 1, 0], "the same inputs on air");
+
+        // Swapped back, all is as before; a box with itself changes nothing.
+        sw.apply(Action::SwapBoxes {
+            layout: InputRef::Number(1),
+            a: 1,
+            b: 2,
+        })
+        .unwrap();
+        let before = sw.state().layouts[0].boxes.clone();
+        sw.apply(Action::SwapBoxes {
+            layout: InputRef::Number(1),
+            a: 1,
+            b: 1,
+        })
+        .unwrap();
+        assert_eq!(sw.state().layouts[0].boxes, before);
+        assert_eq!(sw.state().layouts[0].boxes[0].crop, ZOOM);
+
+        for (a, b) in [(0, 1), (1, 3)] {
+            assert!(matches!(
+                sw.apply(Action::SwapBoxes {
+                    layout: InputRef::Number(1),
+                    a,
+                    b
+                }),
+                Err(ActionError::BadLayout { .. })
+            ));
+        }
+        assert!(matches!(
+            sw.apply(Action::SwapBoxes {
+                layout: InputRef::Number(2),
+                a: 1,
+                b: 2
+            }),
+            Err(ActionError::UnknownLayout { .. })
+        ));
+    }
+
+    #[test]
+    fn a_layout_box_takes_another_input() {
+        let mut sw = interview_on_air();
+        let set = |input: &str| Action::SetBoxInput {
+            layout: named("Interview"),
+            number: 1,
+            input: named(input),
+        };
+
+        // LAY.7: D comes on air in B's box, without B's crop.
+        let cmds = sw.apply(set("D")).unwrap();
+        assert!(matches!(
+            &cmds[..],
+            [Command::SetLayout { boxes, .. }]
+                if boxes[0].slot == 3 && boxes[0].crop.is_zero() && boxes[0].border_px == 4
+        ));
+        let entry = &sw.state().layouts[0].boxes[0];
+        assert!(entry.locked && entry.rect == TOP_RIGHT);
+        assert_eq!(sw.tally(), [1, 0, 1, 1], "B off air, D on");
+
+        // The input it already shows: nothing to do.
+        assert_eq!(sw.apply(set("D")).unwrap(), []);
+        // Once per layout: not the background, not another box's input.
+        for taken in ["A", "C"] {
+            assert!(matches!(
+                sw.apply(set(taken)),
+                Err(ActionError::BadLayout { .. })
+            ));
+        }
+        // A picture only: B, off air now, makes room for a microphone.
+        sw.apply(Action::RemoveInput { input: named("B") }).unwrap();
+        sw.apply(Action::AddInput {
+            source: SourceSpec::AudioDevice { id: "mic".into() },
+            name: Some("Mic".into()),
+        })
+        .unwrap();
+        assert!(matches!(
+            sw.apply(set("Mic")),
+            Err(ActionError::NoVideo { .. })
+        ));
+        assert!(matches!(
+            sw.apply(Action::SetBoxInput {
+                layout: InputRef::Number(1),
+                number: 3,
+                input: named("B"),
+            }),
+            Err(ActionError::BadLayout { .. })
+        ));
+        assert_eq!(sw.tally(), [1, 1, 1, 0], "failed actions change nothing");
     }
 
     #[test]

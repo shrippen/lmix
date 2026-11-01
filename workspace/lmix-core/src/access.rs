@@ -336,6 +336,8 @@ pub fn right_of(action: &Action) -> Right {
         | Action::ClearListen
         | Action::PreviewLayout { .. }
         | Action::ShowBox { .. }
+        | Action::SwapBoxes { .. }
+        | Action::SetBoxInput { .. }
         | Action::CueGo { .. }
         | Action::CueStart { .. }
         | Action::CueToggle { .. }
