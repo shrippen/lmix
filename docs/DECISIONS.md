@@ -7606,3 +7606,45 @@ nicht mit (die unterste von 16 Ebenen ging nicht in einem Zug nach oben).
 (`test_the_layer_reads_as_a_pane_of_messages`),
 `forms::tests::lists_carry_serde_names`; alle schlugen ohne die Änderung
 fehl. Alle QML-Tests (331).
+
+## 2026-11-01 — Layout-Boxen tauschen und neu belegen (LAY.7)
+
+**Kontext**: Ein Layout ließ sich per Aktion nur ganz ersetzen
+(`set_layout` mit allen Boxen) oder eine Box aus- und einblenden
+(`show_box`). Im Interview tauscht man aber live groß und klein, sobald
+der Gast spricht, oder wechselt eine Kamera in einer Box; dafür musste ein
+Kurzbefehl das ganze Layout samt Rechtecken mitschicken und brach, sobald
+jemand das Layout im Editor verschob.
+
+**Entscheidung**:
+- `swap_boxes {layout, a, b}` tauscht die Inputs der Boxen `a` und `b`
+  (ab 1). Der Zuschnitt geht mit dem Input (er rahmt dessen Bild, eine
+  herangezoomte Kamera bleibt herangezoomt); Platz, Rahmen, Sperre und
+  „Sichtbar“ bleiben bei der Box. Eine Box mit sich selbst ändert nichts.
+- `set_box_input {layout, number, input}` legt einen anderen Input in
+  eine Box; Platz, Rahmen, Sperre und „Sichtbar“ bleiben, der Zuschnitt
+  wird gelöscht (er galt dem alten Bild). Wie bei `set_layout`: nur Inputs
+  mit Bild, jeder Input höchstens einmal im Layout (auch nicht als
+  Hintergrund); derselbe Input wie bisher ändert nichts.
+- Beide sind Bedienung (Recht `control` wie `show_box`), wirken auch auf
+  Sendung sofort (das Layout wird wie bei `set_layout` neu an die Engine
+  gegeben), das Tally folgt.
+- Console: Im Rechtsklick-Menü eines Layouts „Boxen tauschen“ mit jedem
+  Paar von Boxen, je Box der Name ihres Inputs, auch wenn das Layout auf
+  Sendung ist. `set_box_input` nur per Aktion (Kurzbefehl, Cue, API);
+  in der Oberfläche bleibt dafür der Layout-Editor.
+
+Verworfen: Tausch als Tausch der Rechtecke (die Box-Reihenfolge ist die
+Zeichenreihenfolge; ein Tausch der Plätze hätte auch die Reihenfolge
+übereinander verändert) und Zuschnitt beim Box-Platz lassen (der Ausschnitt
+der einen Kamera passt selten zur anderen).
+
+**Geprüft**: Tests in lmix-core (Engine-Befehl nach dem Tausch auf
+Sendung, Sperre bleibt, Tally gleich, zurück getauscht wie vorher, Fehler
+für Box 0, fehlende Box und fehlendes Layout; neuer Input ohne Zuschnitt,
+Tally wechselt, Hintergrund oder Input einer anderen Box abgelehnt, Input
+ohne Bild abgelehnt), QML-Test der Layout-Leiste (Paare mit Namen, Wahl
+schickt `swap_boxes`, auch auf Sendung), `scripts/test-headless.sh` über
+die HTTP-API.
+
+**Offen**: Animation (Boxen gleiten an den neuen Platz), PRC.12.

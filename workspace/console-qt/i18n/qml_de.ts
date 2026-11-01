@@ -2939,14 +2939,24 @@
   <context>
     <name>LayoutBar</name>
     <message>
-      <location filename="../qml/LayoutBar.qml" line="+35" />
+      <location filename="../qml/LayoutBar.qml" line="+59" />
       <source>Layouts</source>
       <translation>Layouts</translation>
     </message>
     <message>
-      <location line="+23" />
-      <source>Click: into preview. Right click: edit or remove.</source>
-      <translation>Klick: in die Vorschau. Rechtsklick: bearbeiten oder entfernen.</translation>
+      <location line="-14" />
+      <source>Box %1 (%2) and box %3 (%4)</source>
+      <translation>Box %1 (%2) und Box %3 (%4)</translation>
+    </message>
+    <message>
+      <location line="-7" />
+      <source>%1, hidden</source>
+      <translation>%1, ausgeblendet</translation>
+    </message>
+    <message>
+      <location line="+44" />
+      <source>Click: into preview. Right click: edit, swap boxes or remove.</source>
+      <translation>Klick: in die Vorschau. Rechtsklick: bearbeiten, Boxen tauschen oder entfernen.</translation>
     </message>
     <message>
       <location line="+15" />
@@ -2965,6 +2975,11 @@
     </message>
     <message>
       <location line="+4" />
+      <source>Swap boxes</source>
+      <translation>Boxen tauschen</translation>
+    </message>
+    <message>
+      <location line="+8" />
       <source>Remove</source>
       <translation>Entfernen</translation>
     </message>
