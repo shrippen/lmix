@@ -7,7 +7,7 @@ User es als lmix-eigen entschieden hat.
 Stand 2026-11-01: `dev` (c426a7e) hat 172 Commits ohne Merges, die upstream `main` (4479d8c) nicht
 hat (`git log --no-merges 4479d8c..gitea/dev`).
 
-Stand 2026-11-01: bei Eyevinn liegen 18 PRs von uns (#1185–#1202, unten), auf `main` 4479d8c
+Stand 2026-11-01: bei Eyevinn liegen 20 PRs von uns (#1185–#1204, unten), auf `main` 4479d8c
 rebasiert. Issue-Entwürfe liegen bereit und gehen erst nach Freigabe raus; weitere PR-Branches
 auf upstream `main` sind vorbereitet und warten auf den Review.
 
@@ -35,7 +35,7 @@ Abgleich mit upstream: `git fetch https://github.com/Eyevinn/strom main` und
 | Buffer-Alter auch für Puffer vor der Uhr zählen | fb62d2b | PR | **Eyevinn #1198** (Branch `buffer-age-early-buffers`, dd59d7c) |
 | EFP-SRT-H.264-Decoder nach Rang statt Hersteller | ecd2ed6 | PR | Branch `efp-decoder-by-rank` (83b6fbf): Decoder jetzt nach den Parser-Caps (`can_sink_all_caps`, einmalige CAPS-Probe), Test mit 4:2:2 10 bit; Text fertig, im Review. Derselbe Fehler auf `dev` (Rang ohne Caps): Gitea #74 (`efp-decoder-from-caps`) |
 | GL-Eingänge und Underlays auf NVIDIA ohne udmabuf | 887248d, 2e4a749, #36 | Issue | Issue-Entwurf fertig, wartet auf Freigabe (Bedingung `/dev/udmabuf` mit logind-ACL, Richtung Funktionsprobe statt Herstellername); Branch `gl-upload-udmabuf-nvidia` wird auf die Probe umgebaut, PR nach dem Issue |
-| Inaktive Pads in den Compositoren ignorieren | 2ccb62b, bb4fcd5 | PR | Branch `vision-mixer-ignore-inactive-pads` (4851902), Review ohne Wichtig, Text korrigiert, wird eingereicht |
+| Inaktive Pads in den Compositoren ignorieren | 2ccb62b, bb4fcd5 | PR | **Eyevinn #1204** (Branch `vision-mixer-ignore-inactive-pads`, 4851902) |
 | Encoder: GPU-Speicher vor Software-Konvertierung herunterladen, vor NVENC auf der GPU konvertieren | 79b3b31, 3e8301e | – | upstream erledigt: a0e32bb (#1111, Download-Front) und 1e9b9c0 (kein `autovideoconvert` mehr); übrig nur CUDA-I420 aus dem CUDA-Mischer, gehört ins CUDA-Issue |
 | DSK bleibt an, wenn er während des Ausblendens eingeschaltet wird | 04b87d1 | Issue (mit d47a50a) | gehört zum Ein-/Ausblenden der DSK-Ebenen (d47a50a), steht im DSK-Issue-Entwurf als Folgefix |
 | Losgelassenes Standbild lässt die Haupt-Pipeline fallen | #15 | Issue (mit 7682d41) | im Branch `media-player-hold-last-frame` enthalten (behebt nur dessen Wiederholung) |
