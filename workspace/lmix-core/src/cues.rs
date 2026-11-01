@@ -179,6 +179,15 @@ fn ms(ms: u32) -> Duration {
     Duration::from_millis(u64::from(ms))
 }
 
+/// The cue with `id` below `cues`, in groups too.
+pub(crate) fn cue_by_id(cues: &[Cue], id: CueId) -> Option<&Cue> {
+    cues.iter().find_map(|c| {
+        (c.id == id)
+            .then_some(c)
+            .or_else(|| cue_by_id(&c.children, id))
+    })
+}
+
 /// Path of the cue with `id` below `cues` (indices per level).
 fn path_of(cues: &[Cue], id: CueId) -> Option<Vec<usize>> {
     for (i, cue) in cues.iter().enumerate() {
@@ -661,20 +670,30 @@ impl Runner {
     }
 
     /// After a list changed: standby at most one past its end; runs of
-    /// cues that are gone are dropped, and a group left without a running
-    /// child ends at `now` (its follow goes on).
-    pub fn list_changed(&mut self, lists: &[ShowCueList], now: Instant) {
+    /// cues that are gone stop as a stop would stop them (their sounds and
+    /// pictures fade out, each says it stopped), and a group left without
+    /// a running child ends at `now` (its follow goes on).
+    pub fn list_changed(&mut self, lists: &[ShowCueList], now: Instant) -> Vec<Out> {
         for entry in lists {
             if let Some(standby) = self.standby.get_mut(&entry.id) {
                 *standby = (*standby).min(entry.cues.len());
             }
         }
-        self.runs.retain(|r| {
-            lists
-                .iter()
-                .find(|l| l.id == r.list)
-                .is_some_and(|l| path_of(&l.cues, r.cue).is_some())
-        });
+        let gone: Vec<u64> = self
+            .runs
+            .iter()
+            .filter(|r| {
+                !lists
+                    .iter()
+                    .find(|l| l.id == r.list)
+                    .is_some_and(|l| path_of(&l.cues, r.cue).is_some())
+            })
+            .map(|r| r.id)
+            .collect();
+        let mut out = Vec::new();
+        if !gone.is_empty() {
+            self.stop_runs(&gone, now, SoundEnd::Own, &mut out);
+        }
         self.standby
             .retain(|id, _| lists.iter().any(|l| l.id == *id));
         let groups: Vec<u64> = self
@@ -686,6 +705,7 @@ impl Runner {
         for group in groups {
             self.parent_check(Some(group), now);
         }
+        out
     }
 
     /// How late the steps ran so far.
@@ -2189,7 +2209,7 @@ mod tests {
 
         let old = std::mem::replace(&mut lists[0].cues, vec![cut("New"), a, b]);
         runner.keep_standby(&lists[0], &old);
-        runner.list_changed(&lists, Instant::now());
+        let _ = runner.list_changed(&lists, Instant::now());
 
         assert_eq!(runner.standby(lists[0].id), 2, "still on B");
     }
@@ -2210,7 +2230,7 @@ mod tests {
 
         // A reload takes the child out while it runs.
         lists[0].cues[0].children = vec![cut("Flash")];
-        runner.list_changed(&lists, after(t, 5));
+        let _ = runner.list_changed(&lists, after(t, 5));
         let out = runner.tick(&lists, after(t, 10));
 
         assert_eq!(
@@ -2232,7 +2252,7 @@ mod tests {
         runner.go(&lists, 0, t, Guard::time(0)).unwrap();
 
         lists[0].cues.truncate(1);
-        runner.list_changed(&lists, Instant::now());
+        let _ = runner.list_changed(&lists, Instant::now());
 
         assert_eq!(runner.standby(lists[0].id), 1);
         assert!(

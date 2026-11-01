@@ -2422,7 +2422,20 @@ impl Service {
                 self.run_triggered(delay_ms, actions);
             }
         }
-        result.map(|()| sw.state())
+        // What the edit stopped (a running cue edited away, a mood layer
+        // removed): run like a stop, before the answer.
+        let outs = sw.take_outs();
+        if outs.is_empty() {
+            return result.map(|()| sw.state());
+        }
+        let since = self.panics.load(Ordering::Acquire);
+        drop(sw);
+        self.cue_wake.notify_one();
+        if let Err(e) = self.spawn_cue_outs(outs, since).await {
+            tracing::warn!(error = %e, "stops of an edit broke off");
+        }
+        result?;
+        Ok(self.state().await)
     }
 
     /// Actions of a shortcut in order; the first error stops them.
@@ -3895,6 +3908,255 @@ mod tests {
             .handle(Action::SetMoods { moods: good })
             .await
             .unwrap();
+    }
+
+    /// Light (actions) and music (a sound) in Taverne with Nacht, Ärger
+    /// with drums; the panic mood sets the light. With a zone for sounds.
+    async fn tavern_service() -> (Arc<Service>, Arc<NullEngine>, lmix_types::Moods) {
+        use lmix_types::{LayerContent, LayerId, MoodGroup, MoodId, MoodLayer, MoodVariant};
+        let engine = Arc::new(NullEngine::default());
+        let service = Service::new(4, engine.clone(), None);
+        service.handle(bars()).await.unwrap();
+        service
+            .handle(Action::SetZone {
+                zone: lmix_types::Zone {
+                    name: "Saal".into(),
+                    channels: 2,
+                },
+            })
+            .await
+            .unwrap();
+        let sound = |file: &str| LayerContent::Sound {
+            sound: lmix_types::SoundCue {
+                file: format!("/sounds/{file}.wav"),
+                repeat: lmix_types::SoundRepeat::Forever,
+                ..Default::default()
+            },
+        };
+        let light = |on| LayerContent::Actions {
+            actions: vec![Action::SetFadeToBlack { on, duration_ms: 0 }],
+        };
+        let layer = |name: &str| MoodLayer {
+            id: LayerId::new(),
+            name: name.into(),
+            fade_ms: None,
+        };
+        let (licht, musik) = (layer("Licht"), layer("Musik"));
+        let (l, m) = (licht.id, musik.id);
+        let moods = lmix_types::Moods {
+            layers: vec![licht, musik],
+            groups: vec![
+                MoodGroup {
+                    id: MoodId::new(),
+                    name: "Taverne".into(),
+                    color: None,
+                    base: [(l, light(true)), (m, sound("lute"))].into(),
+                    variants: vec![MoodVariant {
+                        id: MoodId::new(),
+                        name: "Nacht".into(),
+                        layers: [(m, sound("crickets"))].into(),
+                    }],
+                },
+                MoodGroup {
+                    id: MoodId::new(),
+                    name: "Ärger".into(),
+                    color: None,
+                    base: [(m, sound("drums"))].into(),
+                    variants: Vec::new(),
+                },
+            ],
+            panic: [(l, light(false))].into(),
+            ..Default::default()
+        };
+        service
+            .handle(Action::SetMoods {
+                moods: moods.clone(),
+            })
+            .await
+            .unwrap();
+        (service, engine, moods)
+    }
+
+    /// Ids of the sounds the engine was told to stop, from `from` on.
+    fn stopped_sounds(engine: &NullEngine, from: usize) -> Vec<String> {
+        engine.log()[from..]
+            .iter()
+            .filter_map(|c| match c {
+                Command::StopSound { id: Some(id), .. } => Some(id.clone()),
+                _ => None,
+            })
+            .collect()
+    }
+
+    #[tokio::test]
+    async fn a_mood_is_set_by_its_name_in_any_case() {
+        let (service, _, moods) = tavern_service().await;
+        let state = service
+            .handle(Action::SetMood {
+                mood: "ärger".into(),
+                fade_ms: None,
+            })
+            .await
+            .unwrap();
+        assert_eq!(state.mood.mood, Some(moods.groups[1].id));
+    }
+
+    #[tokio::test]
+    async fn removing_a_layer_or_the_mood_that_runs_stops_what_nobody_has() {
+        use lmix_types::LayerOrigin;
+        let (service, engine, moods) = tavern_service().await;
+        let (licht, musik) = (moods.layers[0].id, moods.layers[1].id);
+        service
+            .handle(Action::SetMood {
+                mood: "Taverne / Nacht".into(),
+                fade_ms: None,
+            })
+            .await
+            .unwrap();
+        let night = moods.groups[0].variants[0].id;
+
+        // Nacht goes: no mood is set, light and crickets run on.
+        let mut no_night = moods.clone();
+        no_night.groups[0].variants.clear();
+        let from = engine.log().len();
+        let state = service
+            .handle(Action::SetMoods { moods: no_night })
+            .await
+            .unwrap();
+        assert!(stopped_sounds(&engine, from).is_empty());
+        assert_eq!(state.mood.mood, None);
+        assert_eq!(state.mood.layers.len(), 2);
+        assert_eq!(
+            state.mood.layers[1].origin,
+            LayerOrigin::Mood { mood: night }
+        );
+
+        // The music layer goes: its crickets fade out over the change time.
+        let mut no_music = moods.clone();
+        no_music.groups[0].variants.clear();
+        no_music.layers.retain(|l| l.id != musik);
+        for group in &mut no_music.groups {
+            group.base.remove(&musik);
+        }
+        let from = engine.log().len();
+        let state = service
+            .handle(Action::SetMoods { moods: no_music })
+            .await
+            .unwrap();
+        let stops: Vec<_> = engine.log()[from..]
+            .iter()
+            .filter_map(|c| match c {
+                Command::StopSound {
+                    id: Some(id),
+                    fade_ms,
+                } => Some((id.clone(), *fade_ms)),
+                _ => None,
+            })
+            .collect();
+        assert!(
+            matches!(&stops[..], [(id, ms)] if id.starts_with(&format!("mood-{musik}")) && *ms == moods.change_ms),
+            "{stops:?}"
+        );
+        assert_eq!(state.mood.layers.len(), 1);
+        assert_eq!(state.mood.layers[0].layer, licht);
+    }
+
+    #[tokio::test]
+    async fn removing_a_list_stops_its_cues_and_frees_their_layers() {
+        use lmix_types::{Cue, CueKind};
+        let (service, engine, moods) = tavern_service().await;
+        let musik = moods.layers[1].id;
+        service
+            .handle(Action::SetMood {
+                mood: "Taverne".into(),
+                fade_ms: None,
+            })
+            .await
+            .unwrap();
+        let rain = Cue {
+            name: "Regen".into(),
+            layer: Some(musik),
+            sound: Some(lmix_types::SoundCue {
+                file: "/sounds/rain.wav".into(),
+                repeat: lmix_types::SoundRepeat::Forever,
+                ..Default::default()
+            }),
+            ..Cue::empty(CueKind::Sound)
+        };
+        let rain_id = rain.id;
+        let state = service
+            .handle(Action::AddCueList {
+                name: "Show".into(),
+                cues: vec![rain],
+                source: None,
+            })
+            .await
+            .unwrap();
+        let list = state.cue_lists[0].id;
+        let state = service.handle(Action::CueGo { list: None }).await.unwrap();
+        assert_eq!(
+            state.mood.layers[1].origin,
+            lmix_types::LayerOrigin::Cue { list, cue: rain_id }
+        );
+
+        let mut events = service.subscribe();
+        let from = engine.log().len();
+        let state = service
+            .handle(Action::RemoveCueList {
+                list: InputRef::Text(list.to_string()),
+            })
+            .await
+            .unwrap();
+        assert_eq!(stopped_sounds(&engine, from), [rain_id.to_string()]);
+        assert!(state.running_cues.is_empty());
+        assert!(
+            !state.mood.layers.iter().any(|l| l.layer == musik),
+            "the music layer is free: {:?}",
+            state.mood.layers
+        );
+        let mut said = false;
+        while let Ok(event) = events.try_recv() {
+            said |= matches!(event, Event::Cue { cue: Some(c), what: lmix_types::CueEvent::Stopped, .. } if c == rain_id);
+        }
+        assert!(said, "the cue says it stopped");
+    }
+
+    #[tokio::test]
+    async fn a_cue_after_a_panic_takes_a_layer_of_the_panic_mood() {
+        use lmix_types::{Cue, LayerOrigin};
+        let (service, _, moods) = tavern_service().await;
+        let licht = moods.layers[0].id;
+        service
+            .handle(Action::SetMood {
+                mood: "Taverne".into(),
+                fade_ms: None,
+            })
+            .await
+            .unwrap();
+        let state = service
+            .handle(Action::CuePanic { ms: Some(0) })
+            .await
+            .unwrap();
+        assert_eq!(state.mood.layers[0].origin, LayerOrigin::Panic);
+        let cue = Cue {
+            layer: Some(licht),
+            ..Cue::actions("Spot", vec![Action::FadeToBlack { duration_ms: 0 }])
+        };
+        let cue_id = cue.id;
+        let state = service
+            .handle(Action::AddCueList {
+                name: "Show".into(),
+                cues: vec![cue],
+                source: None,
+            })
+            .await
+            .unwrap();
+        let list = state.cue_lists[0].id;
+        let state = service.handle(Action::CueGo { list: None }).await.unwrap();
+        assert_eq!(
+            state.mood.layers[0].origin,
+            LayerOrigin::Cue { list, cue: cue_id }
+        );
     }
 
     #[tokio::test]

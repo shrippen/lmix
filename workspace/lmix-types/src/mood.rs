@@ -19,7 +19,7 @@
 //!  "groups": [{"id": "…", "name": "Tavern",
 //!              "base": {"<layer id>": {"kind": "actions", "actions": […]}},
 //!              "variants": [{"id": "…", "name": "Night", "layers": {…}}]}],
-//!  "collections": [{"id": "…", "name": "Act 1", "moods": [{"group": "…"}]}]}
+//!  "collections": [{"id": "…", "name": "Act 1", "moods": ["<mood id>"], "pads": ["<cue id>"]}]}
 //! ```
 
 use std::collections::BTreeMap;
@@ -42,6 +42,9 @@ pub const MOOD_GROUPS: usize = 256;
 
 /// Collections of a show, and entries of one (MOOD.7).
 pub const MOOD_COLLECTIONS: usize = 64;
+
+/// Longest name of a layer, group, variant or collection, in characters.
+pub const MOOD_NAME_MAX: usize = 64;
 
 /// Change time of a show without its own (MOOD.1).
 pub const MOOD_CHANGE_MS: u32 = 3000;
@@ -256,18 +259,24 @@ impl Moods {
 
     /// The mood `text` names: an id, a group's name, or "group / variant"
     /// (names ignore case and spaces around the slash).
+    /// A text that reads as an id but names none is taken as a name (a
+    /// group may be called like an id).
     pub fn lookup(&self, text: &str) -> Option<MoodPlace<'_>> {
-        if let Ok(id) = text.trim().parse::<Uuid>() {
-            return self.find(MoodId(id));
+        if let Some(place) = text
+            .trim()
+            .parse::<Uuid>()
+            .ok()
+            .and_then(|id| self.find(MoodId(id)))
+        {
+            return Some(place);
         }
-        let same = |a: &str, b: &str| a.trim().eq_ignore_ascii_case(b.trim());
         let (group, variant) = match text.split_once('/') {
             Some((g, v)) => (g, Some(v)),
             None => (text, None),
         };
-        let group = self.groups.iter().find(|g| same(&g.name, group))?;
+        let group = self.groups.iter().find(|g| same_name(&g.name, group))?;
         let variant = match variant {
-            Some(v) => Some(group.variants.iter().find(|x| same(&x.name, v))?),
+            Some(v) => Some(group.variants.iter().find(|x| same_name(&x.name, v))?),
             None => None,
         };
         Some(MoodPlace { group, variant })
@@ -283,6 +292,21 @@ impl Moods {
             .or_else(|| place.group.base.get(&layer))
             .unwrap_or(&OFF)
     }
+}
+
+/// Whether two names of moods, layers or collections are the same: spaces
+/// around them and case do not count, in any script ("Ärger" is "ärger").
+/// Without allocating, for lookups by name.
+pub fn same_name(a: &str, b: &str) -> bool {
+    a.trim()
+        .chars()
+        .flat_map(char::to_lowercase)
+        .eq(b.trim().chars().flat_map(char::to_lowercase))
+}
+
+/// A name as [`same_name`] compares it, for sets of names.
+pub fn name_key(name: &str) -> String {
+    name.trim().chars().flat_map(char::to_lowercase).collect()
 }
 
 /// Who put what runs on a layer (MOOD.5).
@@ -399,5 +423,38 @@ mod tests {
         let json = serde_json::to_string(&tavern).expect("writes");
         let back: Moods = serde_json::from_str(&json).expect("reads");
         assert_eq!(back, tavern);
+    }
+
+    #[test]
+    fn names_are_found_in_any_case_and_script() {
+        let (mut moods, ..) = tavern();
+        moods.groups[0].name = "Ärger".into();
+        moods.groups[0].variants[0].name = "Straße Σ".into();
+        let night = moods.groups[0].variants[0].id;
+        assert_eq!(
+            moods.lookup(" ärger ").map(|p| p.id()),
+            Some(moods.groups[0].id)
+        );
+        assert_eq!(
+            moods.lookup("ÄRGER / straße σ").map(|p| p.id()),
+            Some(night)
+        );
+        assert!(same_name("Ärger", " ärger"));
+        assert!(!same_name("Ärger", "Ärgern"));
+        assert_eq!(name_key(" ÄRGER "), name_key("ärger"));
+    }
+
+    #[test]
+    fn a_name_that_reads_as_an_id_is_still_a_name() {
+        let (mut moods, ..) = tavern();
+        let like_an_id = Uuid::new_v4().to_string();
+        moods.groups[0].name = like_an_id.clone();
+        assert_eq!(
+            moods.lookup(&like_an_id).map(|p| p.id()),
+            Some(moods.groups[0].id)
+        );
+        // An id that is one still wins.
+        let id = moods.groups[0].variants[0].id;
+        assert_eq!(moods.lookup(&id.to_string()).map(|p| p.id()), Some(id));
     }
 }
