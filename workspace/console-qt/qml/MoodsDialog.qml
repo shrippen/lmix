@@ -281,26 +281,12 @@ KanteDialog {
         when it changed and is not empty), Escape goes back to the name kept
         without sending; a second Escape closes the dialog. After either the
         field shows the name kept again: a refused one does not stay. */
-    component NameField: KanteTextField {
+    component NameField: LimitedField {
         id: nameEdit
         /** The name kept now. */
         property string kept
-        /** The longest name to type; 0: Qt's own limit. */
-        property int limit: 0
         signal renamed(string name)
         text: kept
-        // Cut while typing: lmix-core would refuse a longer name.
-        Binding on maximumLength {
-            when: nameEdit.limit > 0
-            value: nameEdit.limit
-        }
-        // Cut on whole characters, not inside an emoji.
-        onTextChanged: {
-            const whole = Texts.whole(text)
-            if (whole !== text) {
-                text = whole
-            }
-        }
         onEditingFinished: {
             const name = text.trim()
             if (name !== "" && name !== kept) {

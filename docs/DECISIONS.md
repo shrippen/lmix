@@ -7606,3 +7606,32 @@ nicht mit (die unterste von 16 Ebenen ging nicht in einem Zug nach oben).
 (`test_the_layer_reads_as_a_pane_of_messages`),
 `forms::tests::lists_carry_serde_names`; alle schlugen ohne die Änderung
 fehl. Alle QML-Tests (331).
+
+## 2026-11-01 — Felder mit Längengrenze: `LimitedField`
+
+**Kontext**: `Texts.whole` (MOOD Stufe 7d) wirft die übrige Hälfte eines
+Emojis weg, wenn `maximumLength` es entzweischneidet; der `onTextChanged`-Block
+dafür stand dreimal kopiert (`MoodsDialog` NameField, `BusPanel`,
+`NarrowMixer`). Das Review fand zwei weitere Felder mit Grenze ohne ihn:
+Dateiname der Aufnahme (`AddOutputDialog`, `file_name_max`) und Notiz der
+Marke (`OutputsPage`, `mark_text_max`). Weitere `maximumLength` gibt es in der
+Console nicht.
+
+**Optionen**: den Block ein viertes und fünftes Mal kopieren; oder ein
+Baustein, der ihn einmal hält.
+
+**Entscheidung**: `qml/LimitedField.qml`, ein `KanteTextField` mit `limit`
+(0: Qts eigene Grenze, wie bisher `Binding on maximumLength` im NameField)
+und dem Schnitt auf ganze Zeichen. Alle fünf Stellen nehmen ihn; ihre
+eigenen `onEditingFinished`, Escape und das Wiederherstellen der Bindung
+bleiben wie sie waren (der Schnitt setzt `text` und hebt damit eine Bindung
+auf, die Stellen binden beim Fertigstellen neu). Kein Kante-Baustein: der
+Schnitt hängt an `Texts` der Console.
+
+**Bricht**: nichts.
+
+**Geprüft**: `tst_limited_field.qml` (63 Zeichen plus Emoji, ohne Grenze,
+Bindung nach dem Schnitt), `tst_add_output_dialog.qml`
+(`test_a_recording_keeps_its_file_name`), `tst_outputs_page.qml`
+(`test_mark_writes_the_note_once`); die bisherigen Tests der Mood-, Bus- und
+Mixer-Felder unverändert grün.
