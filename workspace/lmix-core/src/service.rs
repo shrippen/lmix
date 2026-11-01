@@ -805,11 +805,16 @@ impl Service {
     }
 
     async fn run_cue_outs_held(self: &Arc<Self>, out: Vec<crate::cues::Out>, since: u64) {
-        // Cues a panic started that a layer of the panic mood kept out:
-        // their actions do not run, the panic mood wins (MOOD.9). Rare:
-        // empty, it allocates nothing.
-        let mut kept_out: Vec<(lmix_types::InputId, lmix_types::CueId)> = Vec::new();
-        for o in out {
+        // A cue the panic started on a layer of the panic mood: the panic
+        // mood's actions there run again after the cue's, so it wins on
+        // the same target (MOOD.9). Not when the panic mood runs later in
+        // this batch anyway (a panic's own). Its take comes right before
+        // its actions.
+        let last_mood = out
+            .iter()
+            .rposition(|o| matches!(o, crate::cues::Out::Mood { .. }));
+        let mut again: Option<(lmix_types::InputId, lmix_types::CueId, Vec<Action>)> = None;
+        for (at, o) in out.into_iter().enumerate() {
             if self.panicked_since(since)
                 && matches!(
                     o,
@@ -864,19 +869,25 @@ impl Service {
                         if self.panicked_since(since) {
                             continue;
                         }
-                        let Some(actions) = sw.mood_take(layer, list, cue, panic) else {
-                            kept_out.push((list, cue));
-                            continue;
-                        };
-                        self.publish(&sw);
-                        actions
+                        match sw.mood_take(layer, list, cue, panic) {
+                            crate::moods::Take::Fade(actions) => {
+                                self.publish(&sw);
+                                actions
+                            }
+                            crate::moods::Take::Panic(actions) => {
+                                if !actions.is_empty() && last_mood.is_none_or(|m| m < at) {
+                                    again = Some((list, cue, actions));
+                                }
+                                continue;
+                            }
+                        }
                     };
                     self.run_mood_actions(actions, since).await;
                 }
-                crate::cues::Out::Actions { list, cue, .. } if kept_out.contains(&(list, cue)) => {
-                    tracing::info!(%cue, "cue of the panic left out: the panic mood has its layer");
-                }
                 crate::cues::Out::Actions { list, cue, actions } => {
+                    let after = again
+                        .take_if(|(l, c, _)| *l == list && *c == cue)
+                        .map(|(.., actions)| actions);
                     for action in actions {
                         // A panic from a cue always goes.
                         if self.panicked_since(since)
@@ -907,8 +918,16 @@ impl Service {
                         });
                         break;
                     }
+                    if let Some(actions) = after {
+                        self.run_mood_actions(actions, since).await;
+                    }
                 }
             }
+        }
+        // A take without actions after it (never from `fire`): still the
+        // panic mood's last.
+        if let Some((.., actions)) = again {
+            self.run_mood_actions(actions, since).await;
         }
     }
 
@@ -4175,27 +4194,69 @@ mod tests {
     }
 
     #[tokio::test(start_paused = true)]
-    async fn a_late_emergency_cue_on_a_panic_layer_does_not_win() {
-        use lmix_types::{Cue, LayerOrigin};
-        let (service, _, moods) = tavern_service().await;
+    async fn emergency_cues_on_a_panic_layer_run_and_the_panic_mood_wins() {
+        use lmix_types::{Cue, CueKind, LayerOrigin};
+        let (service, engine, moods) = tavern_service().await;
         tokio::spawn(service.clone().watch_cues());
         let licht = moods.layers[0].id;
-        // After its wait it would darken what the panic mood lights.
-        let dark = Cue {
+        // The light as a value the panic mood and the cues set.
+        let mut moods = moods;
+        let light = |value: &str| Action::SetDynamicValue {
+            slot: 1,
+            value: value.into(),
+        };
+        moods.panic.insert(
+            licht,
+            lmix_types::LayerContent::Actions {
+                actions: vec![light("Saallicht")],
+            },
+        );
+        service.handle(Action::SetMoods { moods }).await.unwrap();
+        let lit = |state: &ShowState| state.dynamic_values[0] == "Saallicht";
+        let dark = || light("dunkel");
+        // At once: darkens what the panic mood lights, and puts Bars to
+        // preview (an other target).
+        let at_once = Cue {
+            layer: Some(licht),
+            ..Cue::actions(
+                "Sofort",
+                vec![
+                    dark(),
+                    Action::PreviewInput {
+                        input: InputRef::Text("Bars".into()),
+                    },
+                ],
+            )
+        };
+        // After its wait: the same, and cuts Bars.
+        let late = Cue {
             layer: Some(licht),
             pre_wait_ms: 100,
             ..Cue::actions(
-                "Dunkel",
-                vec![Action::SetFadeToBlack {
-                    on: true,
-                    duration_ms: 0,
-                }],
+                "Später",
+                vec![
+                    dark(),
+                    Action::CutDirect {
+                        input: InputRef::Text("Bars".into()),
+                    },
+                ],
             )
         };
+        // An announcement on the same layer.
+        let announcement = Cue {
+            name: "Durchsage".into(),
+            layer: Some(licht),
+            sound: Some(lmix_types::SoundCue {
+                file: "/sounds/durchsage.wav".into(),
+                ..Default::default()
+            }),
+            ..Cue::empty(CueKind::Sound)
+        };
+        let announcement_id = announcement.id;
         service
             .handle(Action::AddCueList {
                 name: "Notfall".into(),
-                cues: vec![dark],
+                cues: vec![at_once, late, announcement],
                 source: None,
             })
             .await
@@ -4206,15 +4267,28 @@ mod tests {
             })
             .await
             .unwrap();
-        service
+        let state = service
             .handle(Action::CuePanic { ms: Some(0) })
             .await
             .unwrap();
+        assert!(state.preview.is_some(), "the other target got its preview");
+        assert!(state.program.is_none(), "the late cue waits");
+        assert!(lit(&state), "the panic mood's light wins");
+        assert!(
+            engine.log().iter().any(
+                |c| matches!(c, Command::PlaySound { id, .. } if *id == announcement_id.to_string())
+            ),
+            "the announcement plays"
+        );
         tokio::time::sleep(std::time::Duration::from_millis(300)).await;
         let state = service.state().await;
-        assert!(state.running_cues.is_empty(), "the cue fired");
-        assert!(!state.fade_to_black, "the panic mood's light stays");
+        assert!(state.program.is_some(), "the late cue ran");
+        assert!(lit(&state), "and the panic mood's light won again");
         assert_eq!(state.mood.layers[0].origin, LayerOrigin::Panic);
+        // The announcement ends as any sound cue: when the engine says so.
+        let mut sw = service.switcher.lock().await;
+        sw.media_ended(&announcement_id.to_string(), tokio::time::Instant::now());
+        assert!(sw.state().running_cues.is_empty());
     }
 
     #[tokio::test]

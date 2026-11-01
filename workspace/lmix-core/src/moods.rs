@@ -56,6 +56,17 @@ fn fades(action: &Action) -> bool {
     )
 }
 
+/// What a cue taking a layer gives ([`MoodRunner::take`]).
+#[derive(Debug, PartialEq)]
+pub enum Take {
+    /// The layer is the cue's: these fade out what ran there, before the
+    /// cue's own actions.
+    Fade(Vec<Action>),
+    /// The layer stays the panic mood's: its actions there, to run again
+    /// after the cue's own.
+    Panic(Vec<Action>),
+}
+
 #[derive(Debug, Default)]
 pub struct MoodRunner {
     mood: Option<MoodId>,
@@ -221,9 +232,10 @@ impl MoodRunner {
     /// panic too (what the panic mood set there stays, like a mood's
     /// actions). A layer the show does not have: nothing. A cue the panic
     /// started (`by_panic`: the emergency list's, at once or later, its
-    /// children, follows and starts) takes no layer of the panic mood:
-    /// the panic mood wins (MOOD.9): `None`, and the cue's own actions
-    /// are not to run either.
+    /// children, follows and starts) leaves a layer of the panic mood the
+    /// panic's: its actions run all the same (SAF.4), and then the panic
+    /// mood's of the layer again, so on the same target the panic mood
+    /// wins (MOOD.9) — [`Take::Panic`].
     pub fn take(
         &mut self,
         moods: &Moods,
@@ -231,15 +243,20 @@ impl MoodRunner {
         list: InputId,
         cue: CueId,
         by_panic: bool,
-    ) -> Option<Vec<Action>> {
+    ) -> Take {
         let Some(own) = moods.layers.iter().find(|l| l.id == layer) else {
-            return Some(Vec::new());
+            return Take::Fade(Vec::new());
         };
         let mut out = Vec::new();
         let taken = LayerOrigin::Cue { list, cue };
         match self.layers.get(&layer).map(|p| &p.origin) {
-            Some(LayerOrigin::Panic) if by_panic => return None,
-            Some(origin) if *origin == taken => return Some(out),
+            Some(LayerOrigin::Panic) if by_panic => {
+                return Take::Panic(match moods.panic.get(&layer) {
+                    Some(LayerContent::Actions { actions }) => actions.clone(),
+                    _ => Vec::new(),
+                });
+            }
+            Some(origin) if *origin == taken => return Take::Fade(out),
             _ => {}
         }
         self.stop(layer, own.fade_ms.unwrap_or(moods.change_ms), &mut out);
@@ -251,7 +268,7 @@ impl MoodRunner {
                 origin: taken,
             },
         );
-        Some(out)
+        Take::Fade(out)
     }
 
     /// The sound or picture `id` is gone: it did not start (a file
@@ -464,6 +481,15 @@ mod tests {
     use super::*;
     use lmix_types::{MoodGroup, MoodLayer, MoodVariant, SoundCue};
 
+    impl Take {
+        fn fade(self) -> Vec<Action> {
+            match self {
+                Take::Fade(actions) => actions,
+                Take::Panic(_) => panic!("kept for the panic"),
+            }
+        }
+    }
+
     struct Tavern {
         moods: Moods,
         light: LayerId,
@@ -564,9 +590,7 @@ mod tests {
         let (list, cue) = (InputId::new(), CueId::new());
 
         // The lute fades out over the change time; the cue has the layer.
-        let out = runner
-            .take(&t.moods, t.music, list, cue, false)
-            .expect("taken");
+        let out = runner.take(&t.moods, t.music, list, cue, false).fade();
         assert!(
             matches!(&out[..], [Action::StopSound { fade_ms: 3000, .. }]),
             "{out:?}"
@@ -576,7 +600,7 @@ mod tests {
         assert!(
             runner
                 .take(&t.moods, t.music, list, cue, false)
-                .expect("taken")
+                .fade()
                 .is_empty(),
             "taken already"
         );
@@ -616,9 +640,7 @@ mod tests {
         assert!(matches!(&out[..], [Action::PlaySound { .. }]), "{out:?}");
 
         let (list, cue) = (InputId::new(), CueId::new());
-        runner
-            .take(&t.moods, t.music, list, cue, false)
-            .expect("taken");
+        runner.take(&t.moods, t.music, list, cue, false).fade();
         assert!(!runner.cue_over(list, CueId::new()), "another cue");
         assert!(runner.cue_over(list, cue));
         assert!(runner
@@ -689,20 +711,18 @@ mod tests {
         assert!(
             runner
                 .take(&t.moods, t.light, list, first, false)
-                .expect("taken")
+                .fade()
                 .is_empty(),
             "nothing ran there"
         );
-        let out = runner
-            .take(&t.moods, t.light, list, second, false)
-            .expect("taken");
+        let out = runner.take(&t.moods, t.light, list, second, false).fade();
         assert!(
             matches!(&out[..], [Action::CueStop { cue: Some(c), .. }] if *c == first.to_string())
         );
         assert!(
             runner
                 .take(&t.moods, LayerId::new(), list, first, false)
-                .expect("taken")
+                .fade()
                 .is_empty(),
             "no such layer"
         );
@@ -710,13 +730,17 @@ mod tests {
         runner.panic(&t.moods);
         assert_eq!(runner.now(&t.moods, 0).layers[0].origin, LayerOrigin::Panic);
         // A cue the panic started does not.
-        assert!(runner.take(&t.moods, t.light, list, first, true).is_none());
+        assert_eq!(
+            runner.take(&t.moods, t.light, list, first, true),
+            Take::Panic(vec![http("house")]),
+            "the panic mood's light again after the cue's"
+        );
         assert_eq!(runner.now(&t.moods, 0).layers[0].origin, LayerOrigin::Panic);
         // After the panic a cue takes its layer: the light it set stays
         // until the cue's actions run, nothing to fade (MOOD.5).
         assert!(runner
             .take(&t.moods, t.light, list, second, false)
-            .expect("taken")
+            .fade()
             .is_empty());
         assert_eq!(
             runner.now(&t.moods, 0).layers[0].origin,
@@ -997,9 +1021,7 @@ mod tests {
         let mut runner = MoodRunner::default();
         let (list, cue) = (InputId::new(), CueId::new());
         runner.set(&t.moods, "Tavern", None, 0).expect("set");
-        runner
-            .take(&t.moods, t.music, list, cue, false)
-            .expect("taken");
+        runner.take(&t.moods, t.music, list, cue, false).fade();
         t.moods.layers.retain(|l| l.id != t.music);
         assert!(runner.trim(&t.moods).is_empty(), "the cue plays on");
         assert!(!runner.holds(list, cue));
@@ -1010,12 +1032,8 @@ mod tests {
         let t = tavern();
         let mut runner = MoodRunner::default();
         let (list, cue, other) = (InputId::new(), CueId::new(), CueId::new());
-        runner
-            .take(&t.moods, t.music, list, cue, false)
-            .expect("taken");
-        runner
-            .take(&t.moods, t.light, list, other, false)
-            .expect("taken");
+        runner.take(&t.moods, t.music, list, cue, false).fade();
+        runner.take(&t.moods, t.light, list, other, false).fade();
         runner.keep_cues(|_, c| c == other);
         assert!(!runner.holds(list, cue));
         assert!(runner.holds(list, other));

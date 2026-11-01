@@ -6638,18 +6638,23 @@ gesperrt blieb und `set_moods` Unstimmiges annahm.
   Schritte kostet das nichts.
 - **Nach der Panik** nimmt ein Cue eine Ebene der Panik-Stimmung wie jede
   andere (MOOD.5); vorher blieb sie bis zur nächsten Stimmung gesperrt.
-  Geschützt bleibt sie nur gegen die Cues, die die Panik selbst startet:
-  die der Notfall-Liste, ob sofort oder nach ihrer Wartezeit, und was sie
-  weiter starten (Kinder einer Gruppe, Folge-Cues, Start-Cues). Solche
+  Für die Cues, die die Panik selbst startet (die der Notfall-Liste, ob
+  sofort oder nach ihrer Wartezeit, und was sie weiter starten: Kinder
+  einer Gruppe, Folge-Cues, Start-Cues), bleibt die Ebene „Panik“: solche
   Läufe tragen eine Marke (`Run::panic`, in `Out::TakeLayer`), und
-  `MoodRunner::take` lässt sie keine Ebene der Panik-Stimmung nehmen: die
-  Panik-Stimmung gewinnt (MOOD.9), die Ebene bleibt „Panik“. Auch die
-  Aktionen eines so abgewiesenen Cues laufen nicht (sonst schaltete ein
-  später feuerndes „Licht aus“ das Saallicht der Panik ab, während die
-  Seite „Panik“ zeigt). Ein GO des Bedieners danach nimmt die Ebene.
-  Ein Start-Cue der Notfall-Liste markiert die Läufe, die er startet, samt
-  ihrer Folge-Kette: auch sie nehmen keine Ebene der Panik-Stimmung, bis
-  eine neue Stimmung gesetzt ist (dann ist die Ebene nicht mehr „Panik“).
+  `MoodRunner::take` gibt dann `Take::Panic` mit den Aktionen der
+  Panik-Stimmung auf dieser Ebene. Die Aktionen des Cues laufen trotzdem
+  (die Notfall-Liste bleibt unverändert, SAF.4: Anfragen an andere Ziele,
+  eine Durchsage als Klang-Cue, die normal endet), danach laufen die der
+  Panik-Stimmung für diese Ebene noch einmal, so gewinnt sie auf demselben
+  Ziel (MOOD.9). Im Panik-Batch selbst entfällt die Wiederholung, dort
+  läuft die Panik-Stimmung ohnehin zuletzt. Verworfen: die Aktionen eines
+  solchen Cues ganz zu überspringen (Zwischenstand der Review; er verlor
+  fremde Ziele, und ein Klang-Cue hing als „läuft“). Ein GO des Bedieners
+  danach nimmt die Ebene. Ein Start-Cue der Notfall-Liste markiert die
+  Läufe, die er startet, samt ihrer Folge-Kette: auch sie nehmen keine
+  Ebene der Panik-Stimmung, bis eine neue Stimmung gesetzt ist (dann ist
+  die Ebene nicht mehr „Panik“).
 - **Aktionen einer Ebene** spielen keinen Klang und zeigen kein Bild
   (`play_sound`, `show_picture`, Pegel und Blenden davon): die Ebene kennte
   sie nicht, sie blendeten nie aus. Dafür hat eine Ebene Klang oder Bild.
@@ -6683,7 +6688,7 @@ Sammlungsnamen, zu langen Namen oder Klang per Aktion in einer Ebene
 **Geprüft**: `service::tests::removing_a_layer_or_the_mood_that_runs_stops_what_nobody_has`,
 `removing_a_list_stops_its_cues_and_frees_their_layers`,
 `a_cue_after_a_panic_takes_a_layer_of_the_panic_mood`,
-`a_late_emergency_cue_on_a_panic_layer_does_not_win`,
+`emergency_cues_on_a_panic_layer_run_and_the_panic_mood_wins`,
 `a_mood_is_set_by_its_name_in_any_case`;
 `switcher::tests::moods_need_distinct_names_ids_and_entries_that_are_there`,
 `a_pad_edited_away_leaves_its_collections`,

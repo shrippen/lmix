@@ -4036,16 +4036,15 @@ impl Switcher {
     }
 
     /// Cue `cue` of `list` takes mood layer `layer` (MOOD.5): the actions
-    /// that fade the mood out there. `by_panic`: a run a panic started;
-    /// `None` when that keeps it from a layer of the panic mood (its
-    /// actions do not run either, MOOD.9).
+    /// that fade the mood out there. `by_panic`: a run a panic started,
+    /// which leaves a layer of the panic mood the panic's (MOOD.9).
     pub fn mood_take(
         &mut self,
         layer: lmix_types::LayerId,
         list: lmix_types::InputId,
         cue: lmix_types::CueId,
         by_panic: bool,
-    ) -> Option<Vec<Action>> {
+    ) -> crate::moods::Take {
         self.moods
             .take(&self.show.moods, layer, list, cue, by_panic)
     }
@@ -10877,7 +10876,10 @@ mod tests {
                     panic,
                 } = o
                 {
-                    if sw.mood_take(layer, list, cue, panic).is_some() {
+                    if matches!(
+                        sw.mood_take(layer, list, cue, panic),
+                        crate::moods::Take::Fade(_)
+                    ) {
                         takes += 1;
                     }
                 }
