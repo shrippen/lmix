@@ -940,6 +940,7 @@ pub fn output_flow(
             encoding,
             split_minutes,
             split_mb,
+            file_name,
         } => {
             add_encoder(&mut flow, *video_kbps, encoding, framerate);
             let recorder = match (container, live_mkv) {
@@ -951,7 +952,7 @@ pub fn output_flow(
                 ("output_dir", PropertyValue::String(folder.clone())),
                 (
                     "filename_prefix",
-                    PropertyValue::String(super::marks::recording_prefix(id)),
+                    PropertyValue::String(super::marks::file_prefix(id, file_name)),
                 ),
                 ("num_audio_tracks", PropertyValue::UInt(u64::from(sound))),
             ];
@@ -3409,6 +3410,7 @@ mod tests {
             encoding: Default::default(),
             split_minutes: 0,
             split_mb: 0,
+            file_name: String::new(),
         };
         let flow = output_flow(
             OutputId::new(),
@@ -3450,6 +3452,29 @@ mod tests {
             LiveMkv::Yes,
         );
         assert_ne!(prefix(&flow), prefix(&other));
+        // REC.5: a filled-in name instead (the switcher fills it in).
+        let named = OutputSpec::Record {
+            folder: "show".into(),
+            container: lmix_types::Container::Mkv,
+            video_kbps: 8000,
+            encoding: Default::default(),
+            split_minutes: 0,
+            split_mb: 0,
+            file_name: "Talk B".into(),
+        };
+        let named = output_flow(
+            OutputId::new(),
+            &named,
+            Feed::Program,
+            None,
+            MixerBackend::Cpu,
+            Framerate::default(),
+            LiveMkv::Yes,
+        );
+        assert_eq!(
+            prefix(&named),
+            format!("{:?}", Some(PropertyValue::String("Talk B".into())))
+        );
         let id = OutputId::new();
         let own = crate::engine::marks::recording_prefix(id);
         assert_eq!(own, format!("lmix-{}", &id.to_string()[..8]));
@@ -3465,6 +3490,7 @@ mod tests {
             encoding: Default::default(),
             split_minutes: 0,
             split_mb: 0,
+            file_name: String::new(),
         };
         let recorder = |container, version: &str| {
             let flow = output_flow(
@@ -3501,6 +3527,7 @@ mod tests {
             encoding: Default::default(),
             split_minutes,
             split_mb,
+            file_name: String::new(),
         };
         let rec = |spec: &OutputSpec, live_mkv| {
             let flow = output_flow(
@@ -3540,6 +3567,7 @@ mod tests {
             encoding: Default::default(),
             split_minutes: 0,
             split_mb: 0,
+            file_name: String::new(),
         };
         let flow = output_flow(
             OutputId::new(),
@@ -3814,6 +3842,7 @@ mod tests {
             encoding: Default::default(),
             split_minutes: 0,
             split_mb: 0,
+            file_name: String::new(),
         };
         let flow = output_flow(
             OutputId::new(),
@@ -3855,6 +3884,7 @@ mod tests {
                 encoding: Default::default(),
                 split_minutes: 0,
                 split_mb: 0,
+                file_name: String::new(),
             },
             OutputSpec::Ndi {
                 name: "lmix".into(),

@@ -199,6 +199,17 @@ pub mod qobject {
         #[cxx_name = "runningTime"]
         fn running_time(self: &Core, since_ms: f64) -> QString;
 
+        /// The start of a recording's file names from its pattern, as
+        /// lmix-core fills it in (forms::record_file_name, REC.5).
+        #[qinvokable]
+        #[cxx_name = "recordFileName"]
+        fn record_file_name(
+            self: &Core,
+            pattern: &QString,
+            output: &QString,
+            source: &QString,
+        ) -> QString;
+
         /// `name` in at most `max` characters for a narrow strip (forms::short_name).
         #[qinvokable]
         #[cxx_name = "shortName"]
@@ -648,6 +659,14 @@ impl qobject::Core {
 
     fn choices(&self, list: &QString) -> QString {
         QString::from(&forms::values(&list.to_string()).unwrap_or_else(|| "[]".into()))
+    }
+
+    fn record_file_name(&self, pattern: &QString, output: &QString, source: &QString) -> QString {
+        QString::from(&forms::record_file_name(
+            &pattern.to_string(),
+            &output.to_string(),
+            &source.to_string(),
+        ))
     }
 
     fn srt_uri(&self, fields: &QString) -> QString {

@@ -162,6 +162,10 @@ pub struct StromEngine {
     /// Recordings started by this lmix-core: strom reports their files.
     /// Others ran before it came up; their file is looked up.
     fresh_recordings: std::sync::Mutex<std::collections::HashSet<lmix_types::OutputId>>,
+    /// The file name prefix each recording was started with (REC.5): set
+    /// at the start, read from the running flow for one found running.
+    /// Not worked out again from the show, which may have changed since.
+    recording_prefixes: std::sync::Mutex<std::collections::HashMap<lmix_types::OutputId, String>>,
 }
 
 /// Longest wait for one engine call. Commands run under the switcher
@@ -225,6 +229,7 @@ impl StromEngine {
             recorder_files: Default::default(),
             protocols: Default::default(),
             fresh_recordings: Default::default(),
+            recording_prefixes: Default::default(),
         }
     }
 
@@ -258,11 +263,13 @@ impl StromEngine {
     // ---- Recording protocols (REC.8) ----
 
     /// Output `id` starts anew here: strom reports its files from now on.
-    fn fresh_recording(&self, id: lmix_types::OutputId) {
+    fn fresh_recording(&self, id: lmix_types::OutputId, prefix: String) {
         let mut files = self.recorder_files.lock().expect("recorder files lock");
         files.remove(&flows::output_flow_id(id));
         let mut fresh = self.fresh_recordings.lock().expect("fresh lock");
         fresh.insert(id);
+        let mut prefixes = self.recording_prefixes.lock().expect("prefixes lock");
+        prefixes.insert(id, prefix);
     }
 
     /// Output `id` stopped.
@@ -271,6 +278,39 @@ impl StromEngine {
         files.remove(&flows::output_flow_id(id));
         let mut fresh = self.fresh_recordings.lock().expect("fresh lock");
         fresh.remove(&id);
+        let mut prefixes = self.recording_prefixes.lock().expect("prefixes lock");
+        prefixes.remove(&id);
+    }
+
+    /// The file name prefix recording `id` runs with: as it was started,
+    /// else (found running after a restart of lmix-core) the recorder's
+    /// in the running flow, else the default `lmix-<id>`.
+    async fn recording_prefix_of(&self, id: lmix_types::OutputId) -> String {
+        if let Some(prefix) = self
+            .recording_prefixes
+            .lock()
+            .expect("prefixes lock")
+            .get(&id)
+        {
+            return prefix.clone();
+        }
+        let flow = self.get_flow(flows::output_flow_id(id)).await;
+        let running = flow.ok().flatten().and_then(|flow| {
+            let rec = flow.blocks.into_iter().find(|b| b.id == flows::RECORDER)?;
+            match rec.properties.get("filename_prefix") {
+                Some(PropertyValue::String(prefix)) => Some(prefix.clone()),
+                _ => None,
+            }
+        });
+        match running {
+            Some(prefix) => {
+                let mut prefixes = self.recording_prefixes.lock().expect("prefixes lock");
+                prefixes.insert(id, prefix.clone());
+                prefix
+            }
+            // Unique to the output: at worst a provisional protocol.
+            None => marks::recording_prefix(id),
+        }
     }
 
     /// `mark`'s line added to its protocol, the whole file written anew.
@@ -347,7 +387,7 @@ impl StromEngine {
 
         // An earlier file of the folder may be another run's: only for a
         // recording found running, whose files are all older.
-        let prefix = marks::recording_prefix(mark.output);
+        let prefix = self.recording_prefix_of(mark.output).await;
         let files = self.media_files(&mark.folder).await?;
         let files: Vec<(&str, u64)> = files.iter().map(|(p, m)| (p.as_str(), *m)).collect();
         let found = marks::newest_recording(&files, &prefix).map(marks::found_file);
@@ -375,7 +415,7 @@ impl StromEngine {
         let (base, provisional) = match beside {
             Some(base) => (base, marks::Provisional::No),
             None => {
-                let prefix = marks::recording_prefix(mark.output);
+                let prefix = self.recording_prefix_of(mark.output).await;
                 (
                     marks::protocol_guess(mark, &prefix),
                     marks::Provisional::Yes,
@@ -2016,7 +2056,11 @@ impl Engine for StromEngine {
                 let live_mkv = *self.live_mkv.lock().expect("live mkv lock");
                 let flow =
                     flows::output_flow(*id, spec, *feed, *bus, self.backend, framerate, live_mkv);
-                self.fresh_recording(*id);
+                let prefix = match spec {
+                    OutputSpec::Record { file_name, .. } => marks::file_prefix(*id, file_name),
+                    _ => marks::recording_prefix(*id),
+                };
+                self.fresh_recording(*id, prefix);
                 self.put_flow(&flow).await
             }
             Command::StopOutput { id } => {
@@ -2698,6 +2742,8 @@ mod tests {
         calls: Vec<String>,
         /// The next this many file reads fail with 500.
         failing_reads: u32,
+        /// Running flows as `GET /api/flows/{id}` answers, by id.
+        flows: std::collections::HashMap<String, String>,
     }
     type SharedMedia = std::sync::Arc<std::sync::Mutex<Media>>;
 
@@ -2723,6 +2769,12 @@ mod tests {
             }
             return match media.files.get(file) {
                 Some(text) => (StatusCode::OK, text.clone()),
+                None => (StatusCode::NOT_FOUND, String::new()),
+            };
+        }
+        if let Some(flow) = path.strip_prefix("/api/flows/") {
+            return match media.flows.get(flow) {
+                Some(json) => (StatusCode::OK, json.clone()),
                 None => (StatusCode::NOT_FOUND, String::new()),
             };
         }
@@ -2815,7 +2867,7 @@ mod tests {
     async fn marks_go_beside_the_recording() {
         let (engine, media) = media_strom().await;
         let id = OutputId::new();
-        engine.fresh_recording(id);
+        engine.fresh_recording(id, marks::recording_prefix(id));
         report_file(&engine, id, format!("{STEM}_00000.mkv"));
         let protocol = format!("{STEM}.marks.csv");
         let earlier = format!("{}earlier\n", marks::HEADER);
@@ -2860,7 +2912,7 @@ mod tests {
     async fn a_guessed_protocol_moves_beside_the_recording() {
         let (engine, media) = media_strom().await;
         let id = OutputId::new();
-        engine.fresh_recording(id);
+        engine.fresh_recording(id, marks::recording_prefix(id));
 
         engine
             .mark_recordings(&[recording_mark(id, 0, "start")])
@@ -2892,7 +2944,7 @@ mod tests {
     async fn a_guess_gone_already_is_removed() {
         let (engine, media) = media_strom().await;
         let id = OutputId::new();
-        engine.fresh_recording(id);
+        engine.fresh_recording(id, marks::recording_prefix(id));
         engine
             .mark_recordings(&[recording_mark(id, 0, "start")])
             .await
@@ -2919,7 +2971,7 @@ mod tests {
     async fn a_right_guess_stays_with_each_mark_once() {
         let (engine, media) = media_strom().await;
         let id = OutputId::new();
-        engine.fresh_recording(id);
+        engine.fresh_recording(id, marks::recording_prefix(id));
         let first = recording_mark(id, 0, "start");
         let prefix = format!("lmix-{}", &id.to_string()[..8]);
         let guess = marks::protocol_guess(&first, &prefix);
@@ -2961,7 +3013,7 @@ mod tests {
     async fn a_folder_written_two_ways_is_one_folder() {
         let (engine, media) = media_strom().await;
         let id = OutputId::new();
-        engine.fresh_recording(id);
+        engine.fresh_recording(id, marks::recording_prefix(id));
         let first = RecordingMark {
             folder: "show/".into(),
             ..recording_mark(id, 0, "start")
@@ -3040,13 +3092,99 @@ mod tests {
         assert_eq!(media.lock().unwrap().files.len(), 3, "no other protocol");
     }
 
+    /// REC.5: lmix-core restarted during a recording named `Talk` that
+    /// had its id appended (a second `Talk` in the folder, removed
+    /// since). The mark takes the prefix of the running flow, not the
+    /// name the show would give now: it goes beside the running file, not
+    /// into the protocol of last week's `Talk`.
+    #[tokio::test]
+    async fn after_a_restart_marks_use_the_prefix_the_recording_runs_with() {
+        let (engine, media) = media_strom().await;
+        let id = OutputId::new();
+        let prefix = format!("Talk-{}", &id.to_string()[..8]);
+        let stem = format!("show/{prefix}_20261101_143000");
+        let start = marks::stem_start_ms(&stem).unwrap();
+        let spec = OutputSpec::Record {
+            folder: "show".into(),
+            container: lmix_types::Container::Mkv,
+            video_kbps: 8000,
+            encoding: Default::default(),
+            split_minutes: 0,
+            split_mb: 0,
+            file_name: prefix.clone(),
+        };
+        let flow = flows::output_flow(
+            id,
+            &spec,
+            crate::switcher::Feed::Program,
+            None,
+            MixerBackend::Cpu,
+            Default::default(),
+            flows::LiveMkv::Yes,
+        );
+        {
+            let mut media = media.lock().unwrap();
+            media
+                .files
+                .insert(format!("{stem}_00000.mkv"), String::new());
+            // Last week's `Talk`, written later than nothing of ours but
+            // with the name the show gives now.
+            let old = "show/Talk_20261025_100000";
+            media
+                .files
+                .insert(format!("{old}_00000.mkv"), String::new());
+            media.files.insert(
+                format!("{old}.marks.csv"),
+                format!("{}old\n", marks::HEADER),
+            );
+            let json = serde_json::json!({ "flow": flow }).to_string();
+            media.flows.insert(flow.id.to_string(), json);
+        }
+        let mark = RecordingMark {
+            output: id,
+            folder: "show".into(),
+            since_ms: start + 10_000,
+            at_ms: start + 20_000,
+            text: "found".into(),
+        };
+        engine
+            .mark_recordings(std::slice::from_ref(&mark))
+            .await
+            .unwrap();
+
+        let text = file_text(&media, &format!("{stem}.marks.csv"));
+        let name = format!("{prefix}_20261101_143000_00000.mkv");
+        assert!(text.contains(&format!(",0:00:20,\"{name}\"")), "{text}");
+        let old = file_text(&media, "show/Talk_20261025_100000.marks.csv");
+        assert_eq!(old.lines().count(), 2, "{old}");
+    }
+
+    /// REC.5: a recording started by this lmix-core keeps the prefix it
+    /// started with; its provisional protocol has it.
+    #[tokio::test]
+    async fn a_fresh_recording_guesses_with_its_start_prefix() {
+        let (engine, media) = media_strom().await;
+        let id = OutputId::new();
+        engine.fresh_recording(id, "Hall".into());
+        let first = recording_mark(id, 0, "start");
+        engine
+            .mark_recordings(std::slice::from_ref(&first))
+            .await
+            .unwrap();
+        let guess = marks::protocol_guess(&first, "Hall");
+        assert!(guess.starts_with("show/Hall_"), "{guess}");
+        let media = media.lock().unwrap();
+        assert!(media.files.contains_key(&guess));
+        assert!(!media.calls.iter().any(|c| c.contains("/api/flows/")));
+    }
+
     /// A protocol strom could not read is not taken for none: nothing is
     /// written, and the next mark reads again and keeps what was there.
     #[tokio::test]
     async fn a_failed_read_overwrites_nothing() {
         let (engine, media) = media_strom().await;
         let id = OutputId::new();
-        engine.fresh_recording(id);
+        engine.fresh_recording(id, marks::recording_prefix(id));
         report_file(&engine, id, format!("{STEM}_00000.mkv"));
         let protocol = format!("{STEM}.marks.csv");
         {
@@ -3086,7 +3224,7 @@ mod tests {
     async fn a_foreign_file_is_never_overwritten() {
         let (engine, media) = media_strom().await;
         let id = OutputId::new();
-        engine.fresh_recording(id);
+        engine.fresh_recording(id, marks::recording_prefix(id));
         report_file(&engine, id, format!("{STEM}_00000.mkv"));
         let protocol = format!("{STEM}.marks.csv");
         let foreign = "time;note\r\n14:31;x\r\n".to_string();
@@ -3108,7 +3246,7 @@ mod tests {
         // Saved again by a spreadsheet: the next run goes on in it.
         let saved = format!("\u{feff}{}", second.replace('\n', "\r\n"));
         let other = OutputId::new();
-        engine.fresh_recording(other);
+        engine.fresh_recording(other, marks::recording_prefix(other));
         report_file(&engine, other, format!("{STEM}_00000.mkv"));
         {
             let mut media = media.lock().unwrap();
@@ -3257,6 +3395,7 @@ mod tests {
             encoding: Default::default(),
             split_minutes: 0,
             split_mb: 0,
+            file_name: String::new(),
         };
 
         for _ in 0..3 {

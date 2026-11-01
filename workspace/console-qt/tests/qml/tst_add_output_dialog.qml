@@ -30,12 +30,18 @@ TestCase {
             case "card_modes": return JSON.stringify(["1080p25", "1080i50"])
             case "card_channels": return JSON.stringify(["2", "8", "16"])
             case "card_limits": return JSON.stringify({ sound_delay_ms: 500 })
-            case "record_limits": return JSON.stringify({ split_minutes_max: 1440, split_mb_min: 10, split_mb_max: 1048576, mark_text_max: 200 })
+            case "record_limits": return JSON.stringify({ split_minutes_max: 1440, split_mb_min: 10, split_mb_max: 1048576, mark_text_max: 200, file_name_max: 100, default_folder: "recordings" })
             case "stream_limits": return JSON.stringify({ delay_s_max: 60 })
             }
             return "[]"
         }
         function refreshLists() {}
+        // The bridge fills the pattern in as lmix-core does
+        // (lmix_types::file_name, its rules tested in forms.rs); here only
+        // the placeholders, enough to check the wiring.
+        function recordFileName(pattern, output, source) {
+            return pattern.replace("{output}", output).replace("{source}", source).trim()
+        }
         function addOutput(form) {
             test.added.push(JSON.parse(form))
             return true
@@ -204,6 +210,53 @@ TestCase {
         verify(!minutes.visible)
         form = JSON.parse(dialog.form())
         compare([form.split_minutes, form.split_mb], [0, 0])
+    }
+
+    // REC.5: a recording's file name pattern is in the form and back, the
+    // first file shows below it; the folder may stay empty (the default
+    // one); other outputs send no pattern.
+    function test_a_recording_keeps_its_file_name() {
+        outputs = [Object.assign(output("stopped"), {
+            name: "Hall", spec: { kind: "record", folder: "show", container: "mp4", file_name: "{output} {source}" } })]
+        const dialog = createTemporaryObject(dialogComponent, test)
+        dialog.edit("o1")
+        opened(dialog)
+        const field = findChild(dialog.contentItem, "fileName")
+        const example = findChild(dialog.contentItem, "fileExample")
+        verify(field.visible)
+        compare(field.text, "{output} {source}")
+        compare(field.maximumLength, 100)
+        compare(example.text, "First file: Hall Slides_20261101_143000_00000.mp4")
+        compare(JSON.parse(dialog.form()).file_name, "{output} {source}")
+        field.text = "Talk"
+        dialog.accept()
+        compare(updates[0].action.form.file_name, "Talk")
+
+        // New: no folder is fine, the example names the default output.
+        dialog.add()
+        opened(dialog)
+        compare(field.text, "")
+        findChild(dialog.contentItem, "kindBox").currentIndex = dialog.kinds.findIndex(k => k.value === "record")
+        verify(dialog.acceptEnabled)
+        compare(example.text, "First file: lmix-…_20261101_143000_00000.mkv")
+        field.text = "{output}"
+        compare(example.text, "First file: Record recordings_20261101_143000_00000.mkv")
+        // The same name into the same folder: the start of the id follows.
+        field.text = "{output} {source}"
+        findChild(dialog.contentItem, "name").text = "Hall"
+        findChild(dialog.contentItem, "target").text = "show/"
+        compare(example.text, "First file: Hall program_20261101_143000_00000.mkv")
+        test.outputs = [Object.assign(output("stopped"), {
+            name: "Hall", spec: { kind: "record", folder: "show", file_name: "{output} {source}" }, source: { from: "program" } })]
+        compare(example.text, "First file: Hall program-…_20261101_143000_00000.mkv")
+
+        outputs = [output("stopped")]
+        dialog.reject()
+        tryCompare(dialog, "visible", false)
+        dialog.edit("o1")
+        opened(dialog)
+        verify(!field.visible)
+        compare(JSON.parse(dialog.form()).file_name, "")
     }
 
     function test_an_output_removed_meanwhile_closes_it() {

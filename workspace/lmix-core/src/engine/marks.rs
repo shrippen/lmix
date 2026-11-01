@@ -204,6 +204,16 @@ pub fn recording_prefix(id: OutputId) -> String {
     format!("{RECORDING_PREFIX}-{}", &id[..8])
 }
 
+/// File name prefix the recorder of output `id` gets: the filled-in
+/// `file_name` (REC.5), else `recording_prefix`.
+pub fn file_prefix(id: OutputId, file_name: &str) -> String {
+    if file_name.is_empty() {
+        recording_prefix(id)
+    } else {
+        file_name.to_string()
+    }
+}
+
 /// A path below the media directory, one way written: strom reports
 /// `show//x.mkv` for the folder `show/`; `./show/x.mkv` and `/show/x.mkv`
 /// are the same file too.

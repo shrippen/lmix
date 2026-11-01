@@ -102,7 +102,8 @@ pub enum Command {
         mode: SignalLoss,
     },
     /// Start output `id` (replaces a running one); its sound from bus
-    /// `bus` instead of the feed's.
+    /// `bus` instead of the feed's. A recording's `file_name` is filled in
+    /// (`recording_file_name`), as the engine gives it to the recorder.
     StartOutput {
         id: OutputId,
         spec: OutputSpec,
@@ -5920,9 +5921,13 @@ impl Switcher {
     }
 
     fn start_command(&self, output: &ShowOutput) -> Result<Command, ActionError> {
+        let mut spec = output.spec.clone();
+        if let OutputSpec::Record { file_name, .. } = &mut spec {
+            *file_name = self.recording_file_name(output);
+        }
         Ok(Command::StartOutput {
             id: output.id,
-            spec: output.spec.clone(),
+            spec,
             feed: self.feed_of(output)?,
             // A bus is not removed while an output takes it.
             bus: output.bus,
@@ -6180,6 +6185,58 @@ impl Switcher {
     pub fn output_start_command(&self, id: OutputId) -> Option<Command> {
         let output = self.show.outputs.iter().find(|o| o.id == id)?;
         self.start_command(output).ok()
+    }
+
+    /// What output `output` records, for its file names (REC.5): the
+    /// input's name, else `program`, `preview` or `multiview`.
+    fn recorded_source(&self, output: &ShowOutput) -> String {
+        match output.source {
+            OutputSource::Program => "program".into(),
+            OutputSource::Preview => "preview".into(),
+            OutputSource::Multiview => "multiview".into(),
+            OutputSource::Input(id) => self
+                .show
+                .inputs
+                .iter()
+                .find(|i| i.id == id)
+                .map_or_else(|| "input".into(), |i| i.name.clone()),
+        }
+    }
+
+    /// The start of recording `output`'s file names (REC.5): its pattern
+    /// filled in with the names as they are now; empty for none (the
+    /// engine's `lmix-<id>`). Two recordings into one folder whose names
+    /// come out the same each get the start of their id appended: started
+    /// together they would write the same file.
+    pub fn recording_file_name(&self, output: &ShowOutput) -> String {
+        let filled = |o: &ShowOutput| match &o.spec {
+            OutputSpec::Record {
+                folder, file_name, ..
+            } => Some((
+                folder.clone(),
+                lmix_types::file_name(file_name, &o.name, &self.recorded_source(o)),
+            )),
+            _ => None,
+        };
+        let Some((folder, own)) = filled(output) else {
+            return String::new();
+        };
+        if own.is_empty() {
+            return own;
+        }
+        // Folders are in their normal form (`with_normal_folder`).
+        let clash = self
+            .show
+            .outputs
+            .iter()
+            .filter(|o| o.id != output.id)
+            .filter_map(filled)
+            .any(|(f, name)| f == folder && name == own);
+        if clash {
+            format!("{own}-{}", &output.id.to_string()[..8])
+        } else {
+            own
+        }
     }
 
     /// A mark at `at_ms` for each running recording (REC.8).
@@ -12885,6 +12942,7 @@ mod tests {
             },
             split_minutes: 0,
             split_mb: 0,
+            file_name: String::new(),
         };
         let add = |spec| Action::AddOutput {
             spec,
@@ -12924,6 +12982,7 @@ mod tests {
                 encoding: Default::default(),
                 split_minutes: 0,
                 split_mb: 0,
+                file_name: String::new(),
             },
             source: OutputSource::Program,
             name: None,
@@ -12934,7 +12993,8 @@ mod tests {
             panic!("a recording");
         };
         assert_eq!(folder, "show/day 1");
-        for folder in ["../elsewhere", "/", ""] {
+        // Blank is the default folder (REC.5), the media root is no folder.
+        for folder in ["../elsewhere", "/", "./"] {
             assert!(
                 matches!(sw.apply(add(folder)), Err(ActionError::BadRecording { .. })),
                 "{folder}"
@@ -12958,6 +13018,7 @@ mod tests {
             encoding: Default::default(),
             split_minutes: 0,
             split_mb: 0,
+            file_name: String::new(),
         };
         for spec in [srt(9000), record, srt(9001)] {
             sw.apply(Action::AddOutput {
@@ -13035,6 +13096,116 @@ mod tests {
         ));
     }
 
+    /// A recording with `file_name`, of input B or program.
+    fn add_named_recording(
+        sw: &mut Switcher,
+        folder: &str,
+        file_name: &str,
+        name: &str,
+        iso: bool,
+    ) {
+        let source = if iso {
+            OutputSource::Input(sw.state().inputs[1].id)
+        } else {
+            OutputSource::Program
+        };
+        sw.apply(Action::AddOutput {
+            spec: OutputSpec::Record {
+                folder: folder.into(),
+                container: lmix_types::Container::Mkv,
+                video_kbps: 8000,
+                encoding: Default::default(),
+                split_minutes: 0,
+                split_mb: 0,
+                file_name: file_name.into(),
+            },
+            source,
+            name: Some(name.into()),
+            bus: None,
+        })
+        .unwrap();
+    }
+
+    /// The file name the engine gets when output `n` starts.
+    fn started_file_name(sw: &mut Switcher, n: u32) -> String {
+        let cmds = sw
+            .apply(Action::StartOutput {
+                output: OutputRef::Number(n),
+            })
+            .unwrap();
+        match &cmds[0] {
+            Command::StartOutput {
+                spec: OutputSpec::Record { file_name, .. },
+                ..
+            } => file_name.clone(),
+            other => panic!("{other:?}"),
+        }
+    }
+
+    // REC.5: the pattern is filled in when the recording starts; the show
+    // keeps the pattern.
+    #[test]
+    fn a_recording_starts_with_its_file_name_filled_in() {
+        let mut sw = two_inputs();
+        add_named_recording(&mut sw, "show", "{output} {source}", "Hall", true);
+        add_named_recording(&mut sw, "show", "Talk: {source}", "Main", false);
+        add_named_recording(&mut sw, "", "", "Plain", false);
+        assert_eq!(started_file_name(&mut sw, 1), "Hall B");
+        assert_eq!(started_file_name(&mut sw, 2), "Talk_ program");
+        // No pattern: the engine's default, no folder: the default one.
+        assert_eq!(started_file_name(&mut sw, 3), "");
+        let OutputSpec::Record { folder, .. } = &sw.state().outputs[2].spec else {
+            panic!("a recording");
+        };
+        assert_eq!(folder, lmix_types::DEFAULT_RECORD_FOLDER);
+        let OutputSpec::Record { file_name, .. } = &sw.state().outputs[0].spec else {
+            panic!("a recording");
+        };
+        assert_eq!(file_name, "{output} {source}");
+    }
+
+    // Started together, two recordings named alike in one folder would
+    // write one file: each gets the start of its id.
+    #[test]
+    fn recordings_named_alike_in_one_folder_stay_apart() {
+        let mut sw = two_inputs();
+        add_named_recording(&mut sw, "show", "Talk", "One", false);
+        add_named_recording(&mut sw, "show/", "Talk", "Two", true);
+        add_named_recording(&mut sw, "other", "Talk", "Three", false);
+        let ids: Vec<String> = sw
+            .state()
+            .outputs
+            .iter()
+            .map(|o| o.id.to_string()[..8].to_string())
+            .collect();
+        assert_eq!(started_file_name(&mut sw, 1), format!("Talk-{}", ids[0]));
+        assert_eq!(started_file_name(&mut sw, 2), format!("Talk-{}", ids[1]));
+        assert_eq!(started_file_name(&mut sw, 3), "Talk");
+    }
+
+    #[test]
+    fn a_wrong_file_name_is_refused() {
+        let mut sw = two_inputs();
+        let err = sw
+            .apply(Action::AddOutput {
+                spec: OutputSpec::Record {
+                    folder: "show".into(),
+                    container: lmix_types::Container::Mkv,
+                    video_kbps: 8000,
+                    encoding: Default::default(),
+                    split_minutes: 0,
+                    split_mb: 0,
+                    file_name: "{date}".into(),
+                },
+                source: OutputSource::Program,
+                name: None,
+                bus: None,
+            })
+            .unwrap_err();
+        assert!(matches!(err, ActionError::BadRecording { .. }), "{err:?}");
+        assert!(sw.state().outputs.is_empty());
+    }
+
     #[test]
     fn iso_output_follows_its_input() {
         let mut sw = two_inputs();
@@ -13046,6 +13217,7 @@ mod tests {
             encoding: Default::default(),
             split_minutes: 0,
             split_mb: 0,
+            file_name: String::new(),
         };
         sw.apply(Action::AddOutput {
             spec: rec,

@@ -588,9 +588,9 @@
       <translation>Karte %1 (nicht gefunden)</translation>
     </message>
     <message>
-      <location line="+69" />
-      <source>folder in the engine's media directory</source>
-      <translation>Ordner im Medienverzeichnis der Engine</translation>
+      <location line="+116" />
+      <source>folder in the engine's media directory, empty: %1</source>
+      <translation>Ordner im Medienverzeichnis der Engine, leer: %1</translation>
     </message>
     <message>
       <location line="+1" />
@@ -619,7 +619,7 @@
       <translation>Speichern</translation>
     </message>
     <message>
-      <location line="+177" />
+      <location line="+182" />
       <source>The output is sending. Stop it first to change its settings.</source>
       <translation>Der Ausgang sendet. Erst stoppen, dann lassen sich seine Einstellungen ändern.</translation>
     </message>
@@ -629,7 +629,33 @@
       <translation>Ausgang</translation>
     </message>
     <message>
-      <location line="+35" />
+      <location line="+21" />
+      <location line="+9" />
+      <source>File name</source>
+      <translation>Dateiname</translation>
+    </message>
+    <message>
+      <location line="-4" />
+      <source>e.g. {output} {source}</source>
+      <translation>z. B. {output} {source}</translation>
+    </message>
+    <message>
+      <location line="+5" />
+      <source>Help on the file name</source>
+      <translation>Hilfe zum Dateinamen</translation>
+    </message>
+    <message>
+      <location line="+1" />
+      <source>{output} becomes the output's name, {source} what it records (an input's name, or program, preview, multiview). The engine adds date, time and a number to each file. Empty: lmix- and the start of the output's id.</source>
+      <translation>{output} wird zum Namen des Ausgangs, {source} zu dem, was er aufnimmt (Name eines Inputs, sonst program, preview, multiview). Die Engine hängt jeder Datei Datum, Uhrzeit und eine Nummer an. Leer: lmix- und der Anfang der Ausgangs-Id.</translation>
+    </message>
+    <message>
+      <location line="+8" />
+      <source>First file: %1</source>
+      <translation>Erste Datei: %1</translation>
+    </message>
+    <message>
+      <location line="+25" />
       <source>No card found</source>
       <translation>Keine Karte gefunden</translation>
     </message>
@@ -764,7 +790,7 @@
       <translation>Name</translation>
     </message>
     <message>
-      <location line="+4" />
+      <location line="+5" />
       <source>optional</source>
       <translation>optional</translation>
     </message>

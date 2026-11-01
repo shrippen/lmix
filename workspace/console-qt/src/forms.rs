@@ -74,6 +74,9 @@ pub fn values(list: &str) -> Option<String> {
             use lmix_types::output::{MARK_TEXT_MAX, SPLIT_MB_MAX, SPLIT_MB_MIN, SPLIT_MINUTES_MAX};
             return Some(
                 serde_json::json!({
+                    // File names and the folder given none (REC.5).
+                    "file_name_max": lmix_types::FILE_NAME_MAX,
+                    "default_folder": lmix_types::DEFAULT_RECORD_FOLDER,
                     "split_minutes_max": SPLIT_MINUTES_MAX,
                     "split_mb_min": SPLIT_MB_MIN,
                     "split_mb_max": SPLIT_MB_MAX,
@@ -334,6 +337,9 @@ pub struct OutputForm {
     /// A stream's send delay in seconds (STR.5); other outputs ignore it.
     #[serde(default)]
     pub delay_s: u32,
+    /// A recording's file name pattern (REC.5); other outputs ignore it.
+    #[serde(default)]
+    pub file_name: String,
 }
 
 /// A card output's sound as the form sends it.
@@ -390,6 +396,22 @@ fn with_split(mut spec: OutputSpec, minutes: u32, mb: u32) -> OutputSpec {
     spec
 }
 
+/// `spec` with file name `pattern` if it is a recording (REC.5); other
+/// outputs as they are.
+fn with_file_name(mut spec: OutputSpec, pattern: &str) -> OutputSpec {
+    if let OutputSpec::Record { file_name, .. } = &mut spec {
+        *file_name = pattern.trim().to_string();
+    }
+    spec
+}
+
+/// The start of a recording's file names from `pattern` as lmix-core
+/// fills it in (REC.5), for the form's example; empty when none is left
+/// (lmix-core then names it `lmix-<id>`). `source` is what the form shows.
+pub fn record_file_name(pattern: &str, output: &str, source: &str) -> String {
+    lmix_types::file_name(pattern, output, source)
+}
+
 /// `spec` sending `seconds` late if it is a stream (STR.5); other
 /// outputs as they are.
 fn with_send_delay(mut spec: OutputSpec, seconds: u32) -> OutputSpec {
@@ -411,7 +433,8 @@ pub fn output_of(
     mode: &str,
 ) -> Option<OutputSpec> {
     let text = text.trim().to_string();
-    let needs_text = !matches!(kind, "window" | "fullscreen");
+    // A recording given no folder goes to the default one (REC.5).
+    let needs_text = !matches!(kind, "window" | "fullscreen" | "record");
     if needs_text && text.is_empty() {
         return None;
     }
@@ -442,6 +465,7 @@ pub fn output_of(
             encoding,
             split_minutes: 0,
             split_mb: 0,
+            file_name: String::new(),
         },
         "ndi" => OutputSpec::Ndi { name: text },
         "window" => OutputSpec::Display {
@@ -507,6 +531,7 @@ fn output_parts(form: &OutputForm) -> Option<(OutputSpec, OutputSource, Option<S
     let spec = with_card_sound(spec, &form.card);
     let spec = with_split(spec, form.split_minutes, form.split_mb);
     let spec = with_send_delay(spec, form.delay_s);
+    let spec = with_file_name(spec, &form.file_name);
     let name = form.name.trim().to_string();
     Some((
         spec,
@@ -917,6 +942,43 @@ mod tests {
         assert_eq!(limits["split_minutes_max"], 24 * 60);
     }
 
+    // REC.5: a recording takes its file name pattern and may leave the
+    // folder blank (lmix-core then takes the default one).
+    #[test]
+    fn a_recording_form_names_its_files() {
+        let form = r#"{"kind":"record","text":"","source":"program","video_kbps":0,"file_name":" {output} "}"#;
+        let Some(Action::AddOutput { spec, .. }) = add_output_action(form) else {
+            panic!("an output");
+        };
+        let OutputSpec::Record {
+            folder, file_name, ..
+        } = spec
+        else {
+            panic!("a recording");
+        };
+        assert_eq!((folder.as_str(), file_name.as_str()), ("", "{output}"));
+        let srt = form.replace(
+            r#""kind":"record","text":"""#,
+            r#""kind":"srt","text":"srt://x:1""#,
+        );
+        assert!(matches!(
+            add_output_action(&srt),
+            Some(Action::AddOutput {
+                spec: OutputSpec::Srt { .. },
+                ..
+            })
+        ));
+        assert_eq!(
+            record_file_name("{output} {source}", "Hall", "Kamera 1"),
+            "Hall Kamera 1"
+        );
+        assert_eq!(record_file_name("", "Hall", "x"), "");
+        let limits: serde_json::Value =
+            serde_json::from_str(&values("record_limits").unwrap()).unwrap();
+        assert_eq!(limits["default_folder"], lmix_types::DEFAULT_RECORD_FOLDER);
+        assert_eq!(limits["file_name_max"], lmix_types::FILE_NAME_MAX);
+    }
+
     // STR.5: a stream takes the delay; other outputs have none.
     #[test]
     fn a_stream_form_delays() {
@@ -966,6 +1028,7 @@ mod tests {
                 encoding: VideoEncoding::default(),
                 split_minutes: 0,
                 split_mb: 0,
+                file_name: String::new(),
             })
         );
         assert_eq!(
