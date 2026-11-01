@@ -13,6 +13,7 @@ pub mod flows;
 pub mod marks;
 pub mod meters;
 pub mod null;
+pub mod output_load;
 pub mod output_rate;
 pub mod playback_flow;
 pub mod strom;

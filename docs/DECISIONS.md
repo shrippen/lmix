@@ -7742,3 +7742,65 @@ Entfernen des Layouts davor, entferntes Layout gesperrt mit Hinweis.
 Switcher-Test `set_layout_by_id_hits_its_layout_after_one_before_is_gone`
 (Id als Text wie aus der Console, nach Entfernen des Layouts davor; ein
 Layout, das wie die Id heißt, gewinnt nicht).
+
+## 2026-11-01 — Ausgänge: Puffer und Encoder-Last (STR.7)
+
+**Kontext**: STR.7 verlangt im Status eines Streams Puffer, verworfene
+Bilder und die Last des Encoders. Bisher zeigte lmix Senderate, SRT-Verluste
+und -Verwürfe, RTT und Laufzeit. Am 1.11. geprüft und zurückgestellt (oben):
+`srtsink` liefert keinen Füllstand des Sendepuffers, die CPU je Thread aus
+strom ordnet die x264-Threads keinem Flow zu (23 % statt 54 %).
+
+**Optionen Puffer**:
+1. Sendepuffer des Protokolls (SRT `snd_buf`, RTMP unbestätigte Bytes):
+   SRT liefert ihn nicht, RTMP nur in groben Schritten (Ack-Fenster). Verworfen.
+2. Füllstand der Sendeverzögerung (STR.5): ist mit Absicht voll, sagt nichts
+   über die Last. Verworfen.
+3. **Die Warteschlange vor dem Encoder**: das Bild kommt über den Inter
+   Input `pgm` (`appsrc`, 500 ms, wirft die ältesten Bilder weg, wenn sie voll
+   ist). Kommt der Ausgang mit (Encoder, Muxer, Netz), wartet dort nichts; wird
+   er zu langsam, füllt sie sich, dann verwirft sie. Füllstand und Verwürfe
+   sind genau „kommt der Ausgang hinterher“.
+
+**Optionen Encoder-Last**:
+1. CPU je Thread (`/proc`): verworfen, siehe oben.
+2. GPU-Auslastung des NVENC (`encoder_utilization`): nur für die ganze
+   Maschine, steht schon in `/metrics` (`lmix_gpu_encoder_percent`); NVML
+   nennt Sitzungen je Prozess, ohne Zuordnung zum Ausgang. Nicht je Ausgang.
+3. **Zeit je Bild im Encoder**, gemessen in strom mit zwei Buffer-Probes am
+   Encoder (Bild rein, Bild raus, Zuordnung über die Running Time), nur
+   Atomics. Zeit über Wanduhr = Anteil an der Echtzeit, bei 100 % kommt er
+   nicht mehr mit. Für x264/x265 mit `zerolatency` genau die Arbeitszeit
+   (er rechnet, solange das Bild drin ist, auch in eigenen Threads); für
+   einen GPU-Encoder mit mehreren Bildern in Arbeit seine Latenz, also zu
+   hoch.
+
+**Entscheidung**: Puffer Option 3, Encoder-Last Option 3. strom meldet beides
+in seiner Block-Statistik (`GET /flows/{id}/rtp-stats`, schon vorhanden für
+RTP; kein neuer Endpunkt): Inter Input mit `queued_buffers`, `queued_time_ns`,
+`max_time_ns`, `dropped_buffers`, Video Encoder mit `encoded_frames` und
+`encode_time_ns` (Typen `InterInputStats`, `VideoEncoderStats` in
+strom-types). lmix-core fragt sie je laufendem Stream und Aufnahme einmal je
+Sekunde mit (eine Anfrage mehr je Ausgang), rechnet den Puffer aus der Zahl
+der wartenden Bilder mal Bilddauer (nicht aus `queued_time_ns`: die Zeit aus
+Zeitstempeln ist auf der Running Time des Mischers nicht immer eine
+Verzögerung, todo.md) und die Last aus zwei Lesungen (`OutputLoad` in
+`OutputStats`). Die Console zeigt Puffer, verworfene Bilder und Encoder im
+Menü „Statistik“, im Tooltip der Ausgangsleiste und als Zeile „Last“ auf der
+Ausgänge-Seite, dort in Warnfarbe, solange der Puffer halb voll oder der
+Encoder bei 90 % ist (verworfene Bilder zählen seit dem Start und sagen
+nichts über jetzt). `/metrics`: `lmix_output_buffer_ms`,
+`lmix_output_frames_dropped_total`, `lmix_output_encoder_percent`.
+
+**Nicht gemessen**: GPU-Last je Ausgang (siehe Option 2), Bildumwandlung vor
+dem Encoder (gehört nicht zur Encoder-Zeit, zeigt sich aber im Puffer).
+
+**Geprüft**: strom `output_load_stats_test` (echter Video-Encoder-Block mit
+x264enc: 30 Bilder gezählt; echter Inter Input, pausiert: wartend + verworfen
+= 30 veröffentlichte Bilder, Puffer ≤ 200 ms), Einheitentests der Zuordnung
+(Running Time statt PTS: x264enc verschiebt sein Ausgangssegment um 1000 h,
+mit PTS zählte der Test 0 Bilder); lmix-core `output_load` (Puffer in
+Bildern, Last aus zwei Lesungen, Neustart, veraltete Lesung),
+`outputs_report_their_load` (über einen strom-Stand-in), Anfragen je Poll im
+RTMP-Test gezählt, `/metrics`; QML `tst_output_menu`, `tst_outputs_page`;
+VM-Test prüft die Last der Aufnahme an echtem strom.

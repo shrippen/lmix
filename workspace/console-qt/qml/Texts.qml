@@ -280,6 +280,30 @@ QtObject {
             .arg(link.packets_dropped).arg(rtt)
     }
 
+    /** How full an output's buffer in front of the encoder is (`OutputLoad`, STR.7). */
+    function outputBuffer(load) {
+        return qsTr("%1 of %2 ms").arg(load.buffer_ms).arg(load.buffer_max_ms)
+    }
+    /** The encoder's time per frame and busy share; "–" before its second reading. */
+    function encoderLoad(load) {
+        if (load.encoder_percent === null || load.encoder_percent === undefined)
+            return "–"
+        return qsTr("%1 ms per frame, %2 %").arg(Number(load.encode_ms).toLocaleString(Qt.locale(), "f", 1))
+            .arg(load.encoder_percent)
+    }
+    /** An output's load in one line: buffer, frames dropped, encoder. */
+    function loadDetail(load) {
+        return qsTr("buffer %1 · frames dropped %2 · encoder %3").arg(outputBuffer(load))
+            .arg(load.frames_dropped).arg(encoderLoad(load))
+    }
+    /**
+     * The output falls behind now: its buffer half full or its encoder near
+     * real time. Dropped frames count since the start, so they do not say.
+     */
+    function loadStrained(load) {
+        return 2 * load.buffer_ms >= load.buffer_max_ms || (load.encoder_percent || 0) >= 90
+    }
+
     /** Seconds until a running stream's delayed picture reaches its
      *  receivers (STR.5); 0 when it is live, there already or not running. */
     function sendDelayLeft(output, nowMs) {

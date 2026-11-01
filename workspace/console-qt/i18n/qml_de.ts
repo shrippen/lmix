@@ -4736,7 +4736,7 @@
       <translation>Sendeverzögerung %1</translation>
     </message>
     <message>
-      <location line="+1" />
+      <location line="+2" />
       <source>Click: start or stop. Right click: menu.</source>
       <translation>Klick: starten oder stoppen. Rechtsklick: Menü.</translation>
     </message>
@@ -4769,7 +4769,7 @@
   <context>
     <name>OutputMenu</name>
     <message>
-      <location filename="../qml/OutputMenu.qml" line="+38" />
+      <location filename="../qml/OutputMenu.qml" line="+41" />
       <source>%1 kbit/s</source>
       <translation>%1 kbit/s</translation>
     </message>
@@ -4829,7 +4829,22 @@
       <translation>%1 ms</translation>
     </message>
     <message>
-      <location line="+8" />
+      <location line="+4" />
+      <source>Buffer</source>
+      <translation>Puffer</translation>
+    </message>
+    <message>
+      <location line="+6" />
+      <source>Frames dropped</source>
+      <translation>Bilder verworfen</translation>
+    </message>
+    <message>
+      <location line="+6" />
+      <source>Encoder</source>
+      <translation>Encoder</translation>
+    </message>
+    <message>
+      <location line="+11" />
       <source>Remove…</source>
       <translation>Entfernen…</translation>
     </message>
@@ -4969,12 +4984,18 @@
       <translation>Rate</translation>
     </message>
     <message>
-      <location line="+53" />
+      <location line="+9" />
+      <source>Load</source>
+      <comment>how busy an output is</comment>
+      <translation>Last</translation>
+    </message>
+    <message>
+      <location line="+54" />
       <source>of the source</source>
       <translation>der Quelle</translation>
     </message>
     <message>
-      <location line="-78" />
+      <location line="-88" />
       <source>Target</source>
       <translation>Ziel</translation>
     </message>
@@ -4989,7 +5010,7 @@
       <translation>%1 kbit/s</translation>
     </message>
     <message>
-      <location line="+26" />
+      <location line="+36" />
       <source>Failed</source>
       <translation>Fehlgeschlagen</translation>
     </message>
@@ -7515,12 +7536,12 @@
     <message>
       <location line="+1" />
       <location line="+63" />
-      <location line="+195" />
+      <location line="+219" />
       <source>NDI</source>
       <translation>NDI</translation>
     </message>
     <message>
-      <location line="-257" />
+      <location line="-281" />
       <source>WHIP (browser, OBS)</source>
       <translation>WHIP (Browser, OBS)</translation>
     </message>
@@ -7692,12 +7713,12 @@
     </message>
     <message>
       <location line="+1" />
-      <location line="+193" />
+      <location line="+217" />
       <source>Recording</source>
       <translation>Aufnahme</translation>
     </message>
     <message>
-      <location line="-191" />
+      <location line="-215" />
       <source>Screen: window</source>
       <translation>Bildschirm: Fenster</translation>
     </message>
@@ -7965,7 +7986,22 @@
       <translation>%1 · verloren %2 · verworfen %3 · %4</translation>
     </message>
     <message>
-      <location line="+18" />
+      <location line="+6" />
+      <source>%1 of %2 ms</source>
+      <translation>%1 von %2 ms</translation>
+    </message>
+    <message>
+      <location line="+6" />
+      <source>%1 ms per frame, %2 %</source>
+      <translation>%1 ms je Bild, %2 %</translation>
+    </message>
+    <message>
+      <location line="+5" />
+      <source>buffer %1 · frames dropped %2 · encoder %3</source>
+      <translation>Puffer %1 · Bilder verworfen %2 · Encoder %3</translation>
+    </message>
+    <message>
+      <location line="+25" />
       <source>%1 s, on air in %2 s</source>
       <translation>%1 s, auf Sendung in %2 s</translation>
     </message>

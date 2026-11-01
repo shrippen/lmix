@@ -490,6 +490,9 @@ wait_for "$SETTLE_S" stream_link || fail "no link health for the SRT output: $(c
 output_id() { curl -sf "$CORE/state" | jq -r ".outputs[] | select(.name==\"$1\") | .id"; }
 rec_rate() { curl -sf "$CORE/outputs/stats" | jq -e --arg id "$(output_id Rec)" '.[] | select(.output == $id and .srt == null and .kbps > 0)' >/dev/null; }
 wait_for "$SETTLE_S" rec_rate || fail "no measured rate for the recording: $(curl -sf "$CORE/outputs/stats")"
+# How the engine keeps up with it (STR.7): its buffer, and its encoder from the second reading.
+rec_load() { curl -sf "$CORE/outputs/stats" | jq -e --arg id "$(output_id Rec)" '.[] | select(.output == $id and .load.buffer_max_ms == 500 and .load.encoder_percent != null)' >/dev/null; }
+wait_for "$SETTLE_S" rec_load || fail "no load for the recording: $(curl -sf "$CORE/outputs/stats")"
 wait "$receiver" || true
 [[ $(stat -c %s "$WORK/srt.ts" 2>/dev/null || echo 0) -gt 50000 ]] || fail "SRT output delivered nothing"
 act '{"action":"stop_output","output":"Rec"}' >/dev/null
@@ -497,7 +500,7 @@ wait_for "$SETTLE_S" is output_state Rec stopped || fail "recording did not stop
 recording="$(find "$WORK/strom-data" -path '*rec/*' -name '*.mp4' | head -1)"
 [[ -n "$recording" ]] || fail "no recording file"
 [[ "$(codecs "$recording")" == "aac,h264" ]] || fail "recording lacks H.264 or AAC: $(codecs "$recording")"
-pass "outputs: recording (H.264 + AAC, finalized MP4), SRT stream received with link health, start/stop"
+pass "outputs: recording (H.264 + AAC, finalized MP4) with its load, SRT stream received with link health, start/stop"
 # All streams at once (STR.1): the stopped one starts, then both stop.
 act '{"action":"add_output","spec":{"kind":"srt","uri":"srt://:9912?mode=listener"},"name":"Stream 2"}' >/dev/null
 act '{"action":"start_outputs","group":"streams"}' >/dev/null

@@ -9,7 +9,8 @@ import Kante
  * kind and the bitrate while it sends; Start or Stop…, Settings…, Copy
  * address, Statistics ▸; Remove last and red, locked while it sends.
  *   output   the output (`ShowState.outputs`)
- *   link     what it measures (`Core.links`: SRT, RTMP, recording), or undefined
+ *   link     what it measures (`Core.links`: SRT, RTMP, recording; rate,
+ *            link health, load), or undefined
  *   elapsed  its running time as shown
  * `startRequested()`, `stopRequested()`, `settingsRequested()`,
  * `removeRequested()`; the owner asks before stopping and removing.
@@ -32,6 +33,8 @@ QQC2.Menu {
     readonly property string address: Texts.outputTarget(output.spec) || ""
     /** SRT's link health, else undefined. */
     readonly property var srt: link ? link.srt : undefined
+    /** How the engine keeps up with it (STR.7), else undefined. */
+    readonly property var load: link ? link.load : undefined
     /** The rate while it sends: measured, else (not yet, other kinds) the one set. */
     readonly property string rate: !sending ? ""
         : link ? Texts.linkRate(link)
@@ -140,6 +143,25 @@ QQC2.Menu {
             height: visible ? implicitHeight : 0
             valueText: outputMenu.srt && outputMenu.srt.rtt_ms !== null && outputMenu.srt.rtt_ms !== undefined
                 ? qsTr("%1 ms").arg(outputMenu.srt.rtt_ms) : "–"
+        }
+        // Encoded outputs (STR.7): how the engine keeps up.
+        KanteMenuItem {
+            text: qsTr("Buffer")
+            visible: !!outputMenu.load
+            height: visible ? implicitHeight : 0
+            valueText: outputMenu.load ? Texts.outputBuffer(outputMenu.load) : ""
+        }
+        KanteMenuItem {
+            text: qsTr("Frames dropped")
+            visible: !!outputMenu.load
+            height: visible ? implicitHeight : 0
+            valueText: outputMenu.load ? String(outputMenu.load.frames_dropped) : ""
+        }
+        KanteMenuItem {
+            text: qsTr("Encoder")
+            visible: !!outputMenu.load
+            height: visible ? implicitHeight : 0
+            valueText: outputMenu.load ? Texts.encoderLoad(outputMenu.load) : ""
         }
     }
 

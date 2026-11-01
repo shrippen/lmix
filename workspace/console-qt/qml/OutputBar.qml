@@ -84,7 +84,8 @@ RowLayout {
                     : (status.state === "cards_off" ? qsTr("Waiting for the cards") : qsTr("Stopped")))
                 const delay = modelData.spec && modelData.spec.delay_s ? modelData.spec.delay_s : 0
                 return state + (delay > 0 ? "\n" + qsTr("Send delay %1").arg(Texts.sendDelay(delay, running ? delayLeft : 0)) : "")
-                    + (link ? "\n" + Texts.linkDetail(link) : "") + "\n" + qsTr("Click: start or stop. Right click: menu.")
+                    + (link ? "\n" + Texts.linkDetail(link) : "") + (link && link.load ? "\n" + Texts.loadDetail(link.load) : "")
+                    + "\n" + qsTr("Click: start or stop. Right click: menu.")
             }
 
             Timer {

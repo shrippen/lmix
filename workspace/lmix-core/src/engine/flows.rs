@@ -209,6 +209,10 @@ pub fn tiles_grid() -> (usize, usize) {
 /// Outputs buffer a little more than the mixer: they are not on the
 /// switching path, an encoder hiccup must not drop frames.
 const OUTPUT_BUFFER_MS: &str = "500";
+/// An output flow's picture input and its encoder (block ids): what
+/// `output_load` reads.
+pub const OUTPUT_PICTURE: &str = "pgm";
+pub const OUTPUT_ENCODER: &str = "enc";
 /// Thumbnail tap in every slot flow: input bar pictures.
 pub const SLOT_TAP: &str = "tap";
 /// Subscriber buffer of a live picture: as short as the mixer's, it
@@ -856,7 +860,7 @@ pub fn output_flow(
     let audio = output_sound(spec, feed, bus);
     let delay_ms = card_sound_delay_ms(spec);
     let channels = [
-        ("pgm", Some(video), 0),
+        (OUTPUT_PICTURE, Some(video), 0),
         (OUTPUT_SOUND, audio.clone(), delay_ms),
     ];
     for (block_id, channel, extra_ms) in channels {
@@ -1537,7 +1541,7 @@ fn add_encoder(flow: &mut Flow, video_kbps: u32, encoding: &VideoEncoding, frame
         RateMode::Cbr => "cbr",
     };
     flow.blocks.push(block(
-        "enc",
+        OUTPUT_ENCODER,
         VIDEO_ENCODER_BLOCK,
         vec![
             ("codec", PropertyValue::String(codec.into())),
