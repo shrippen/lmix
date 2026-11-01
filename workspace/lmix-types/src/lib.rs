@@ -25,6 +25,7 @@ pub mod output;
 pub mod ptz;
 pub mod shortcut;
 pub mod sound;
+pub mod srt;
 pub mod stage;
 pub mod state;
 pub mod target;
@@ -72,6 +73,7 @@ pub use output::{
 pub use ptz::{PtzFocus, PtzProtocol, PtzSpec};
 pub use shortcut::{Shortcut, ShortcutSpec};
 pub use sound::{AfterFade, FadeCue, FadeTarget, SoundCue, SoundRepeat, SoundRoute};
+pub use srt::{SrtAddress, SrtMode};
 pub use stage::{PictureCue, PictureEnd, PictureFit, Stage, StageOutput, StagePatch, StageState};
 pub use state::{
     Event, InputLevel, Latency, Levels, LiveFeed, LiveTiles, LiveTransport, OverlayChannel,

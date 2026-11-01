@@ -79,8 +79,14 @@ pub enum SourceSpec {
     File { path: String },
     /// Network stream handled by the media player: http(s), rtsp, … (SRC.13).
     Url { url: String },
-    /// MPEG-TS over SRT, e.g. `srt://:9000?mode=listener` (SRC.12).
-    Srt { uri: String },
+    /// MPEG-TS over SRT, e.g. `srt://:9000?mode=listener&latency=200`
+    /// (SRC.12; the parts in [`crate::srt::SrtAddress`]). `decoder_delay_ms`
+    /// is how long the demuxer waits for late packets; none: strom's 0.
+    Srt {
+        uri: String,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        decoder_delay_ms: Option<u32>,
+    },
     /// Capture device id from discovery (SRC.1), with the mode to capture
     /// in: `resolution` as `1920x1080`, `framerate` as `30/1`; none: the
     /// device's own.
@@ -247,7 +253,8 @@ impl SourceSpec {
             Self::Pattern { pattern } => format!("Pattern {pattern:?}"),
             Self::File { path } => file_stem(path),
             Self::Url { url } => url.clone(),
-            Self::Srt { uri } => uri.clone(),
+            // Without the query: it can hold a passphrase.
+            Self::Srt { uri, .. } => crate::srt::public_uri(uri),
             Self::Device { id, .. } | Self::AudioDevice { id } => id.clone(),
             Self::Color { color } => format!("Color {color}"),
             Self::Image { path } => file_stem(path),
@@ -809,5 +816,23 @@ mod tests {
             serde_json::to_string(&InputColor::Cyan).unwrap(),
             r#""cyan""#
         );
+    }
+
+    #[test]
+    fn an_srt_source_keeps_its_decoder_delay_and_hides_its_passphrase() {
+        let plain: SourceSpec =
+            serde_json::from_str(r#"{"kind":"srt","uri":"srt://:9000?mode=listener"}"#).unwrap();
+        assert_eq!(
+            serde_json::to_string(&plain).unwrap(),
+            r#"{"kind":"srt","uri":"srt://:9000?mode=listener"}"#
+        );
+        let delayed = SourceSpec::Srt {
+            uri: "srt://cam:9000?passphrase=0123456789".into(),
+            decoder_delay_ms: Some(300),
+        };
+        let json = serde_json::to_string(&delayed).unwrap();
+        assert!(json.contains(r#""decoder_delay_ms":300"#), "{json}");
+        assert_eq!(serde_json::from_str::<SourceSpec>(&json).unwrap(), delayed);
+        assert_eq!(delayed.default_name(), "srt://cam:9000");
     }
 }

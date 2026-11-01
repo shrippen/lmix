@@ -1678,6 +1678,8 @@ pub enum ActionError {
     BadColor { color: String },
     #[error("web page {url} is not an http:// or https:// address")]
     BadWebUrl { url: String },
+    #[error("SRT: {reason}")]
+    BadSrt { reason: String },
     #[error("capture mode {mode} is not a resolution like 1920x1080 or a frame rate like 30/1")]
     BadDeviceMode { mode: String },
     #[error("card: {reason}")]
