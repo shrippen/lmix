@@ -512,7 +512,7 @@
       <translation>Speichern</translation>
     </message>
     <message>
-      <location line="+170" />
+      <location line="+172" />
       <source>The output is sending. Stop it first to change its settings.</source>
       <translation>Der Ausgang sendet. Erst stoppen, dann lassen sich seine Einstellungen ändern.</translation>
     </message>
@@ -623,8 +623,8 @@
     </message>
     <message>
       <location line="+1" />
-      <source>0: live. Picture and sound wait this long before they go out, e.g. against spoilers or for a moment to react. A stop still sends what waits.</source>
-      <translation>0: live. Bild und Ton warten so lange, bevor sie hinausgehen, etwa gegen Spoiler oder für einen Moment zum Reagieren. Ein Stopp sendet noch, was wartet.</translation>
+      <source>0: live. Picture and sound wait this long before they go out, e.g. against spoilers or for a moment to react. A stop ends the stream at once; what still waits is lost.</source>
+      <translation>0: live. Bild und Ton warten so lange, bevor sie hinausgehen, etwa gegen Spoiler oder für einen Moment zum Reagieren. Ein Stopp beendet den Stream sofort; was noch wartet, geht verloren.</translation>
     </message>
     <message>
       <location line="+4" />

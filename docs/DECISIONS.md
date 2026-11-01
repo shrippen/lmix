@@ -6836,18 +6836,33 @@ den Encoder nicht sofort an) und keine Grenze in Puffern oder Bytes. Die
 Verzögerung gilt für den ganzen Ausgang, Bild und Ton gleich; ändern lässt
 sie sich wie die übrigen Einstellungen nur, solange der Ausgang nicht
 sendet (eine Änderung im Lauf risse ein Loch oder wiederholte Sekunden).
-Beim Stoppen gehen die gepufferten Sekunden noch hinaus (EOS leert die
-Queue), danach endet der Stream.
+Ein Stopp beendet den Stream sofort; was noch wartet, geht verloren: Ein
+verzögerter Stream stoppt ohne EOS (`eos_on_stop` aus). Verworfen: das
+Leeren mit EOS. strom wartet darauf höchstens 5 s
+(`EOS_ON_STOP_TIMEOUT_MS`), der taktende `srtsink` gäbe die wartenden
+Sekunden aber in Echtzeit aus; bei 30 s Verzögerung kämen 5 s an, der Rest
+(die Verabschiedung) nicht, und jeder Stopp hinge 5 s. Wirklich ausspielen
+hieße ein Zeitlimit je Flow in strom (Upstream-Kandidat) und einen Status
+„stoppt, sendet noch n s“. Eine Show-Datei mit mehr als 60 s (von Hand
+bearbeitet; geladene Shows werden nicht geprüft) baut höchstens 60 s auf.
 
 **Countdown**: Die Oberfläche rechnet ihn aus `since_ms` und `delay_s`
-(Ausgänge-Seite: „auf Sendung in 7 s“ statt der Laufzeit, danach die
-Laufzeit und „verzögert 10 s“; Ausgangsleiste im Tooltip). Kein eigener
-Zustand im Kern: Der Startzeitpunkt steht schon im Status.
+(Ausgänge-Seite: in der Zeile „−0:07“ statt der Laufzeit, im Detail die
+Zeile „Verzögerung“ mit „10 s, auf Sendung in 7 s“, danach „10 s“;
+Ausgangsleiste: Countdown im Knopf, Verzögerung im Tooltip). Kein eigener
+Zustand im Kern: Der Startzeitpunkt steht schon im Status. Ein Ausgang, den
+der Kern nach einem Neustart laufend vorfindet, kennt seinen Start nicht;
+ein verzögerter gilt dann als auf Sendung (`since_ms` um die Verzögerung
+zurück), sonst zeigte ein seit Stunden sendender Stream wieder einen
+Countdown.
 
 **Gemessen** (`scripts/measure-send-delay.sh`, CPU-Mischer, Empfänger
 ffmpeg, Zeit von der Stummschaltung bis zur Stille beim Empfänger): SRT
 live 0,27 s, mit 5 s 5,26 s, mit 10 s 10,27 s (10,00 s Unterschied); RTMP
-an ffmpeg als Server live 0,14 s, mit 5 s 5,10 s.
+an ffmpeg als Server live 0,14 s, mit 5 s 5,10 s. Stopp eines verzögerten
+Streams kurz nach dem Wiedereinschalten des Tons: SRT mit 5 s kehrt nach
+1,04 s zurück (so lange wie live), RTMP mit 10 s nach 0,04 s; der Empfänger
+hört den Ton danach nicht mehr (er wartete noch und ist verworfen).
 
 **Bekannt**: strom warnt im eigenen Log alle 5 s je Queue „Queue level
 exceeds threshold“ (Grenze fest 2 s, `pipeline_monitor.rs`), solange ein

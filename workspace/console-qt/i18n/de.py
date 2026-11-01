@@ -42,7 +42,7 @@ DE = {
     'Send delay (s)': 'Sendeverzögerung (s)',
     'Send delay': 'Sendeverzögerung',
     'Help on the send delay': 'Hilfe zur Sendeverzögerung',
-    '0: live. Picture and sound wait this long before they go out, e.g. against spoilers or for a moment to react. A stop still sends what waits.': '0: live. Bild und Ton warten so lange, bevor sie hinausgehen, etwa gegen Spoiler oder für einen Moment zum Reagieren. Ein Stopp sendet noch, was wartet.',
+    '0: live. Picture and sound wait this long before they go out, e.g. against spoilers or for a moment to react. A stop ends the stream at once; what still waits is lost.': '0: live. Bild und Ton warten so lange, bevor sie hinausgehen, etwa gegen Spoiler oder für einen Moment zum Reagieren. Ein Stopp beendet den Stream sofort; was noch wartet, geht verloren.',
     'Send delay: %1': 'Sendeverzögerung: %1',
     'Send delay %1': 'Sendeverzögerung %1',
     '%1 s, on air in %2 s': '%1 s, auf Sendung in %2 s',

@@ -151,6 +151,8 @@ KanteDialog {
         cardBox.currentIndex = 0
         cardChannelsBox.currentIndex = 0
         cardDelay.value = 0
+        // Unlike codec and bitrate, a delay is not carried to the next one.
+        sendDelay.value = 0
         cardModeBox.currentIndex = Math.max(0, cardModes.findIndex(m => m.value === defaultCardMode))
         textField.text = ""
         nameField.text = ""
@@ -472,7 +474,7 @@ KanteDialog {
                 KanteInfoTip {
                     term: qsTr("Send delay")
                     accessibleName: qsTr("Help on the send delay")
-                    info: qsTr("0: live. Picture and sound wait this long before they go out, e.g. against spoilers or for a moment to react. A stop still sends what waits.")
+                    info: qsTr("0: live. Picture and sound wait this long before they go out, e.g. against spoilers or for a moment to react. A stop ends the stream at once; what still waits is lost.")
                 }
             }
 

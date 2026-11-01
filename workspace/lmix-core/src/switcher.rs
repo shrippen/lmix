@@ -6198,6 +6198,24 @@ impl Switcher {
         self.held_outputs.insert(id);
     }
 
+    /// Output `id` found running after a restart: its start is unknown,
+    /// so it counts from `now_ms`, and a delayed stream as on air already
+    /// (STR.5: no countdown for a stream that has long been sending).
+    pub fn adopt_running_output(&mut self, id: OutputId, now_ms: u64) {
+        let delay_ms = self
+            .show
+            .outputs
+            .iter()
+            .find(|o| o.id == id)
+            .map_or(0, |o| u64::from(o.spec.send_delay_s()) * 1000);
+        self.set_output_status(
+            id,
+            OutputStatus::Running {
+                since_ms: now_ms.saturating_sub(delay_ms),
+            },
+        );
+    }
+
     pub fn output_ids(&self) -> Vec<OutputId> {
         self.show.outputs.iter().map(|o| o.id).collect()
     }
@@ -10489,6 +10507,37 @@ mod tests {
         })
         .unwrap();
         sw
+    }
+
+    /// STR.5: after a restart a delayed stream counts as on air: its
+    /// start lies the delay back, so clients show no countdown.
+    #[test]
+    fn an_adopted_delayed_stream_is_on_air() {
+        let mut sw = two_outputs();
+        let mut spec = srt_at(9000);
+        if let OutputSpec::Srt { delay_s, .. } = &mut spec {
+            *delay_s = 30;
+        }
+        sw.apply(Action::UpdateOutput {
+            output: OutputRef::Number(1),
+            spec,
+            source: OutputSource::Program,
+            name: None,
+            bus: None,
+        })
+        .unwrap();
+        let (delayed, live) = (sw.state().outputs[0].id, sw.state().outputs[1].id);
+        sw.adopt_running_output(delayed, 100_000);
+        sw.adopt_running_output(live, 100_000);
+        let state = sw.state();
+        assert_eq!(
+            state.outputs[0].status,
+            OutputStatus::Running { since_ms: 70_000 }
+        );
+        assert_eq!(
+            state.outputs[1].status,
+            OutputStatus::Running { since_ms: 100_000 }
+        );
     }
 
     #[test]

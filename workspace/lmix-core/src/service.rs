@@ -1331,7 +1331,7 @@ impl Service {
         }
         let mut sw = self.switcher.lock().await;
         for id in running {
-            sw.set_output_status(id, OutputStatus::Running { since_ms: now_ms() });
+            sw.adopt_running_output(id, now_ms());
         }
         // A card output on air keeps the cards on, also when the engine
         // could not say it uses them (`adopt_cards`).

@@ -842,7 +842,11 @@ pub fn output_flow(
     flow.id = output_flow_id(id);
     share_timing(&mut flow);
     // Stopping drains with EOS: recordings get their trailer (MP4 needs it).
-    flow.properties.eos_on_stop = Some(true);
+    // Not a delayed stream (STR.5): strom gives the drain 5 s, the syncing
+    // sink would play the waiting seconds out in real time and be cut off
+    // in the middle, and the stop would hang meanwhile. It ends at once;
+    // what still waits is dropped (SRT and RTMP need no trailer).
+    flow.properties.eos_on_stop = Some(spec.send_delay_s() == 0);
 
     // Program, the multiview, the preview, or one slot as it arrives (ISO,
     // MultiCorder). A slot
@@ -1018,6 +1022,8 @@ pub fn output_flow(
 fn add_send_delay(flow: &mut Flow, delay_s: u32, sound: bool) -> (String, Option<String>) {
     let encoded = "enc:encoded_out".to_string();
     let timed = sound.then(|| OUTPUT_SOUND_TIMED.to_string());
+    // Shows are not checked on load: a hand-edited hour stays a minute.
+    let delay_s = delay_s.min(lmix_types::MAX_SEND_DELAY_S);
     if delay_s == 0 {
         return (encoded, timed);
     }
@@ -3235,6 +3241,8 @@ mod tests {
         let ns = |s: u64| Some(s * 1_000_000_000);
         for (spec, video_in, audio_in) in streams {
             let flow = flow_of(&spec);
+            // A stop ends at once: a drain would be cut off after 5 s.
+            assert_eq!(flow.properties.eos_on_stop, Some(false));
             for (queue, from, to) in [
                 (SEND_DELAY_VIDEO, "enc:encoded_out", video_in),
                 (SEND_DELAY_SOUND, OUTPUT_SOUND_TIMED, audio_in),
@@ -3261,12 +3269,47 @@ mod tests {
                 *delay_s = 0;
             }
             let flow = flow_of(&live);
-            assert!(flow.elements.iter().all(|e| e.element_type != "queue"));
+            assert!(flow
+                .elements
+                .iter()
+                .all(|e| e.id != SEND_DELAY_VIDEO && e.id != SEND_DELAY_SOUND));
+            assert_eq!(flow.properties.eos_on_stop, Some(true), "live drains");
             assert!(flow
                 .links
                 .iter()
                 .any(|l| l.from == "enc:encoded_out" && l.to == video_in));
         }
+    }
+
+    /// Shows are not checked on load: a hand-edited delay past the limit
+    /// holds no more than the limit in memory.
+    #[test]
+    fn a_send_delay_stays_within_the_limit() {
+        let spec = OutputSpec::Srt {
+            uri: "srt://cdn:9000".into(),
+            video_kbps: 6000,
+            encoding: Default::default(),
+            delay_s: 3600,
+        };
+        let flow = output_flow(
+            OutputId::new(),
+            &spec,
+            Feed::Program,
+            None,
+            MixerBackend::Cpu,
+            Framerate::default(),
+            LiveMkv::Yes,
+        );
+        let q = flow
+            .elements
+            .iter()
+            .find(|e| e.id == SEND_DELAY_VIDEO)
+            .unwrap();
+        let max_ns = u64::from(lmix_types::MAX_SEND_DELAY_S) * 1_000_000_000;
+        assert!(matches!(
+            q.properties.get("min-threshold-time"),
+            Some(PropertyValue::UInt(v)) if *v == max_ns
+        ));
     }
 
     #[test]

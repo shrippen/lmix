@@ -228,5 +228,17 @@ TestCase {
         opened(dialog)
         verify(!delay.visible)
         compare(JSON.parse(dialog.form()).delay_s, 0)
+
+        // A new output starts live, unlike codec and bitrate.
+        dialog.reject()
+        tryCompare(dialog, "visible", false)
+        dialog.add()
+        opened(dialog)
+        delay.value = 30
+        dialog.reject()
+        tryCompare(dialog, "visible", false)
+        dialog.add()
+        opened(dialog)
+        compare(delay.value, 0)
     }
 }

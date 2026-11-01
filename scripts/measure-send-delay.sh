@@ -5,7 +5,10 @@
 # it arrives; the tone is muted once and
 # the time until the receiver hears the silence is the delay through the
 # whole chain. Run once live and once delayed: the difference is the send
-# delay. No GPU needed; stays out of CI (measures, does not judge).
+# delay. A delayed stream is then stopped right after the tone comes back:
+# the stop must return at once and the receiver must not hear the tone
+# again (what waits is dropped, DECISIONS „Sendeverzögerung je Stream“).
+# No GPU needed; stays out of CI (measures).
 #
 #   scripts/measure-send-delay.sh            # live, then 5 s late
 #   DELAYS="0 10" scripts/measure-send-delay.sh
@@ -113,8 +116,10 @@ for delay in $DELAYS; do
     act '{"action":"set_audio","input":1,"on":false}'
     sleep $((delay + 3))
     act '{"action":"set_audio","input":1,"on":true}'
+    stop_at="$(date +%s.%N)"
     act '{"action":"stop_output","output":"Late"}'
-    sleep 2
+    stopped_at="$(date +%s.%N)"
+    sleep $((delay + 2))
     kill "$receiver" 2>/dev/null || true
     pkill -f "ffmpeg .*127.0.0.1:$PORT" 2>/dev/null || true
     act '{"action":"remove_output","output":"Late"}'
@@ -122,6 +127,15 @@ for delay in $DELAYS; do
     [[ -n "$heard" ]] || fail "delay $delay s: the receiver never heard the mute"
     took="$(awk -v h="$heard" -v m="$muted" 'BEGIN { printf "%.2f", h - m }')"
     echo "delay ${delay} s: mute heard after ${took} s"
+    stop_took="$(awk -v a="$stop_at" -v b="$stopped_at" 'BEGIN { printf "%.2f", b - a }')"
+    echo "delay ${delay} s: stop took ${stop_took} s"
+    if ((delay > 0)); then
+        awk -v t="$stop_took" 'BEGIN { exit !(t < 2) }' || fail "delay $delay s: the stop took ${stop_took} s"
+        # The tone came back only in what waited: it must not arrive.
+        again="$(awk -v h="$heard" '$1 == "tone" && $2 > h { print $2; exit }' "$marks")"
+        [[ -z "$again" ]] || fail "delay $delay s: the receiver heard the tone after the stop"
+        echo "delay ${delay} s: after the stop nothing more arrived"
+    fi
     results+=("$delay $took")
     sleep 2
 done

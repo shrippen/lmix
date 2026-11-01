@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 """Reads a stream's sound as it arrives (mono s16le at 8 kHz on stdin, from
-ffmpeg) and prints the wall-clock time (Unix seconds) of the first tone,
-`tone <time>`, and of every switch from tone to silence, `silence <time>`. scripts/measure-send-delay.sh compares it
+ffmpeg) and prints the wall-clock time (Unix seconds) of every switch from
+silence to tone, `tone <time>` (the first tone too), and from tone to
+silence, `silence <time>`. scripts/measure-send-delay.sh compares it
 with the time the tone was muted. Needs nothing beyond Python 3."""
 import array
 import math
@@ -23,7 +24,7 @@ while True:
     samples = array.array("h", data)
     rms = math.sqrt(sum(s * s for s in samples) / len(samples))
     is_loud = rms >= QUIET
-    if is_loud and loud is None:
+    if is_loud and not loud:
         print(f"tone {now:.3f}", flush=True)
     elif loud and not is_loud:
         print(f"silence {now:.3f}", flush=True)
