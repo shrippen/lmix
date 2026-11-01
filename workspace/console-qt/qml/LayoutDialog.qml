@@ -11,7 +11,8 @@ import Kante
  * (zoom into its input) and locked in place. Shift+click chooses more
  * boxes, which then move together. New layouts get a name. Changed
  * live while open (a cue swaps boxes): Save sends only what was changed
- * here and keeps the rest as it is now.
+ * here and keeps the rest as it is now; removed meanwhile: Save adds it
+ * as a new layout.
  */
 KanteDialog {
     id: dialog
@@ -250,12 +251,12 @@ KanteDialog {
     modal: true
     width: Kirigami.Units.gridUnit * 40
     standardButtons: QQC2.Dialog.Ok | QQC2.Dialog.Cancel
-    acceptText: layout ? qsTr("Save layout") : qsTr("Add layout")
+    acceptText: gone ? qsTr("Save as new layout") : layout ? qsTr("Save layout") : qsTr("Add layout")
     // KanteDialog has a child of its own (KanteScope), so the popup does not
     // size itself to this one.
     contentHeight: column.implicitHeight
 
-    acceptEnabled: dialog.valid && !dialog.gone
+    acceptEnabled: dialog.valid
 
     onOpened: {
         nameField.text = ""
@@ -273,10 +274,23 @@ KanteDialog {
     /** The live layout has other boxes or a background than when it was
      *  taken (a cue, shortcut or another console changed it). */
     readonly property bool changedMeanwhile: live !== null && !sameLayout(live, base)
+    /** Same boxes in the same order: as many, each in its place with its
+     *  frame and lock. Changes on air (swap_boxes, set_box_input,
+     *  show_box) keep that; another console saving other boxes (one
+     *  removed and one added, reordered) does not. */
+    function sameBoxes(a, b) {
+        if (a.boxes.length !== b.boxes.length)
+            return false
+        return a.boxes.every((box, i) => {
+            const p = fromSpec(box), q = fromSpec(b.boxes[i])
+            return ["rect", "framed", "locked"].every(part => samePart(p, q, part))
+        })
+    }
     /** Changed meanwhile so that the edits cannot be laid over it (see
      *  `mix`): Save replaces it with what the dialog shows. */
     readonly property bool replacesLive: changedMeanwhile && mix(chosenBackground()) === null
-    /** Removed meanwhile (another console, an undo): nothing to save to. */
+    /** Removed meanwhile (another console, an undo): nothing to save to,
+     *  Save adds the working copy as a new layout. */
     readonly property bool gone: visible && base !== null && live === null
 
     /** Takes `l` (null: a new layout) into the dialog, dropping what was changed here. */
@@ -320,12 +334,12 @@ KanteDialog {
 
     /** The working copy over the live layout: a part of a box changed here
      *  wins, every other part is taken as it is now. Boxes are matched by
-     *  their place in the list. Null when that cannot be done: boxes added
-     *  or removed elsewhere, or a mix that would show an input twice
-     *  (lmix-core refuses that). */
+     *  their place in the list. Null when that cannot be done: other boxes
+     *  elsewhere (see `sameBoxes`), or a mix that would show an input
+     *  twice (lmix-core refuses that). */
     function mix(bg) {
         const current = liveNow()
-        if (!current || current.boxes.length !== base.boxes.length)
+        if (!current || !sameBoxes(current, base))
             return null
         const was = base.boxes.map(fromSpec), now = current.boxes.map(fromSpec)
         const wasBg = base.background || null
@@ -387,6 +401,16 @@ KanteDialog {
         select(n, false)
     }
 
+    /** `name`, or "name (2)", "name (3)" … when another layout has it
+     *  (as lmix-core names a second input; without case). */
+    function freeName(name) {
+        const taken = layouts.map(l => l.name.toLowerCase())
+        let free = name
+        for (let n = 2; taken.indexOf(free.toLowerCase()) >= 0; n++)
+            free = name + " (" + n + ")"
+        return free
+    }
+
     onAccepted: {
         var bg = chosenBackground()
         var result = merged(bg)
@@ -398,7 +422,10 @@ KanteDialog {
             locked: b.locked,
             hidden: b.hidden
         }))
-        if (layout)
+        if (layout && !liveNow())
+            // Removed while open: the work is kept as a new layout.
+            act({ action: "add_layout", name: freeName(base.name), background: bg, boxes: specs })
+        else if (layout)
             // By id: a number would hit another layout once one before it
             // is removed while the dialog is open.
             act({ action: "set_layout", layout: String(base.id), background: result.background, boxes: specs })
@@ -417,7 +444,7 @@ KanteDialog {
             Layout.fillWidth: true
             visible: dialog.changedMeanwhile || dialog.gone
             kind: dialog.gone || dialog.replacesLive ? KanteCallout.Kind.Warn : KanteCallout.Kind.Info
-            text: dialog.gone ? qsTr("This layout was removed while the dialog was open. It can no longer be saved.")
+            text: dialog.gone ? qsTr("This layout was removed while the dialog was open. Save it as a new layout to keep what is shown here.")
                 : dialog.replacesLive
                 ? qsTr("This layout was changed elsewhere while the dialog was open. Saving replaces it with what is shown here.")
                 : qsTr("This layout was changed while the dialog was open. Saving keeps those changes wherever you changed nothing here.")

@@ -47,6 +47,7 @@ on:
       - scripts/test-web.sh
       - scripts/titles-check.cjs
       - scripts/web-check.cjs
+      - scripts/rtmp-unpublish.cjs
       - scripts/fetch-strom.sh
       - .github/workflows/ci.yml
   workflow_dispatch:

@@ -8,8 +8,10 @@ import Kante
  * Qt cuts the inserted part, so the half may sit anywhere in the text.
  * The field counts UTF-16 units, lmix-core counts characters: the field
  * is at most stricter than the core, never more lenient.
- * Cutting sets `text`, which ends a binding on it; a field bound to a
- * value restores the binding itself when editing ends, as before.
+ * The halves go by remove(), which keeps the undo history: Ctrl+Z takes
+ * back a cut paste (setting `text` would clear the history). A cut
+ * leaves a binding on `text` in place, like typing; the callers bind
+ * again when editing finishes.
  */
 KanteTextField {
     id: field
@@ -21,13 +23,31 @@ KanteTextField {
         when: field.limit > 0
         value: field.limit
     }
+    QtObject {
+        id: own
+        // remove() changes the text again; the outer call does all halves.
+        property bool cutting: false
+    }
+
     onTextChanged: {
-        const whole = Texts.whole(text)
-        if (whole !== text) {
-            // The cursor stays where it was, less the halves dropped before it.
-            const cursor = Texts.whole(text.slice(0, cursorPosition)).length
-            text = whole
-            cursorPosition = cursor
+        if (own.cutting) {
+            return
         }
+        const lone = Texts.halves(text)
+        if (lone.length === 0) {
+            return
+        }
+
+        // The cursor stays where it was, less the halves dropped before it.
+        const cursor = cursorPosition - lone.filter(i => i < cursorPosition).length
+        own.cutting = true
+        try {
+            for (let k = lone.length - 1; k >= 0; k--) {
+                remove(lone[k], lone[k] + 1)
+            }
+        } finally {
+            own.cutting = false
+        }
+        cursorPosition = cursor
     }
 }
