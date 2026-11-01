@@ -227,7 +227,7 @@ kann es, Console nicht.
 | LAY.4 | "Ebenen flach rechnen": Input samt Ebenen als ein Bild für Weiterverwendung | K | – |
 | LAY.5 | Layout-Vorlagen: speichern, laden, ex-/importieren, außerhalb der Show | S | ✅ |
 | LAY.6 | Ebenen-Editor: Maus verschieben/skalieren/croppen, Mehrfachauswahl, Fangen an Kanten/Mitte/Schutzbereichen/anderen Ebenen, Sperre, Rückgängig/Wiederholen, Pixelwerte zur Ausgabegröße | S | ✅ (Zuschnitt per Zahl, nicht per Maus) |
-| LAY.7 | Ebene ein/aus, tauschen, Inhalt wechseln und Rechteck setzen per Aktion, auch animiert | S | ◐ (Inhalt und Rechteck per `set_layout`; ohne Ein/Aus je Box, Tauschen, Animation) |
+| LAY.7 | Ebene ein/aus, tauschen, Inhalt wechseln und Rechteck setzen per Aktion, auch animiert | S | ◐ (Inhalt und Rechteck per `set_layout`, Ein/Aus je Box per `show_box`, zwei Boxen tauschen per `swap_boxes` (auch im Rechtsklick-Menü des Layouts), Input einer Box per `set_box_input` (2026-11-01); ohne Animation) |
 
 ### 3.5 Schalten (SWI)
 

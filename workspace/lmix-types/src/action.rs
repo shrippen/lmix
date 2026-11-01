@@ -161,6 +161,8 @@ pub const ACTION_GROUPS: &[(&str, &[&str])] = &[
             "add_layout",
             "set_layout",
             "show_box",
+            "swap_boxes",
+            "set_box_input",
             "remove_layout",
             "preview_layout",
             "save_layout_template",
@@ -718,6 +720,22 @@ pub enum Action {
         layout: InputRef,
         number: u8,
         shown: crate::layout::BoxShown,
+    },
+    /// Swap the inputs of boxes `a` and `b` (1-based) of a layout (LAY.7):
+    /// each input takes its crop along; place, frame, lock and visibility
+    /// stay with the box. On air the picture changes at once.
+    SwapBoxes {
+        layout: InputRef,
+        a: u8,
+        b: u8,
+    },
+    /// Put another input into box `number` (1-based) of a layout (LAY.7);
+    /// the box keeps its place, frame, lock and visibility, its crop is
+    /// cleared. An input can be in a layout only once.
+    SetBoxInput {
+        layout: InputRef,
+        number: u8,
+        input: InputRef,
     },
     /// Remove a layout (not while it is on program).
     RemoveLayout {

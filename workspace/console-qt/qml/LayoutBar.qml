@@ -7,8 +7,8 @@ import Kante
 
 /**
  * Layouts: one button each (click: into preview; right click: edit,
- * save as template, remove), red on program and green in preview like a
- * tile. "+ Layout" adds one; "Templates" (LAY.5, kept apart from the show
+ * swap two boxes, save as template, remove), red on program and green in
+ * preview like a tile. "+ Layout" adds one; "Templates" (LAY.5, kept apart from the show
  * for every show) adds one from a template, removes templates and moves
  * them to and from files.
  */
@@ -25,6 +25,28 @@ RowLayout {
     readonly property var layouts: show && show.layouts ? show.layouts : []
     readonly property var templates: show && show.layout_templates ? show.layout_templates : []
     readonly property var templateChoices: templates.map(t => ({ value: t.name, label: t.name }))
+
+    /** Pairs of boxes a layout can swap (LAY.7), `{value: [a, b], label}`,
+     *  numbers 1-based, each box named by its input. */
+    function swapChoices(layout) {
+        var boxes = layout && layout.boxes ? layout.boxes : []
+        var inputs = show && show.inputs ? show.inputs : []
+        var name = id => {
+            var found = inputs.find(i => i.id === id)
+            return found ? found.name : "?"
+        }
+        var choices = []
+        for (var a = 0; a < boxes.length; a++) {
+            for (var b = a + 1; b < boxes.length; b++) {
+                choices.push({
+                    value: [a + 1, b + 1],
+                    label: qsTr("Box %1 (%2) and box %3 (%4)")
+                        .arg(a + 1).arg(name(boxes[a].input)).arg(b + 1).arg(name(boxes[b].input))
+                })
+            }
+        }
+        return choices
+    }
 
     function localPath(url) {
         return decodeURIComponent(url.toString().replace(/^file:\/\//, ""))
@@ -55,7 +77,7 @@ RowLayout {
                 enabled: bar.core.connected && !entry.onProgram
                 onClicked: bar.act({ action: "preview_layout", layout: entry.modelData.number })
                 QQC2.ToolTip.visible: hovered
-                QQC2.ToolTip.text: qsTr("Click: into preview. Right click: edit or remove.")
+                QQC2.ToolTip.text: qsTr("Click: into preview. Right click: edit, swap boxes or remove.")
             }
 
             // On the item: a disabled button (on program) passes it through.
@@ -80,6 +102,14 @@ RowLayout {
                     onTriggered: bar.act({ action: "save_layout_template", layout: entry.modelData.number })
                     QQC2.ToolTip.visible: hovered
                     QQC2.ToolTip.text: qsTr("Keeps its places for every show, under its name (one of the same name is replaced).")
+                }
+                // LAY.7: also on program, the picture changes at once.
+                ChoiceMenu {
+                    title: qsTr("Swap boxes")
+                    icon.name: "exchange-positions"
+                    enabled: choices.length > 0
+                    choices: bar.swapChoices(entry.modelData)
+                    onPicked: pair => bar.act({ action: "swap_boxes", layout: entry.modelData.number, a: pair[0], b: pair[1] })
                 }
                 QQC2.MenuSeparator {}
                 KanteMenuItem {
