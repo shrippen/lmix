@@ -113,11 +113,35 @@ TestCase {
         row.kindIndex = rows.kinds.findIndex(k => k.kind === "osc")
         compare(row.osc().target, "Pult")
         verify(rows.error !== "", "no address yet")
-        row.setOsc({ target: "Pult", address: "/eos/cue/1 fire", args: "" })
-        verify(rows.error !== "", "a space in the address")
+        for (const bad of ["/eos/cue/1 fire", "/a#b", "/a,b", "/grün", "eos"]) {
+            row.setOsc({ target: "Pult", address: bad, args: "" })
+            verify(rows.error !== "", bad)
+        }
         row.setOsc({ target: "Pult", address: "/eos/cue/1/fire", args: "" })
         compare(rows.error, "")
         compare(rows.collect()[2], { action: "osc_send", target: "Pult", address: "/eos/cue/1/fire", args: "" })
+    }
+
+    // The choice is a name: targets added or removed while the dialog is
+    // open never move it to another desk.
+    function test_osc_target_holds_when_the_list_changes() {
+        const rows = createTemporaryObject(rowsComponent, test, {
+            targets: [{ name: "Pult", kind: "osc_udp" }, { name: "Licht", kind: "osc_udp" }]
+        })
+        rows.load([{ action: "osc_send", target: "Licht", address: "/go", args: "" }])
+        const row = findChild(rows, "actionRowRepeater").itemAt(0)
+        rows.targets = [{ name: "A", kind: "osc_tcp" }, { name: "Pult", kind: "osc_udp" }, { name: "Licht", kind: "osc_udp" }]
+        compare(row.osc().target, "Licht")
+        rows.targets = [{ name: "Pult", kind: "osc_udp" }]
+        compare(row.osc().target, "Licht", "kept, though gone")
+        compare(row.oscChoices, ["Licht", "Pult"])
+        // Picking one in the list holds the same way.
+        const box = findChild(row, "oscTargetBox")
+        box.activated(1)
+        compare(row.osc().target, "Pult")
+        rows.targets = [{ name: "B", kind: "osc_udp" }, { name: "Pult", kind: "osc_udp" }]
+        compare(row.osc().target, "Pult")
+        compare(box.currentText, "Pult")
     }
 
     // Without OSC targets the row cannot be saved.

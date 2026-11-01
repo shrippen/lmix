@@ -12,7 +12,7 @@ use std::net::SocketAddr;
 use std::time::Duration;
 
 use lmix_types::TargetKind;
-use tokio::io::AsyncWriteExt;
+use tokio::io::{AsyncReadExt, AsyncWriteExt};
 
 use crate::targets::TargetConfig;
 
@@ -108,14 +108,27 @@ async fn send_tcp(peer: SocketAddr, packet: &[u8]) -> Result<(), String> {
         .await
         .map_err(|e| format!("not sent: {e}"))?;
     let _ = stream.shutdown().await;
+    drain(&mut stream).await;
     Ok(())
+}
+
+/// How long a sent frame waits for the peer to close, reading what it
+/// sends meanwhile.
+const DRAIN: Duration = Duration::from_millis(200);
+
+/// Read and drop what the peer sent until it closes (or `DRAIN` passed):
+/// closing with unread data sends a reset, and the peer may drop the
+/// frame it has not read yet (a desk that talks to its clients).
+async fn drain(stream: &mut tokio::net::TcpStream) {
+    let mut buf = [0u8; 1024];
+    let read_all = async { while matches!(stream.read(&mut buf).await, Ok(n) if n > 0) {} };
+    let _ = tokio::time::timeout(DRAIN, read_all).await;
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::osc::{decode, encode_args, Arg};
-    use tokio::io::AsyncReadExt;
 
     fn target(kind: TargetKind, addresses: &[String]) -> TargetConfig {
         TargetConfig {
@@ -160,6 +173,28 @@ mod tests {
         let packet = encode_args("/go", &[Arg::Str("Szene 2".into())]);
         let read = tokio::spawn(async move {
             let (mut stream, _) = listener.accept().await.unwrap();
+            let mut got = Vec::new();
+            stream.read_to_end(&mut got).await.unwrap();
+            got
+        });
+        send(&target, &address, &packet).await.unwrap();
+        assert_eq!(read.await.unwrap(), slip(&packet));
+    }
+
+    /// A desk that talks to its clients first: the frame still arrives
+    /// whole, the connection closes without a reset.
+    #[tokio::test]
+    async fn tcp_reads_what_a_talking_peer_sent() {
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let address = listener.local_addr().unwrap().to_string();
+        let target = target(TargetKind::OscTcp, std::slice::from_ref(&address));
+        let packet = encode_args("/eos/go", &[]);
+        let read = tokio::spawn(async move {
+            let (mut stream, _) = listener.accept().await.unwrap();
+            stream
+                .write_all(&slip(&encode_args("/eos/out/hello", &[])))
+                .await
+                .unwrap();
             let mut got = Vec::new();
             stream.read_to_end(&mut got).await.unwrap();
             got

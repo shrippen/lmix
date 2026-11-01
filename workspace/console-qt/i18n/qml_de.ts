@@ -122,7 +122,7 @@
       <translation>Andere (JSON)</translation>
     </message>
     <message>
-      <location line="+117" />
+      <location line="+126" />
       <source>Action %1 needs an OSC target (Output targets)</source>
       <translation>Aktion %1 braucht ein OSC-Ziel (Ausgabeziele)</translation>
     </message>
@@ -142,17 +142,17 @@
       <translation>Aktionen, in dieser Reihenfolge</translation>
     </message>
     <message>
-      <location line="+38" />
+      <location line="+40" />
       <source>Action %1</source>
       <translation>Aktion %1</translation>
     </message>
     <message>
-      <location line="+16" />
+      <location line="+19" />
       <source>OSC target of action %1</source>
       <translation>OSC-Ziel von Aktion %1</translation>
     </message>
     <message>
-      <location line="+11" />
+      <location line="+9" />
       <source>OSC address of action %1</source>
       <translation>OSC-Adresse von Aktion %1</translation>
     </message>
@@ -3300,7 +3300,7 @@
       <translation>Ordner mit den fehlenden Dateien</translation>
     </message>
     <message>
-      <location line="+200" />
+      <location line="+201" />
       <source>Inputs from a show…</source>
       <translation>Inputs aus einer Show …</translation>
     </message>
@@ -3391,7 +3391,7 @@
       <translation>Ansicht</translation>
     </message>
     <message>
-      <location line="-502" />
+      <location line="-503" />
       <source>FTB</source>
       <comment>fade to black</comment>
       <translation>FTB</translation>
@@ -3407,7 +3407,7 @@
       <translation>Schwarzblende: Programm auf Schwarz und zurück (SWI.9); Show und Ausgänge laufen weiter</translation>
     </message>
     <message>
-      <location line="+539" />
+      <location line="+540" />
       <source>Multiview</source>
       <translation>Multiview</translation>
     </message>
@@ -8380,7 +8380,7 @@
   <context>
     <name>TitlesDialog</name>
     <message>
-      <location filename="../qml/TitlesDialog.qml" line="+53" />
+      <location filename="../qml/TitlesDialog.qml" line="+55" />
       <source>Ready</source>
       <translation>Bereit</translation>
     </message>
@@ -8405,7 +8405,7 @@
       <translation>Titel</translation>
     </message>
     <message>
-      <location line="+54" />
+      <location line="+55" />
       <source>New graphics channel</source>
       <translation>Neuer Grafikkanal</translation>
     </message>

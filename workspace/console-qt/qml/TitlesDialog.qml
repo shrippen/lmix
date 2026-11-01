@@ -25,6 +25,8 @@ KanteDialog {
     /** For actions of triggers. */
     required property var inputs
     required property var outputs
+    /** Output targets of this machine, for OSC actions of the triggers. */
+    property var targets: []
     required property string coreUrl
 
     property int current: 0
@@ -121,6 +123,7 @@ KanteDialog {
         act: dialog.act
         inputs: dialog.inputs
         outputs: dialog.outputs
+        targets: dialog.targets
     }
 
     BindingMenu {

@@ -12,8 +12,11 @@
 //!                    └─ int (32 bit)
 //! ```
 //!
-//! Any other word is text too (`go` is `"go"`). Both are checked when an
-//! action is read, so a cue never holds a message that cannot be sent.
+//! Any other word is text too (`go` is `"go"`). A whole number beyond
+//! 32 bit, or a decimal a 32-bit float cannot hold (`1e99`, `1e-50`), is
+//! refused rather than changed; so are control characters. The address is
+//! printable ASCII (OSC 1.0). Both are checked when an action is read, so
+//! a cue never holds a message that cannot be sent.
 
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
@@ -61,7 +64,7 @@ impl TryFrom<String> for OscAddress {
         if text.len() > OSC_ADDRESS_MAX {
             return Err(format!("OSC address longer than {OSC_ADDRESS_MAX} bytes"));
         }
-        let bad = |c: char| c.is_control() || c.is_whitespace() || RESERVED.contains(&c);
+        let bad = |c: char| !c.is_ascii_graphic() || RESERVED.contains(&c);
         if let Some(c) = text.chars().find(|c| bad(*c)) {
             return Err(format!("OSC address {text:?} holds {c:?}"));
         }
@@ -133,9 +136,12 @@ pub fn parse_args(text: &str) -> Result<Vec<OscArg>, String> {
             if c == '"' {
                 return Err(format!("a quote inside {word}\": put the text in quotes"));
             }
+            if c.is_control() {
+                return Err(format!("a control character {c:?} in {word}"));
+            }
             word.push(c);
         }
-        args.push(word_arg(word));
+        args.push(word_arg(word)?);
     }
 }
 
@@ -150,6 +156,9 @@ fn quoted(chars: &mut std::iter::Peekable<std::str::Chars>) -> Result<String, St
                 Some(c @ ('"' | '\\')) => text.push(c),
                 _ => return Err("only \\\" and \\\\ inside quotes".into()),
             },
+            Some(c) if c.is_control() => {
+                return Err(format!("a control character {c:?} in \"{text}"));
+            }
             Some(c) => text.push(c),
         }
     }
@@ -160,27 +169,34 @@ fn quoted(chars: &mut std::iter::Peekable<std::str::Chars>) -> Result<String, St
 }
 
 /// An unquoted word: a number, `true`, `false`, `nil`, or text.
-fn word_arg(word: String) -> OscArg {
+fn word_arg(word: String) -> Result<OscArg, String> {
     match word.as_str() {
-        "true" => return OscArg::Bool(true),
-        "false" => return OscArg::Bool(false),
-        "nil" => return OscArg::Nil,
+        "true" => return Ok(OscArg::Bool(true)),
+        "false" => return Ok(OscArg::Bool(false)),
+        "nil" => return Ok(OscArg::Nil),
         _ => {}
     }
-    if let Ok(int) = word.parse::<i32>() {
-        return OscArg::Int(int);
+    let digits = word.strip_prefix(['+', '-']).unwrap_or(&word);
+    if !digits.is_empty() && digits.chars().all(|c| c.is_ascii_digit()) {
+        return word
+            .parse::<i32>()
+            .map(OscArg::Int)
+            .map_err(|_| format!("{word} is beyond a 32-bit whole number; {word}.0 is a float"));
     }
     let numeric = word
         .chars()
         .all(|c| c.is_ascii_digit() || "+-.eE".contains(c));
-    let float = word
-        .parse::<f32>()
-        .ok()
-        .filter(|f| numeric && f.is_finite());
-    match float {
-        Some(float) => OscArg::Float(float),
-        None => OscArg::Text(word),
+    let Some(wide) = word.parse::<f64>().ok().filter(|_| numeric) else {
+        return Ok(OscArg::Text(word));
+    };
+    let float = wide as f32;
+    if !float.is_finite() {
+        return Err(format!("{word} is too big for a 32-bit float"));
     }
+    if float == 0.0 && wide != 0.0 {
+        return Err(format!("{word} is too small for a 32-bit float"));
+    }
+    Ok(OscArg::Float(float))
 }
 
 #[cfg(test)]
@@ -209,13 +225,31 @@ mod tests {
 
     #[test]
     fn odd_words_stay_text() {
-        // Too big for 32 bit, not a finite number, a name like a number.
-        let args = parse_args("3000000000 inf NaN 1.2.3 1e99").unwrap();
-        assert_eq!(args[0], OscArg::Float(3.0e9));
-        assert_eq!(args[1], OscArg::Text("inf".into()));
-        assert_eq!(args[2], OscArg::Text("NaN".into()));
-        assert_eq!(args[3], OscArg::Text("1.2.3".into()));
-        assert_eq!(args[4], OscArg::Text("1e99".into()));
+        // Names, not numbers.
+        let args = parse_args("inf NaN 1.2.3 - 3000000000.0").unwrap();
+        assert_eq!(args[0], OscArg::Text("inf".into()));
+        assert_eq!(args[1], OscArg::Text("NaN".into()));
+        assert_eq!(args[2], OscArg::Text("1.2.3".into()));
+        assert_eq!(args[3], OscArg::Text("-".into()));
+        assert_eq!(args[4], OscArg::Float(3.0e9));
+    }
+
+    #[test]
+    fn numbers_a_receiver_would_misread_are_refused() {
+        // Beyond 32 bit, too big or too small for a float: never changed.
+        for word in ["3000000000", "-2147483649", "1e99", "1e-50"] {
+            assert!(parse_args(word).is_err(), "{word}");
+        }
+        assert_eq!(parse_args("-2147483648").unwrap(), [OscArg::Int(i32::MIN)]);
+    }
+
+    #[test]
+    fn control_characters_are_refused() {
+        // A NUL would end the OSC string early and shift every argument after.
+        for text in ["\"ab\0cd\" 50", "a\0b", "\"a\u{7}\"", "\"a\tb\""] {
+            assert!(parse_args(text).is_err(), "{text:?}");
+        }
+        assert_eq!(parse_args("a\tb").unwrap().len(), 2, "a tab separates");
     }
 
     #[test]
@@ -241,7 +275,7 @@ mod tests {
     #[test]
     fn addresses_start_with_a_slash_and_hold_no_spaces() {
         assert!(OscAddress::try_from("/eos/chan/1/at".to_string()).is_ok());
-        for bad in ["eos", "", "/a b", "/a#b", "/a,b", "/a\tb"] {
+        for bad in ["eos", "", "/a b", "/a#b", "/a,b", "/a\tb", "/grün", "/a\0"] {
             assert!(OscAddress::try_from(bad.to_string()).is_err(), "{bad}");
         }
         let long = format!("/{}", "a".repeat(OSC_ADDRESS_MAX));
@@ -271,6 +305,13 @@ mod tests {
             let _ = OscAddress::try_from(text.clone());
             if let Ok(args) = OscArgs::try_from(text.clone()) {
                 assert_eq!(Ok(args.args()), parse_args(&text), "{text:?}");
+                let texts = args.args().into_iter().filter_map(|a| match a {
+                    OscArg::Text(t) => Some(t),
+                    _ => None,
+                });
+                for t in texts {
+                    assert!(!t.chars().any(char::is_control), "{text:?}");
+                }
             }
         }
     }

@@ -66,6 +66,15 @@ ColumnLayout {
         return []
     }
 
+    /** Longest OSC address in bytes (lmix-core OSC_ADDRESS_MAX). */
+    readonly property int oscAddressMax: 256
+
+    /** An OSC address as lmix-core takes it (lmix_types::osc): `/`, then
+     *  printable ASCII without `#` and `,`. */
+    function oscAddressOk(address) {
+        return /^\/[!-~]*$/.test(address) && !/[#,]/.test(address) && address.length <= oscAddressMax
+    }
+
     /** Preset row → action; `null` for an empty row. `osc`: target,
      *  address and arguments of an OSC row. */
     function actionOf(kind, index, json, osc) {
@@ -173,7 +182,7 @@ ColumnLayout {
                     error = qsTr("Action %1 needs an OSC target (Output targets)").arg(i + 1)
                     return
                 }
-                if (!/^\/\S*$/.test(osc.address.trim())) {
+                if (!oscAddressOk(osc.address.trim())) {
                     error = qsTr("Action %1: the OSC address starts with / and has no spaces").arg(i + 1)
                     return
                 }
@@ -207,16 +216,18 @@ ColumnLayout {
             property alias json: jsonField.text
             onJsonChanged: editor.validate()
             readonly property string param: editor.kinds[kindBox.currentIndex].param
-            /** A target the action names that this machine does not have. */
-            property string oscGone: ""
-            readonly property var oscChoices: oscGone !== "" ? [oscGone].concat(editor.oscTargets) : editor.oscTargets
+            /** The OSC target chosen, by name: a target list that changes
+             *  while the dialog is open keeps it. Empty: the first one. */
+            property string oscChosen: ""
+            onOscChosenChanged: if (row.param === "osc") editor.validate()
+            /** The OSC targets, and first the chosen one if this machine lacks it. */
+            readonly property var oscChoices: oscChosen !== "" && editor.oscTargets.indexOf(oscChosen) < 0 ? [oscChosen].concat(editor.oscTargets) : editor.oscTargets
 
             function osc() {
-                return { target: oscTarget.currentIndex >= 0 ? oscTarget.currentText : "", address: oscAddress.text, args: oscArgs.text }
+                return { target: oscChosen !== "" ? oscChosen : (oscChoices[0] || ""), address: oscAddress.text, args: oscArgs.text }
             }
             function setOsc(o) {
-                oscGone = o.target !== "" && editor.oscTargets.indexOf(o.target) < 0 ? o.target : ""
-                oscTarget.currentIndex = o.target === "" ? (oscChoices.length > 0 ? 0 : -1) : oscChoices.indexOf(o.target)
+                oscChosen = o.target
                 oscAddress.text = o.address
                 oscArgs.text = o.args
             }
@@ -244,12 +255,13 @@ ColumnLayout {
             }
             QQC2.ComboBox {
                 id: oscTarget
+                objectName: "oscTargetBox"
                 Layout.preferredWidth: Kirigami.Units.gridUnit * 7
                 visible: row.param === "osc"
                 model: row.oscChoices
+                currentIndex: row.oscChosen === "" ? (row.oscChoices.length > 0 ? 0 : -1) : row.oscChoices.indexOf(row.oscChosen)
+                onActivated: (index) => row.oscChosen = row.oscChoices[index]
                 Accessible.name: qsTr("OSC target of action %1").arg(row.index + 1)
-                // Not while the rows are built: their kinds are not set yet.
-                onCurrentIndexChanged: if (row.param === "osc") editor.validate()
                 KanteFieldSkin { control: oscTarget }
             }
             KanteTextField {
