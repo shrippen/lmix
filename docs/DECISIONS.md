@@ -6670,7 +6670,8 @@ gesperrt blieb und `set_moods` Unstimmiges annahm.
   von Sammlungen je einmal und nicht die einer Stimmung (eine Id für
   Stimmungen und Sammlungen); in einer Sammlung nur Stimmungen und Pads,
   die es gibt, jede einmal. Pads, die es nicht mehr gibt (Cue entfernt,
-  Liste entfernt oder keine Pads mehr), fallen still aus den Sammlungen:
+  Liste entfernt; „keine Pads mehr“ aufgehoben, siehe „Pads einer Liste
+  ohne Pads bleiben in Sammlungen“), fallen still aus den Sammlungen:
   beim Bearbeiten der Listen, beim Öffnen einer Show, beim Wiederherstellen
   und in `set_moods` selbst (der Dialog kann ein Pad noch haben, das
   inzwischen anderswo gelöscht wurde; abgelehnt würde sein Speichern).
@@ -7590,8 +7591,9 @@ nicht mit (die unterste von 16 Ebenen ging nicht in einem Zug nach oben).
   weggescrollte: die Markierung ist immer zu sehen.
   Nicht in der Liste der Gruppen und Varianten: deren `ListView` gibt
   eine weit aus dem Bild gescrollte Zeile samt ihrem Ziehen auf.
-- **Nicht geändert**: Pads, deren Liste keine Pads mehr ist, fallen weiter
-  aus den Sammlungen und kommen beim Wiedereinschalten nicht zurück
+- **Nicht geändert** (aufgehoben, siehe „Pads einer Liste ohne Pads
+  bleiben in Sammlungen“): Pads, deren Liste keine Pads mehr ist, fallen
+  weiter aus den Sammlungen und kommen beim Wiedereinschalten nicht zurück
   (Stufe 7a). Sie zu behalten hieße, Sammlungen Einträge zu lassen, die
   keine Pads sind (Prüfung, Zählung, Seite); ein Rückgängig über
   `Removed::Moods` ist ein eigenes Thema.
@@ -7667,8 +7669,9 @@ Baustein, der ihn einmal hält.
 (0: Qts eigene Grenze, wie bisher `Binding on maximumLength` im NameField)
 und dem Schnitt auf ganze Zeichen. Alle fünf Stellen nehmen ihn; ihre
 eigenen `onEditingFinished`, Escape und das Wiederherstellen der Bindung
-bleiben wie sie waren (der Schnitt setzt `text` und hebt damit eine Bindung
-auf, die Stellen binden beim Fertigstellen neu). Kein Kante-Baustein: der
+bleiben wie sie waren (die Stellen binden beim Fertigstellen neu). Die
+Hälften gehen per `remove()`, nicht per `text =`: so bleibt der Verlauf, Strg+Z
+nimmt ein gekürztes Einfügen zurück (Review, Nachtrag unten). Kein Kante-Baustein: der
 Schnitt hängt an `Texts` der Console.
 Qt kürzt den eingefügten Teil, nicht das Ende: ein Emoji, mitten im Text
 getippt oder eingefügt, kann dort halb stehen bleiben. `Texts.whole` wirft
@@ -7757,6 +7760,100 @@ entfernte plus eine hinzugefügte nicht gemischt (alle drei vor der
 Switcher-Test `set_layout_by_id_hits_its_layout_after_one_before_is_gone`
 (Id als Text wie aus der Console, nach Entfernen des Layouts davor; ein
 Layout, das wie die Id heißt, gewinnt nicht).
+
+## 2026-11-01 — Pads einer Liste ohne Pads bleiben in Sammlungen
+
+**Kontext**: Schaltete man bei einer Liste „Pads“ aus, fielen ihre Cues aus
+allen Sammlungen (Stufe 7a, in 7d nicht geändert); wieder eingeschaltet,
+fehlten sie, die Sammlungen waren von Hand neu zu füllen. Der User will
+das nicht (1.11.2026).
+
+**Optionen**: (a) Einträge behalten, solange der Cue in einer Liste steht;
+Seite und Zählung nehmen nur die von Listen mit Pads. (b) Beim Ausschalten
+merken, was entfiel, und beim Einschalten zurücklegen: zweiter Speicher in
+der Show-Datei, der mit jedem Bearbeiten der Sammlungen veralten kann.
+
+**Entscheidung**: (a).
+- `pads` einer Sammlung nennt Cues der Show (oberste Ebene einer Liste);
+  Pads sind sie, solange ihre Liste Pads hat. Aus den Sammlungen fallen
+  sie nur, wenn der Cue oder seine Liste entfernt ist (`prune_pads`);
+  `set_cue_list_pads` ändert die Sammlungen nicht mehr.
+- `set_moods` und das Öffnen einer Show nehmen solche Einträge an, auch
+  Cues von Listen, die nie Pads waren. Die Grenze von 256 Einträgen je
+  Sammlung zählt sie mit (sie stehen in der Datei); weil die Seite sie
+  nicht zeigt, sagt es der eigene Fehler `collection_full` („Sammlung …
+  fasst höchstens 256 Einträge, Oneshots von Listen ohne Pads
+  mitgezählt“).
+- Ein Cue, der in der Datei in eine Liste ohne Pads wandert, bleibt als
+  ruhender Eintrag und ist wieder Pad, sobald sie Pads bekommt. Per
+  Aktion verschiebt sich kein Cue zwischen Listen (eine Cue-Id steht nur
+  einmal in der Show): er verlässt erst die alte Liste und damit die
+  Sammlungen.
+- Die Seite Stimmungen zeigt und zählt nur Pads von Listen mit Pads
+  (`padIds`, ein `Set`, Nachschlagen ohne Suche je Eintrag);
+  „Zusammenstellen“ ändert die Sammlung als Ganzes und behält die übrigen.
+- Der Kern nutzt `pads` einer Sammlung nur zum Prüfen; zur Laufzeit
+  ändert sich nichts.
+
+**Bricht**: das Format bleibt; eine zu volle Sammlung meldet
+`collection_full` statt `bad_mood`. Einträge, die frühere Stände beim
+Ausschalten entfernten, kommen nicht zurück.
+
+**Geprüft**: `switcher::tests::a_pad_switched_off_and_on_keeps_its_collections`
+(vorher: Sammlung nach dem Ausschalten leer),
+`a_pad_moved_to_a_list_without_pads_waits_in_its_collections`,
+`a_full_collection_says_that_waiting_pads_count` (vorher allgemeines
+`bad_mood`),
+`moods_need_distinct_names_ids_and_entries_that_are_there` (ausgeschaltet
+gültig, Liste entfernt fällt weg); QML `tst_moods_page.qml`
+`test_a_list_switched_off_keeps_its_one_shots_in_the_collection` (vorher
+„1 one-shot“ statt „0 one-shots“),
+`test_a_full_collection_says_that_hidden_one_shots_count`. Alle Tests von
+lmix-core (587) und QML (363).
+
+## 2026-11-01 — Nachträge der Reviews: Rückgängig, TCP-Schließen, OSC gegen liblo, Toasts für Screenreader
+
+**LimitedField und Strg+Z**: Der Schnitt setzte `text`, das löscht Qts
+Verlauf; ein gekürztes Einfügen ließ sich nicht zurücknehmen. Jetzt nimmt das
+Feld jede einzelne Hälfte per `remove()` heraus (`Texts.halves` nennt ihre
+Stellen), von hinten, damit die Stellen davor gelten; `remove()` ändert den
+Text erneut, ein Merker hält den Aufruf darin kurz. Ein Strg+Z nimmt das
+Einfügen samt Schnitt zurück. Test `test_a_cut_paste_can_be_undone` (vorher
+rot: `canUndo` war falsch). Der zweite Fall von
+`test_an_insert_in_the_middle_keeps_whole_characters` schnitt nichts
+(„abcdefg“ ließ drei Einheiten, genug für „X“ und ein Emoji); mit „abcdef“
+bleiben vier, das zweite Emoji wird halbiert.
+
+**OSC über TCP, Schließen**: `send_tcp` überging einen Fehler beim
+Schließen der eigenen Seite. Hat das Pult die Verbindung zurückgesetzt, ist
+der Rahmen womöglich nicht angekommen; das zählt jetzt als
+`not sent: …`. Test `a_failed_close_is_not_sent` (vorher: `Ok`).
+
+**OSC gegen eine echte Implementierung**: Kein Pult da; auf dem Rechner
+liegt liblo 0.34 (Fedora-Paket, `oscdump`/`oscsend`, LGPL, nur als Werkzeug
+benutzt, nicht im Repo). lmix-core (`--engine none`) schickte per
+`osc_send` an `oscdump osc.udp://:9771` und `oscdump osc.tcp://:9772`:
+- UDP und TCP kamen gleich an: `/eos/chan/1/at ifsTN 50 0.500000 "Szene 2" #T Nil`.
+- SLIP-Escapes: `192 219` (Bytes `c0` und `db` im Paket) kamen über TCP
+  unverändert an, ebenso Umlaute.
+- liblo erkennt beim Empfang über TCP beide Rahmungen (SLIP und
+  Längen-Präfix), sendet selbst aber mit Längen-Präfix nach OSC 1.0
+  (`oscsend osc.tcp://…` schrieb `0000000c 2f676f00 …`).
+**Entscheidung**: bei SLIP bleiben (DECISIONS „OSC-Cue“). Dass liblo selbst
+mit Längen-Präfix sendet, zeigt, dass OSC 1.0 über TCP verbreitet ist; ein
+Empfänger, der nur das liest, bekäme von lmix nichts Lesbares. Eine zweite
+Rahmung als eigene Zielart (`osc_tcp` mit Wahl 1.0/1.1) erst, wenn ein Pult
+sie verlangt; bis dahin gehen solche Pulte über UDP. Gegen ein Hardware-Pult
+ungeprüft.
+
+**Toasts für Screenreader, geprüft über AT-SPI**: lmix (xcb auf Xvfb,
+`QT_LINUX_ACCESSIBILITY_ALWAYS_ON=1`, eigener Sitzungs- und
+Barrierefreiheits-Bus, lmix-core `--engine none`), Baum mit `gi.Atspi`
+gelesen. Eine Meldung (lmix-core beendet, dann „+ Bus“) steht im Inhalt
+als `alert` mit dem Text und „Close“. Mit einem modalen Dialog
+(„Shortcuts…“) liegt sie in `panel 'Messages'` (deutsch „Meldungen“),
+neben `dialog 'Shortcuts'` direkt unter dem Fenster, nicht als zweiter
+Dialog. Nichts zu ändern.
 
 ## 2026-11-01 — Sendeverzögerung: Stopp mit Abmelden (STR.5)
 

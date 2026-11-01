@@ -4120,12 +4120,12 @@
   <context>
     <name>MoodsPage</name>
     <message>
-      <location filename="../qml/MoodsPage.qml" line="+81" />
+      <location filename="../qml/MoodsPage.qml" line="+86" />
       <source>Moods</source>
       <translation>Stimmungen</translation>
     </message>
     <message>
-      <location line="+369" />
+      <location line="+370" />
       <source>A mood says what runs on each layer: light, music, ambience, picture.</source>
       <translation>Eine Stimmung sagt, was auf jeder Ebene läuft: Licht, Musik, Atmo, Bild.</translation>
     </message>
@@ -4140,7 +4140,7 @@
       <translation>Panik</translation>
     </message>
     <message>
-      <location line="-571" />
+      <location line="-572" />
       <source>Stops every cue and sound; the panic mood runs</source>
       <translation>Stoppt alle Cues und Klänge, die Panik-Stimmung läuft</translation>
     </message>
@@ -4181,12 +4181,12 @@
     </message>
     <message>
       <location line="+1" />
-      <location line="+487" />
+      <location line="+488" />
       <source>Off</source>
       <translation>Aus</translation>
     </message>
     <message>
-      <location line="-411" />
+      <location line="-412" />
       <source>Edit…</source>
       <translation>Bearbeiten…</translation>
     </message>
@@ -4222,7 +4222,7 @@
       <translation>Sammlungen einklappen</translation>
     </message>
     <message>
-      <location line="+16" />
+      <location line="+17" />
       <source>All</source>
       <translation>Alle</translation>
     </message>
@@ -4232,26 +4232,26 @@
       <translation>Alle Stimmungen und Oneshots</translation>
     </message>
     <message>
-      <location line="-271" />
+      <location line="-272" />
       <location line="+4" />
-      <location line="+314" />
+      <location line="+315" />
       <location line="+286" />
       <source>Panic mood</source>
       <translation>Panik-Stimmung</translation>
     </message>
     <message>
-      <location line="-459" />
-      <location line="+432" />
+      <location line="-460" />
+      <location line="+433" />
       <source>Cue</source>
       <translation>Cue</translation>
     </message>
     <message>
-      <location line="-432" />
+      <location line="-433" />
       <source>Cue (gone)</source>
       <translation>Cue (entfernt)</translation>
     </message>
     <message>
-      <location line="+167" />
+      <location line="+168" />
       <source>Now</source>
       <translation>Jetzt</translation>
     </message>
@@ -4261,12 +4261,12 @@
       <translation>Keine Stimmung gesetzt</translation>
     </message>
     <message>
-      <location line="-224" />
+      <location line="-225" />
       <source>%1 s left</source>
       <translation>noch %1 s</translation>
     </message>
     <message>
-      <location line="+261" />
+      <location line="+262" />
       <source>Back to %1</source>
       <translation>Zurück zu %1</translation>
     </message>
@@ -4287,7 +4287,7 @@
       <translation>%1 setzen</translation>
     </message>
     <message>
-      <location line="-308" />
+      <location line="-309" />
       <source>In the collection: click to take it out</source>
       <translation>In der Sammlung: klicken, um sie herauszunehmen</translation>
     </message>
@@ -4297,7 +4297,7 @@
       <translation>Klicken, um sie in die Sammlung aufzunehmen</translation>
     </message>
     <message>
-      <location line="+160" />
+      <location line="+161" />
       <location line="+258" />
       <source>Mood (gone)</source>
       <translation>Stimmung (entfernt)</translation>
@@ -7483,7 +7483,7 @@
   <context>
     <name>Texts</name>
     <message>
-      <location filename="../qml/Texts.qml" line="+41" />
+      <location filename="../qml/Texts.qml" line="+54" />
       <source>Test pattern</source>
       <translation>Testbild</translation>
     </message>
@@ -8253,6 +8253,11 @@
       <location line="+1" />
       <source>Mood: %1</source>
       <translation>Stimmung: %1</translation>
+    </message>
+    <message>
+      <location line="+1" />
+      <source>Collection %1 holds at most %2 entries, one-shots of lists without pads included</source>
+      <translation>Sammlung %1 fasst höchstens %2 Einträge, Oneshots von Listen ohne Pads mitgezählt</translation>
     </message>
     <message>
       <location line="+1" />

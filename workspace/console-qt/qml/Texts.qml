@@ -12,8 +12,22 @@ QtObject {
      *  emoji (it would come out as "\uFFFD"). Qt cuts the inserted part, so
      *  the half can be anywhere, not only at the end. */
     function whole(text) {
+        const lone = halves(text)
+        if (lone.length === 0) {
+            return text
+        }
         let kept = ""
         let from = 0
+        for (const i of lone) {
+            kept += text.slice(from, i)
+            from = i + 1
+        }
+        return kept + text.slice(from)
+    }
+
+    /** Indexes of the lone halves in `text` (see whole), ascending. */
+    function halves(text) {
+        const lone = []
         for (let i = 0; i < text.length; i++) {
             const unit = text.charCodeAt(i)
             if (unit < 0xD800 || unit > 0xDFFF) {
@@ -26,11 +40,10 @@ QtObject {
                     continue
                 }
             }
-            // A lone half (first without second, or second without first).
-            kept += text.slice(from, i)
-            from = i + 1
+            // A first without second, or a second without first.
+            lone.push(i)
         }
-        return from === 0 ? text : kept + text.slice(from)
+        return lone
     }
 
     /** Text of one value of a form list (Core.choices). */
@@ -394,6 +407,7 @@ QtObject {
         case "bad_stage": return qsTr("Stage: %1").arg(e.reason)
         case "bad_cue_list": return qsTr("Cue list: %1").arg(e.reason)
         case "bad_mood": return qsTr("Mood: %1").arg(e.reason)
+        case "collection_full": return qsTr("Collection %1 holds at most %2 entries, one-shots of lists without pads included").arg(e.collection).arg(e.max)
         case "bad_triggers": return qsTr("Triggers: %1").arg(e.reason)
         case "locked": return qsTr("The show is locked: unlock it first")
         case "io_locked": return qsTr("%1 is locked").arg(ioClass(e["class"]))
