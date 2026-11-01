@@ -331,6 +331,39 @@ TestCase {
         compare(toasts.column.parent, toasts)
     }
 
+    // A dialog closed and another opened at once (Keys → Shortcuts): the
+    // toasts rise above the new one, not left under its dimmed ground.
+    function test_the_toasts_rise_over_a_dialog_that_takes_anothers_place() {
+        const layer = findChild(shell, "toastLayer")
+        const toasts = layer.parent
+        shell.openKeys(shell.currentItem)
+        const keys = findChild(shell, "keysDialog")
+        tryVerify(() => keys.opened)
+        tryVerify(() => layer.opened)
+        mouseClick(findChild(shell, "keysShortcutsButton"))
+        const shortcuts = findChild(shell, "shortcutsDialog")
+        tryVerify(() => shortcuts.opened)
+        tryVerify(() => !keys.visible)
+        wait(50)
+        verify(layer.opened)
+        // The popup item of each in the shell's overlay: the one later is on top.
+        const overlay = shortcuts.parent
+        const place = popup => {
+            let item = popup.contentItem
+            while (item && item.parent !== overlay) {
+                item = item.parent
+            }
+            return Array.from(overlay.children).indexOf(item)
+        }
+        verify(place(shortcuts) >= 0)
+        verify(place(layer) > place(shortcuts),
+               "the toasts above the dialog: " + place(layer) + " > " + place(shortcuts))
+        verify(toasts.column.parent !== toasts)
+        shortcuts.close()
+        tryVerify(() => !layer.visible)
+        compare(toasts.column.parent, toasts)
+    }
+
     function test_the_small_program_only_without_one_elsewhere() {
         shell.showPage("show")
         verify(!shell.programElsewhere)

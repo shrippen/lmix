@@ -6841,12 +6841,17 @@ Umschalt+Tab als Taste auf.
   prüft der Dienst nur an ersterem.
 - **Toasts beim Vergrößern** (`MessageToasts`): Qt meldet die neue Größe des
   Overlays, bevor es die abgedunkelten Gründe nachzieht; `dimmed` fällt
-  darum je Schritt kurz auf 0. Die Ebene merkt sich, für welche Zahl sie
-  zuletzt geöffnet oder geschlossen wurde (`shownFor`), und handelt im
-  verzögerten Aufruf nur, wenn sich die Zahl danach wirklich geändert hat.
-  So bleiben Hover, die Haltezeit des Toasts und die Reihenfolge über
-  einem offenen Menü des Dialogs erhalten; ein zweiter Dialog öffnet die
-  Ebene weiter neu. Beim Abbau eines Fensters kann das Overlay kurz `null`
+  darum je Schritt kurz auf 0. Die Ebene merkt sich, für welche Gründe sie
+  zuletzt geöffnet oder geschlossen wurde (`shownGrounds`, die Elemente in
+  der Reihenfolge des Overlays), und handelt im verzögerten Aufruf nur, wenn
+  danach andere Gründe da sind. Beim Vergrößern kommt derselbe Grund zurück:
+  Hover, die Haltezeit des Toasts und die Reihenfolge über einem offenen
+  Menü des Dialogs bleiben erhalten. Ein zweiter Dialog über dem ersten und
+  ein Dialog, der im selben Durchlauf den Platz eines anderen nimmt
+  („Kurzbefehle…“ im Dialog „Tasten“), bringen einen neuen Grund und öffnen
+  die Ebene neu. Verworfen: nur die Zahl der Gründe zu merken (Zwischenstand
+  der Review; beim Tausch blieb sie 1, die Toasts lagen unter dem Grund des
+  neuen Dialogs). Beim Abbau eines Fensters kann das Overlay kurz `null`
   unter seinen Kindern haben, das überspringt die Zählung jetzt.
 - **Tab beim Aufnehmen einer Taste**: Tab und Umschalt+Tab bewegen den
   Fokus wie überall, das Aufnehmen endet damit. Als Taste eines
@@ -6862,6 +6867,9 @@ gesetzt; mit pausierter Zeit), schlägt ohne die Prüfung der Ebene bzw. ohne
 die der leeren Liste fehl; `tst_app_shell.qml`
 `test_the_toasts_stay_raised_while_the_window_grows` (fünf Schritte
 Vergrößern bei offenem Dialog: die Spalte zieht nicht um, die Ebene geht nicht
-zu; ohne die Änderung 40 Umzüge); `tst_action_rows.qml`
+zu; ohne die Änderung 40 Umzüge) und
+`test_the_toasts_rise_over_a_dialog_that_takes_anothers_place` („Tasten“ →
+„Kurzbefehle…“: die Ebene liegt über dem Dialog „Kurzbefehle“; mit nur der
+Zahl darunter); `tst_action_rows.qml`
 `test_tab_moves_on_while_a_key_is_recorded`. Alle Tests in `lmix-core`,
 `lmix-types` und alle QML-Tests.
