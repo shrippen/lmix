@@ -327,7 +327,7 @@ kann es, Console nicht.
 | STR.2 | Protokolle RTMP; zusätzlich RTMPS, SRT, WHIP (lmix); Ziel = URL + Schlüssel; Profile (benannte Zielsätze) | M | ◐ (SRT, RTMP/RTMPS mit Schlüssel; WHIP E; ohne Profile) |
 | STR.3 | Qualitätsprofile: Auflösung, Bitrate, Codec H.264/HEVC/AV1, Profil/Level/Preset, Keyframe-Abstand, CBR, Ton-Bitrate/-Kanäle; Ziele teilen Profil oder eigenes | M | ◐ (Video-Bitrate, Codec H.264/HEVC, CBR/VBR, Keyframe-Abstand je Ausgang; ohne AV1 (strom-Recorder und TS-Muxer), Auflösung, Profil/Preset, Ton-Bitrate, geteilte Profile) |
 | STR.4 | Multi-Bitrate: ein Ziel mit mehreren Qualitäten, keyframe-ausgerichtet | K | – |
-| STR.5 | Sendeverzögerung n s (Puffer im RAM, Countdown) | S | – |
+| STR.5 | Sendeverzögerung n s (Puffer im RAM, Countdown) | S | ✅ (SRT und RTMP je Ausgang 0–60 s, kodiert im RAM; Countdown bis „auf Sendung“ auf der Ausgänge-Seite und in der Ausgangsleiste; ein Stopp beendet den Stream sofort, was noch wartet, geht verloren) |
 | STR.6 | Beschnitt auf 1:1 oder 9:16 je Stream | S | – |
 | STR.7 | Status: Bitrate, Puffer, verworfene Frames, Laufzeit, Encoder CPU/GPU | M | ◐ (Senderate, Paketverluste und -verwürfe, RTT, Laufzeit; ohne Puffer, Encoder-Last) |
 | STR.8 | Lokales Mitschauen im LAN per HLS-Seite (≈ 10 s Verzug, ~100 Zuschauer) | K | – |

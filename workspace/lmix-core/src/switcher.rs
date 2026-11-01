@@ -5787,6 +5787,9 @@ impl Switcher {
         if let Some(reason) = spec.card_problem() {
             return Err(ActionError::BadCard { reason });
         }
+        if let Some(reason) = spec.delay_problem() {
+            return Err(ActionError::BadDelay { reason });
+        }
         if let Some(reason) = spec.split_problem() {
             return Err(ActionError::BadRecording { reason });
         }
@@ -6254,6 +6257,24 @@ impl Switcher {
     pub fn hold_output(&mut self, id: OutputId, failure: String) {
         self.set_output_status(id, OutputStatus::Failed { message: failure });
         self.held_outputs.insert(id);
+    }
+
+    /// Output `id` found running after a restart: its start is unknown,
+    /// so it counts from `now_ms`, and a delayed stream as on air already
+    /// (STR.5: no countdown for a stream that has long been sending).
+    pub fn adopt_running_output(&mut self, id: OutputId, now_ms: u64) {
+        let delay_ms = self
+            .show
+            .outputs
+            .iter()
+            .find(|o| o.id == id)
+            .map_or(0, |o| u64::from(o.spec.send_delay_s()) * 1000);
+        self.set_output_status(
+            id,
+            OutputStatus::Running {
+                since_ms: now_ms.saturating_sub(delay_ms),
+            },
+        );
     }
 
     pub fn output_ids(&self) -> Vec<OutputId> {
@@ -8920,6 +8941,7 @@ mod tests {
             uri: "srt://cdn:9000".into(),
             video_kbps: 6000,
             encoding: Default::default(),
+            delay_s: 0,
         };
         sw.apply(Action::AddOutput {
             spec: srt,
@@ -8959,6 +8981,7 @@ mod tests {
                     uri: "srt://cdn:9001".into(),
                     video_kbps: 6000,
                     encoding: Default::default(),
+                    delay_s: 0,
                 },
                 source: OutputSource::Program,
                 name: None,
@@ -9039,6 +9062,7 @@ mod tests {
             uri: format!("srt://cdn:{port}"),
             video_kbps: 6000,
             encoding: Default::default(),
+            delay_s: 0,
         };
         sw.apply(Action::AddOutput {
             spec: srt(9000),
@@ -10522,6 +10546,7 @@ mod tests {
             uri: format!("srt://cdn:{port}"),
             video_kbps: 6000,
             encoding: Default::default(),
+            delay_s: 0,
         }
     }
 
@@ -10543,6 +10568,37 @@ mod tests {
         })
         .unwrap();
         sw
+    }
+
+    /// STR.5: after a restart a delayed stream counts as on air: its
+    /// start lies the delay back, so clients show no countdown.
+    #[test]
+    fn an_adopted_delayed_stream_is_on_air() {
+        let mut sw = two_outputs();
+        let mut spec = srt_at(9000);
+        if let OutputSpec::Srt { delay_s, .. } = &mut spec {
+            *delay_s = 30;
+        }
+        sw.apply(Action::UpdateOutput {
+            output: OutputRef::Number(1),
+            spec,
+            source: OutputSource::Program,
+            name: None,
+            bus: None,
+        })
+        .unwrap();
+        let (delayed, live) = (sw.state().outputs[0].id, sw.state().outputs[1].id);
+        sw.adopt_running_output(delayed, 100_000);
+        sw.adopt_running_output(live, 100_000);
+        let state = sw.state();
+        assert_eq!(
+            state.outputs[0].status,
+            OutputStatus::Running { since_ms: 70_000 }
+        );
+        assert_eq!(
+            state.outputs[1].status,
+            OutputStatus::Running { since_ms: 100_000 }
+        );
     }
 
     #[test]
@@ -11111,6 +11167,7 @@ mod tests {
             key: String::new(),
             video_kbps: 6000,
             encoding: Default::default(),
+            delay_s: 0,
         };
         assert!(sw.apply(update(rtmp, Some(None))).is_err());
         assert_eq!(sw.state().outputs[0].bus, Some(stream));
@@ -11252,6 +11309,7 @@ mod tests {
             key: String::new(),
             video_kbps: 6000,
             encoding: Default::default(),
+            delay_s: 0,
         };
         assert!(matches!(
             sw.apply(update(rtmp, OutputSource::Program)),
@@ -11268,6 +11326,20 @@ mod tests {
         assert!(matches!(
             sw.apply(update(card(vec![Some(stream)]), OutputSource::Program)),
             Err(ActionError::BadCard { .. })
+        ));
+        // STR.5: a delay past the limit would fill the memory.
+        let delayed = |delay_s| OutputSpec::Srt {
+            uri: "srt://cdn:9000".into(),
+            video_kbps: 6000,
+            encoding: Default::default(),
+            delay_s,
+        };
+        assert!(matches!(
+            sw.apply(update(
+                delayed(lmix_types::MAX_SEND_DELAY_S + 1),
+                OutputSource::Program
+            )),
+            Err(ActionError::BadDelay { .. })
         ));
         assert!(matches!(
             sw.apply(update(srt_at(9000), OutputSource::Input(InputId::new()))),
@@ -11286,6 +11358,15 @@ mod tests {
         // Refused, nothing changed and nothing to bring back.
         assert_eq!(sw.state().outputs[0], before);
         assert_eq!(restorable(&sw), None);
+        sw.apply(update(
+            delayed(lmix_types::MAX_SEND_DELAY_S),
+            OutputSource::Program,
+        ))
+        .unwrap();
+        assert_eq!(
+            sw.state().outputs[0].spec.send_delay_s(),
+            lmix_types::MAX_SEND_DELAY_S
+        );
     }
 
     #[test]
@@ -11295,6 +11376,7 @@ mod tests {
             uri: format!("srt://cdn:{port}"),
             video_kbps: 6000,
             encoding: Default::default(),
+            delay_s: 0,
         };
         for port in [9000, 9001] {
             sw.apply(Action::AddOutput {
@@ -11380,6 +11462,7 @@ mod tests {
                 uri: "srt://cdn:9000".into(),
                 video_kbps: 6000,
                 encoding: Default::default(),
+                delay_s: 0,
             },
             source: OutputSource::Program,
             name: Some("CDN".into()),
@@ -11505,6 +11588,7 @@ mod tests {
                 uri: "srt://cdn:9000".into(),
                 video_kbps: 6000,
                 encoding: Default::default(),
+                delay_s: 0,
             },
             source: OutputSource::Program,
             name: Some("CDN".into()),
@@ -12605,6 +12689,7 @@ mod tests {
             uri: "srt://cdn:9000".into(),
             video_kbps: 6000,
             encoding: Default::default(),
+            delay_s: 0,
         };
         sw.apply(Action::AddOutput {
             spec: srt.clone(),
@@ -12723,6 +12808,7 @@ mod tests {
                 codec,
                 ..Default::default()
             },
+            delay_s: 0,
         };
         let add = |spec| Action::AddOutput {
             spec,
@@ -12828,6 +12914,7 @@ mod tests {
             uri: format!("srt://cdn:{port}"),
             video_kbps: 6000,
             encoding: Default::default(),
+            delay_s: 0,
         };
         let record = OutputSpec::Record {
             folder: "show".into(),

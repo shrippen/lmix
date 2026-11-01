@@ -3211,6 +3211,7 @@ mod tests {
             key: "key".into(),
             video_kbps: 6000,
             encoding: Default::default(),
+            delay_s: 0,
         };
 
         assert_eq!(engine.output_stats(id, &spec).await, None);

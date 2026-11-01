@@ -16,7 +16,10 @@ TestCase {
     property var sent: []
     property var outputs: [
         { id: "o1", number: 1, name: "Stream", spec: { kind: "srt", uri: "srt://:9000" }, status: { state: "stopped" } },
-        { id: "o2", number: 2, name: "Recording", spec: { kind: "record", folder: "rec" }, status: { state: "stopped" } }
+        { id: "o2", number: 2, name: "Recording", spec: { kind: "record", folder: "rec" }, status: { state: "stopped" } },
+        // STR.5: started 3 s ago, 10 s late.
+        { id: "o3", number: 3, name: "Late", spec: { kind: "srt", uri: "srt://:9001", delay_s: 10 },
+            status: { state: "running", since_ms: Date.now() - 3000 } }
     ]
 
     QtObject {
@@ -33,6 +36,7 @@ TestCase {
                 switch (list) {
                 case "card_limits": return JSON.stringify({ sound_delay_ms: 0 })
                 case "record_limits": return JSON.stringify({ split_minutes_max: 1440, split_mb_min: 10, split_mb_max: 1048576, mark_text_max: 200 })
+                case "stream_limits": return JSON.stringify({ delay_s_max: 60 })
                 }
                 return "[]"
             }
@@ -91,6 +95,35 @@ TestCase {
         page.selectedId = "o2"
         compare(page.selected.id, "o2")
         compare(page.selected.name, "Recording")
+    }
+
+    // STR.5: a delayed stream counts down to on air, in its row and in
+    // the detail; a live one shows no delay.
+    function test_a_delayed_stream_counts_down() {
+        // In the window, not in the (hidden) test case: visibility counts.
+        const page = createTemporaryObject(pageComponent, test.parent)
+        const delay = findChild(page, "delayDetail")
+        verify(!delay.visible, "live")
+        page.selectedId = "o3"
+        verify(delay.visible)
+        verify(delay.value.startsWith("10 s, on air in "), delay.value)
+        const left = Number(delay.value.match(/in (\d+) s/)[1])
+        verify(left >= 6 && left <= 7, left)
+        // The row's time column, in the running time's place.
+        tryVerify(() => {
+            const labels = []
+            collect(page, "elapsed", labels)
+            return labels.some(l => /^\u22120:0[67]$/.test(l.text))
+        })
+    }
+    function collect(item, name, into) {
+        for (const child of item.children || []) {
+            if (child.objectName === name)
+                into.push(child)
+            collect(child, name, into)
+        }
+        if (item.contentItem && item.contentItem !== item)
+            collect(item.contentItem, name, into)
     }
 
     function test_settings_opens_the_selected_ones() {
