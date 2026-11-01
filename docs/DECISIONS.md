@@ -7237,3 +7237,39 @@ von #217:
   wächst oder jetzt eine `srt://`-Adresse ist und vorher keine war (Einfügen
   über eine Auswahl). Ein Zeichen über eine markierte Stelle getippt oder
   gelöscht füllt nichts; die Felder füllen sich dann beim Verlassen.
+
+## 2026-11-01 — Geheimnisse auch nicht in Namen und Fehlertexten
+
+**Anlass**: Abschluss-Review von #219. Logs waren geschwärzt, aber
+vorgeschlagene Namen und einige Fehlertexte trugen Adressen samt
+Geheimnis weiter: in Ausgangsliste, Multiview, Fernbedienung, Tally, API.
+
+**Entscheidung**:
+- **Namen**: Der vorgeschlagene Name eines RTMP-Ausgangs entsteht aus der
+  geschwärzten Adresse (`RTMP rtmp://host/app/…`, wenn der Schlüssel am
+  Ende der Adresse steht, `…@` statt `user:passwort@`), der eines
+  WHIP-Inputs ohne Token (`WHIP stage?token=…`), der einer Datenquelle aus
+  einer Adresse ohne Abfrage und `user:passwort@`.
+- **Alte Shows**: Beim Laden bekommt ein Input oder Ausgang, dessen Name
+  genau der alte Vorschlag ist (SRT-Input: die URI; URL/Web: die Adresse;
+  `WHIP …`, `SRT …`, `RTMP …`), den neuen Vorschlag. Eindeutig, weil nur
+  der unveränderte Vorschlag zählt; von Hand umbenannte Namen bleiben. Hätte
+  ein anderer Input bzw. Ausgang den neuen Namen schon, bleibt der alte
+  (Namen sind je Input eindeutig, INP.2). Die Datei ändert sich erst beim
+  nächsten Speichern.
+- **Fehlertexte**: `bad_web_url` und die Lesefehler der Datenquellen
+  (`{Adresse}: {Fehler}`) nennen die Adresse über `redact_url`, die Fehler
+  von reqwest ohne ihre URL. Sie gehen an alle Clients und ins Log.
+- **Logs**: `Action::without_secrets` schwärzt auch die Adresse von
+  `add_data_source` und ersetzt `body` von `http_request` und `data` von
+  `ha_service` durch ihre Länge (`… (n bytes)`): darin können Passwörter,
+  Codes oder Tokens stehen.
+- **Einfügen ins Adressfeld** (SRT-Input): Als Einfügen gilt, wenn zwei oder
+  mehr Zeichen auf einmal neu sind (was zwischen vorher und jetzt nach
+  gemeinsamem Anfang und Ende bleibt), auch über eine Auswahl und auch
+  wenn vorher schon eine (abgelehnte) Adresse dastand. Eine Taste bringt
+  eines. Unterscheidet sich die eingefügte Korrektur nur in einem Zeichen,
+  füllen sich die Felder beim Verlassen.
+
+**Offen**: Was strom in Fehlerantworten zurückgibt (`EngineError::Refused`),
+ist weiter ungeprüft.

@@ -369,6 +369,22 @@ fn is_false(v: &bool) -> bool {
 }
 
 impl DataSourceSpec {
+    /// The spec with `user:password@` and tokens in an address as `…`,
+    /// for logs.
+    pub fn without_secrets(&self) -> Self {
+        let mut spec = self.clone();
+        match &mut spec {
+            Self::Csv { path, .. }
+            | Self::Sheet { path, .. }
+            | Self::GoogleSheet { path, .. }
+            | Self::Json { path }
+            | Self::Text { path, .. }
+            | Self::Feed { path }
+            | Self::Xml { path, .. } => *path = crate::srt::redact_url(path),
+        }
+        spec
+    }
+
     pub fn path(&self) -> &str {
         match self {
             Self::Csv { path, .. }

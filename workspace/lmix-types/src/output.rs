@@ -455,7 +455,12 @@ impl OutputSpec {
         match self {
             // Without the query: it can hold a passphrase.
             Self::Srt { uri, .. } => format!("SRT {}", crate::srt::public_uri(uri)),
-            Self::Rtmp { url, .. } => format!("RTMP {url}"),
+            // Without `user:password@`, tokens or a key at the address's
+            // end: names show in lists, remote panels and the API.
+            Self::Rtmp { .. } => match self.without_secrets() {
+                Self::Rtmp { url, .. } => format!("RTMP {url}"),
+                _ => unreachable!("an RTMP output stays one"),
+            },
             Self::Record { folder, .. } => format!("Record {folder}"),
             Self::Ndi { name } => format!("NDI {name}"),
             Self::Display { mode } => match mode {

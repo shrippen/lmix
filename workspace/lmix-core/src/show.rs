@@ -479,6 +479,7 @@ pub fn read_bytes(bytes: &[u8], name: &str) -> Result<Loaded, ShowFileError> {
         serde_json::from_value(value).map_err(|e| format_err(e.to_string()))?;
     normal_recording_folders(&mut file.show);
     send_delays_in_range(&mut file.show);
+    names_without_secrets(&mut file.show);
     Ok(Loaded {
         show: file.show,
         older: (version < FILE_VERSION).then_some(version),
@@ -540,6 +541,58 @@ fn send_delays_in_range(show: &mut Show) {
                 "send delay at its limit"
             );
             *delay_s = lmix_types::MAX_SEND_DELAY_S;
+        }
+    }
+}
+
+/// Names lmix once proposed from an address with its secrets (SRT
+/// passphrase, RTMP key at the address's end, `user:password@`, tokens)
+/// become what it proposes now; only a name that is exactly the old
+/// proposal (one renamed by hand stays) and that no other input or output
+/// has.
+fn names_without_secrets(show: &mut Show) {
+    fn old_input_name(source: &SourceSpec) -> Option<String> {
+        match source {
+            SourceSpec::Srt { uri, .. } => Some(uri.clone()),
+            SourceSpec::Url { url } | SourceSpec::Web { url, .. } => Some(url.clone()),
+            SourceSpec::Whip { endpoint } => Some(format!("WHIP {endpoint}")),
+            _ => None,
+        }
+    }
+    fn old_output_name(spec: &OutputSpec) -> Option<String> {
+        match spec {
+            OutputSpec::Srt { uri, .. } => Some(format!("SRT {uri}")),
+            OutputSpec::Rtmp { url, .. } => Some(format!("RTMP {url}")),
+            _ => None,
+        }
+    }
+    fn taken(names: &[String], name: &str) -> bool {
+        names.iter().any(|n| n.eq_ignore_ascii_case(name))
+    }
+    let mut names: Vec<String> = show.inputs.iter().map(|i| i.name.clone()).collect();
+    for input in &mut show.inputs {
+        let new = input.source.default_name();
+        if old_input_name(&input.source).as_deref() == Some(input.name.as_str())
+            && new != input.name
+            && !taken(&names, &new)
+        {
+            tracing::info!(to = %new, "input name without the secrets of its address");
+            names.retain(|n| n != &input.name);
+            names.push(new.clone());
+            input.name = new;
+        }
+    }
+    let mut names: Vec<String> = show.outputs.iter().map(|o| o.name.clone()).collect();
+    for output in &mut show.outputs {
+        let new = output.spec.default_name();
+        if old_output_name(&output.spec).as_deref() == Some(output.name.as_str())
+            && new != output.name
+            && !taken(&names, &new)
+        {
+            tracing::info!(to = %new, "output name without the secrets of its address");
+            names.retain(|n| n != &output.name);
+            names.push(new.clone());
+            output.name = new;
         }
     }
 }
@@ -1233,6 +1286,84 @@ mod tests {
 
         let loaded: Vec<u32> = show.outputs.iter().map(|o| o.spec.send_delay_s()).collect();
         assert_eq!(loaded, [lmix_types::MAX_SEND_DELAY_S, 60, 7]);
+    }
+
+    #[test]
+    fn names_with_secrets_load_without_them() {
+        let mut value = serde_json::to_value(sample()).unwrap();
+        let input = |name: &str, source: serde_json::Value, slot: usize| serde_json::json!({ "id": InputId::new(), "name": name, "source": source, "slot": slot });
+        let srt_uri = "srt://cam:9000?passphrase=geheim0123";
+        value["inputs"] = serde_json::json!([
+            input(
+                srt_uri,
+                serde_json::json!({ "kind": "srt", "uri": srt_uri }),
+                0
+            ),
+            input(
+                "rtsp://u:geheim@cam/live",
+                serde_json::json!({ "kind": "url", "url": "rtsp://u:geheim@cam/live" }),
+                1
+            ),
+            // Renamed by hand: stays, even if it holds the address.
+            input(
+                "Bühne srt://x:1?passphrase=geheim0123",
+                serde_json::json!({ "kind": "srt", "uri": "srt://x:1?passphrase=geheim0123" }),
+                2
+            ),
+            // The new name is another input's: stays as it is.
+            input(
+                "srt://cam:9000",
+                serde_json::json!({ "kind": "pattern", "pattern": "bars" }),
+                3
+            ),
+            input(
+                "srt://far:7001?passphrase=geheim0123",
+                serde_json::json!({ "kind": "srt", "uri": "srt://far:7001?passphrase=geheim0123" }),
+                4
+            ),
+        ]);
+        let output = |name: &str, spec: serde_json::Value| {
+            serde_json::json!({ "id": OutputId::new(), "name": name, "spec": spec,
+                "source": { "from": "program" } })
+        };
+        value["outputs"] = serde_json::json!([
+            output(
+                "RTMP rtmp://ingest.example/live/GEHEIMKEY",
+                serde_json::json!({ "kind": "rtmp", "url": "rtmp://ingest.example/live/GEHEIMKEY" })
+            ),
+            output(
+                "SRT srt://cdn:9000?passphrase=geheim0123",
+                serde_json::json!({ "kind": "srt", "uri": "srt://cdn:9000?passphrase=geheim0123" })
+            ),
+            output(
+                "Stream",
+                serde_json::json!({ "kind": "rtmp", "url": "rtmp://a/b", "key": "geheim" })
+            ),
+        ]);
+        let file =
+            serde_json::json!({ "format": FILE_FORMAT, "version": FILE_VERSION, "show": value });
+        let show = from_bytes(&serde_json::to_vec(&file).unwrap(), "old").unwrap();
+        let inputs: Vec<&str> = show.inputs.iter().map(|i| i.name.as_str()).collect();
+        assert_eq!(
+            inputs,
+            [
+                srt_uri,
+                "rtsp://…@cam/live",
+                "Bühne srt://x:1?passphrase=geheim0123",
+                "srt://cam:9000",
+                "srt://far:7001"
+            ],
+            "the first would clash with the fourth"
+        );
+        let outputs: Vec<&str> = show.outputs.iter().map(|o| o.name.as_str()).collect();
+        assert_eq!(
+            outputs,
+            [
+                "RTMP rtmp://ingest.example/live/…",
+                "SRT srt://cdn:9000",
+                "Stream"
+            ]
+        );
     }
 
     #[test]
