@@ -6462,15 +6462,6 @@ impl Switcher {
         index.ok_or_else(unknown)
     }
 
-    /// Signal-loss mode of the input in `slot`; hold for an empty slot.
-    pub fn signal_loss_of(&self, slot: usize) -> SignalLoss {
-        self.show
-            .inputs
-            .iter()
-            .find(|i| i.slot == slot)
-            .map_or_else(SignalLoss::default, |i| i.signal_loss)
-    }
-
     fn transport(
         &mut self,
         input: &InputRef,
@@ -7299,7 +7290,8 @@ mod tests {
                 mode: SignalLoss::Black
             }]
         );
-        assert_eq!(sw.signal_loss_of(1), SignalLoss::Black);
+        let input = sw.show.inputs.iter().find(|i| i.slot == 1).unwrap();
+        assert_eq!(input.signal_loss, SignalLoss::Black);
         let restored = sw.restore_commands();
         assert!(restored.contains(&Command::SetSignalLoss {
             slot: 1,

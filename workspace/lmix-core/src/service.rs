@@ -19,7 +19,7 @@ use lmix_types::state::TILES_LEASE;
 use lmix_types::{
     Action, ActionError, Event, InputId, InputLevel, InputRef, InputStatus, IoClass, Latency,
     Levels, LiveFeed, LiveTiles, OutputId, OutputSpec, OutputStats, OutputStatus, ShowState,
-    SignalLoss, Template,
+    Template,
 };
 use strom_types::FlowId;
 use tokio::sync::{broadcast, Mutex, Notify};
@@ -43,15 +43,6 @@ const FAILBACK_MAX: std::time::Duration = std::time::Duration::from_secs(10);
 /// A failed output started again counts as running once its flow has run
 /// this long: one on a busy card starts and fails a second later.
 const OUTPUT_HOLD: std::time::Duration = std::time::Duration::from_secs(5);
-/// strom's picture tap detaches after this long without a request and
-/// drops its frame (`ThumbnailTapConfig::idle_timeout`).
-const STROM_TAP_IDLE: std::time::Duration = std::time::Duration::from_secs(10);
-/// How long a held picture bridges a tap without a frame: the first frame
-/// after attaching (strom grabs one a second), a slot's restart (failback
-/// after 2 s) and a missed poll or two of a client (web pages: 1.5 s).
-/// Below `STROM_TAP_IDLE`, so a picture from before a detach never returns.
-const HELD_PICTURE_MAX: std::time::Duration = std::time::Duration::from_secs(5);
-const _: () = assert!(HELD_PICTURE_MAX.as_secs() < STROM_TAP_IDLE.as_secs());
 
 /// Events kept for slow subscribers before they miss some.
 const EVENT_BUFFER: usize = 256;
@@ -108,9 +99,6 @@ pub struct Service {
     /// lmix-script for the show's script folder (SSH.2), once configured.
     script: Mutex<Option<crate::script::ScriptRunner>>,
     recent: Mutex<Recent>,
-    /// Last good frame per picture and when it came: bridges a tap's
-    /// gaps for `HELD_PICTURE_MAX`.
-    pictures: std::sync::Mutex<HashMap<Picture, (Vec<u8>, tokio::time::Instant)>>,
     /// When lmix-core last changed each flow: its own stops are no failure.
     touched: std::sync::Mutex<HashMap<FlowId, Touch>>,
     /// Slots with a failback running.
@@ -219,7 +207,6 @@ impl Service {
             target_http: crate::datasource::client(),
             target_queues: std::sync::Mutex::new(HashMap::new()),
             recent: Mutex::new(Recent::load(autosave.as_deref())),
-            pictures: std::sync::Mutex::new(HashMap::new()),
             touched: std::sync::Mutex::new(HashMap::new()),
             failing_back: std::sync::Mutex::new(HashSet::new()),
             output_stats: std::sync::Mutex::new(Vec::new()),
@@ -1122,12 +1109,8 @@ impl Service {
         &self,
         input: &InputRef,
     ) -> Result<Result<Vec<u8>, EngineError>, ActionError> {
-        let (slot, loss) = {
-            let sw = self.switcher.lock().await;
-            let slot = sw.slot_for(input)?;
-            (slot, sw.signal_loss_of(slot))
-        };
-        Ok(self.picture(Picture::Slot(slot), loss).await)
+        let slot = self.switcher.lock().await.slot_for(input)?;
+        Ok(self.engine.picture(Picture::Slot(slot)).await)
     }
 
     /// Live picture socket of an input's slot at tile size (see
@@ -1205,28 +1188,10 @@ impl Service {
         })
     }
 
+    /// The engine's frame; none while its tap has none, never an old one
+    /// of lmix-core's (it would look live and hide that nothing comes).
     pub async fn program_picture(&self) -> Result<Vec<u8>, EngineError> {
-        // Program never stalls; holding only bridges the tap's gaps.
-        self.picture(Picture::Program, SignalLoss::Hold).await
-    }
-
-    /// Fresh frame; while the engine has none, the last one (`Hold`, up
-    /// to `HELD_PICTURE_MAX` old) or nothing (`Black`). An older picture
-    /// would look live and hide that nothing comes.
-    async fn picture(&self, which: Picture, loss: SignalLoss) -> Result<Vec<u8>, EngineError> {
-        let fresh = self.engine.picture(which).await;
-        let mut last = self.pictures.lock().expect("picture cache lock");
-        match fresh {
-            Ok(jpeg) => {
-                last.insert(which, (jpeg.clone(), tokio::time::Instant::now()));
-                Ok(jpeg)
-            }
-            Err(EngineError::NotReady) if loss == SignalLoss::Hold => match last.get(&which) {
-                Some((jpeg, at)) if at.elapsed() < HELD_PICTURE_MAX => Ok(jpeg.clone()),
-                _ => Err(EngineError::NotReady),
-            },
-            Err(e) => Err(e),
-        }
+        self.engine.picture(Picture::Program).await
     }
 
     /// Current levels per input (by slot) and of program.
@@ -2672,10 +2637,6 @@ impl Service {
                 }
                 None => command,
             };
-            // A new or emptied slot must not show the old source's frame.
-            if let Command::SetSlot { slot, .. } = command {
-                self.forget_picture(Picture::Slot(*slot));
-            }
             if let Some(flow) = flow_of(command) {
                 self.touched
                     .lock()
@@ -2785,13 +2746,6 @@ impl Service {
             return Ok(());
         }
         first_error.map_or(Ok(()), Err)
-    }
-
-    fn forget_picture(&self, which: Picture) {
-        self.pictures
-            .lock()
-            .expect("picture cache lock")
-            .remove(&which);
     }
 
     fn publish(&self, sw: &Switcher) {
@@ -7461,82 +7415,24 @@ mod tests {
         assert!(accepted.is_err(), "the check went out");
     }
 
-    /// A service with Bars on input 1 and a tap that gives a frame.
-    async fn picture_service() -> (Arc<Service>, Arc<NullEngine>) {
+    /// A tap without a frame (strom's after attaching) gives no picture,
+    /// under "hold" too: lmix-core's last one would look live, however old.
+    #[tokio::test]
+    async fn a_tap_without_a_frame_gives_no_picture() {
+        use crate::engine::null::Tap;
         let engine = Arc::new(NullEngine::default());
         let service = Service::new(4, engine.clone(), None);
         service.handle(bars()).await.unwrap();
-        engine.set_tap(crate::engine::null::Tap::Frame(b"old".to_vec()));
-        (service, engine)
-    }
-
-    /// Under "hold" a tap without a frame (strom's after attaching) gets
-    /// the last picture, but only while it is fresh: an old one looks
-    /// live and hides that nothing comes.
-    #[tokio::test(start_paused = true)]
-    async fn a_held_picture_is_served_only_while_fresh() {
-        use crate::engine::null::Tap;
-        let (service, engine) = picture_service().await;
         let bars = InputRef::Number(1);
+        engine.set_tap(Tap::Frame(b"old".to_vec()));
         assert_eq!(service.program_picture().await.unwrap(), b"old");
         assert_eq!(service.input_picture(&bars).await.unwrap().unwrap(), b"old");
 
-        // A gap: the last picture bridges it.
-        engine.set_tap(Tap::Waiting);
-        tokio::time::advance(HELD_PICTURE_MAX - std::time::Duration::from_millis(1)).await;
-        assert_eq!(service.program_picture().await.unwrap(), b"old");
-        assert_eq!(service.input_picture(&bars).await.unwrap().unwrap(), b"old");
-
-        // Older: no picture, as before the first one.
-        tokio::time::advance(std::time::Duration::from_millis(2)).await;
-        assert!(matches!(
-            service.program_picture().await,
-            Err(EngineError::NotReady)
-        ));
-        assert!(matches!(
-            service.input_picture(&bars).await.unwrap(),
-            Err(EngineError::NotReady)
-        ));
-
-        // A new frame counts from now.
-        engine.set_tap(Tap::Frame(b"new".to_vec()));
-        assert_eq!(service.program_picture().await.unwrap(), b"new");
-        engine.set_tap(Tap::Waiting);
-        assert_eq!(service.program_picture().await.unwrap(), b"new");
-    }
-
-    /// strom's tap detaches after its idle time and drops its picture; the
-    /// picture held from before may not come back once it attaches again.
-    #[tokio::test(start_paused = true)]
-    async fn a_reattached_tap_does_not_bring_back_the_held_picture() {
-        use crate::engine::null::Tap;
-        let (service, engine) = picture_service().await;
-        assert_eq!(service.program_picture().await.unwrap(), b"old");
-
-        // Nobody asks for strom's idle time: the tap detaches.
-        tokio::time::advance(STROM_TAP_IDLE).await;
         engine.set_tap(Tap::Waiting);
         assert!(matches!(
             service.program_picture().await,
             Err(EngineError::NotReady)
         ));
-    }
-
-    /// Under "black" a gap gives no picture at all, however fresh the last.
-    #[tokio::test(start_paused = true)]
-    async fn a_black_input_holds_no_picture() {
-        use crate::engine::null::Tap;
-        let (service, engine) = picture_service().await;
-        let bars = InputRef::Number(1);
-        service
-            .handle(Action::SetSignalLoss {
-                input: bars.clone(),
-                mode: SignalLoss::Black,
-            })
-            .await
-            .unwrap();
-        assert_eq!(service.input_picture(&bars).await.unwrap().unwrap(), b"old");
-        engine.set_tap(Tap::Waiting);
         assert!(matches!(
             service.input_picture(&bars).await.unwrap(),
             Err(EngineError::NotReady)
