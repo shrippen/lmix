@@ -15,6 +15,7 @@
 //! | `Seek`, `PlayItem` | the player's `seek` and `goto` (then play) |
 //! | `Stinger` | vision mixer stinger API: clip ensured in the library, then `stinger/take` with index and file; a cut if it cannot run |
 //! | `StingerLibrary` | vision mixer stinger API: clips removed, added, cut points set |
+//! | `mark_recordings` (REC.8) | media API: a protocol read once per recording run, then written whole per mark (`POST /api/media/upload`) |
 
 use async_trait::async_trait;
 use lmix_types::{
@@ -84,6 +85,7 @@ const NOT_RUNNING_YET: &str = "query pipeline position";
 const LAYOUT_BORDER_COLOR: &str = "#FFFFFF";
 
 use super::flows::{self, MixerBackend, MonitorOut, AUDIO_MIXER, MIXER_BLOCK, PGM_TAP, SLOT_TAP};
+use super::marks::{self, RecordingMark};
 use super::meters::{self, EngineHealth, EngineLevels, FlowError};
 use super::{Engine, EngineError, LivePicture, Picture};
 use crate::switcher::{Command, EngineBox, LibraryClip, MixerBuses, AUDIO_RAMP_MS};
@@ -152,6 +154,10 @@ pub struct StromEngine {
     live_mkv: std::sync::Mutex<flows::LiveMkv>,
     /// Last byte counter reading of each RTMP and recording output.
     output_rates: std::sync::Mutex<super::output_rate::OutputRates>,
+    /// The file each recording writes now, from strom's events (REC.8).
+    recorder_files: Arc<std::sync::Mutex<std::collections::HashMap<FlowId, marks::RecorderFile>>>,
+    /// Recording protocols; one mark at a time, so uploads keep order.
+    protocols: Mutex<marks::Protocols>,
 }
 
 /// Longest wait for one engine call. Commands run under the switcher
@@ -205,6 +211,8 @@ impl StromEngine {
             playback: Default::default(),
             live_mkv: std::sync::Mutex::new(flows::LiveMkv::No),
             output_rates: Default::default(),
+            recorder_files: Default::default(),
+            protocols: Default::default(),
         }
     }
 
@@ -233,6 +241,101 @@ impl StromEngine {
 
     fn url(&self, path: &str) -> String {
         format!("{}/api{}", self.base_url, path)
+    }
+
+    // ---- Recording protocols (REC.8) ----
+
+    /// A new recording of output `id` starts with no file reported.
+    fn forget_recorder_file(&self, id: lmix_types::OutputId) {
+        let mut files = self.recorder_files.lock().expect("recorder files lock");
+        files.remove(&flows::output_flow_id(id));
+    }
+
+    /// `mark`'s line added to its protocol, the whole file written anew.
+    async fn mark_one(
+        &self,
+        protocols: &mut marks::Protocols,
+        mark: &RecordingMark,
+    ) -> Result<(), EngineError> {
+        let file = {
+            let files = self.recorder_files.lock().expect("recorder files lock");
+            files.get(&flows::output_flow_id(mark.output)).cloned()
+        };
+        if protocols.path_of(mark).is_none() {
+            let prefix = match file {
+                Some(_) => String::new(),
+                None => self.recording_prefix(mark.output).await,
+            };
+            let path = marks::protocol_path(mark, file.as_ref(), &prefix);
+            let before = self.media_text(&path).await;
+            protocols.begin(mark, path, before);
+        }
+        let (path, text) = protocols
+            .add(mark, file.as_ref())
+            .expect("the protocol was begun");
+        self.upload_media(path, text.as_bytes().to_vec()).await
+    }
+
+    /// File name prefix of output `id`'s recording, as its running flow
+    /// gave it to the recorder.
+    async fn recording_prefix(&self, id: lmix_types::OutputId) -> String {
+        let flow = self
+            .get_flow(flows::output_flow_id(id))
+            .await
+            .ok()
+            .flatten();
+        let recorder = flow.and_then(|f| f.blocks.into_iter().find(|b| b.id == flows::RECORDER));
+        match recorder.and_then(|b| b.properties.get("filename_prefix").cloned()) {
+            Some(PropertyValue::String(prefix)) => prefix,
+            _ => "recording".into(),
+        }
+    }
+
+    /// URL of a file below the media directory, each part encoded.
+    fn media_file_url(&self, path: &str) -> Result<reqwest::Url, EngineError> {
+        let mut url = reqwest::Url::parse(&self.url("/media/file"))
+            .map_err(|e| EngineError::Refused(e.to_string()))?;
+        url.path_segments_mut()
+            .map_err(|()| EngineError::Refused("no media URL".into()))?
+            .extend(path.split('/').filter(|p| !p.is_empty()));
+        Ok(url)
+    }
+
+    /// Text of a file below the media directory; `None` when there is none.
+    async fn media_text(&self, path: &str) -> Option<String> {
+        let url = self.media_file_url(path).ok()?;
+        let resp = self.http.get(url).send().await.ok()?;
+        if !resp.status().is_success() {
+            return None;
+        }
+        resp.text().await.ok()
+    }
+
+    /// `bytes` as file `path` below the media directory, in place of the
+    /// one there (strom writes it whole, then renames it).
+    async fn upload_media(&self, path: &str, bytes: Vec<u8>) -> Result<(), EngineError> {
+        let (folder, name) = marks::split_path(path);
+        let boundary = format!("lmix-{}", uuid::Uuid::new_v4().simple());
+        let mut body = format!(
+            "--{boundary}\r\nContent-Disposition: form-data; name=\"file\"; filename=\"{name}\"\r\n\
+             Content-Type: text/csv\r\n\r\n"
+        )
+        .into_bytes();
+        body.extend_from_slice(&bytes);
+        body.extend_from_slice(format!("\r\n--{boundary}--\r\n").as_bytes());
+        let resp = self
+            .http
+            .post(self.url("/media/upload"))
+            .query(&[("path", folder)])
+            .header(
+                reqwest::header::CONTENT_TYPE,
+                format!("multipart/form-data; boundary={boundary}"),
+            )
+            .body(body)
+            .send()
+            .await
+            .map_err(net)?;
+        check(resp).await.map(|_| ())
     }
 
     // ---- Flows ----
@@ -1580,6 +1683,7 @@ impl Engine for StromEngine {
                 self.players.clone(),
                 self.stingers.clone(),
                 self.buses.clone(),
+                self.recorder_files.clone(),
             ));
         }
 
@@ -1643,6 +1747,18 @@ impl Engine for StromEngine {
         self.untapped.lock().expect("untapped lock").clear();
         let wanted = self.mixer_flow();
         self.build_mixer(&wanted).await
+    }
+
+    async fn mark_recordings(&self, marks: &[RecordingMark]) -> Result<(), EngineError> {
+        let mut protocols = self.protocols.lock().await;
+        let mut first_error = None;
+        for mark in marks {
+            if let Err(e) = self.mark_one(&mut protocols, mark).await {
+                tracing::warn!(output = %mark.output, error = %e, "recording mark not written");
+                first_error.get_or_insert(e);
+            }
+        }
+        first_error.map_or(Ok(()), Err)
     }
 
     async fn run(&self, command: &Command) -> Result<(), EngineError> {
@@ -1729,9 +1845,13 @@ impl Engine for StromEngine {
                 let live_mkv = *self.live_mkv.lock().expect("live mkv lock");
                 let flow =
                     flows::output_flow(*id, spec, *feed, *bus, self.backend, framerate, live_mkv);
+                self.forget_recorder_file(*id);
                 self.put_flow(&flow).await
             }
-            Command::StopOutput { id } => self.drop_flow(flows::output_flow_id(*id)).await,
+            Command::StopOutput { id } => {
+                self.forget_recorder_file(*id);
+                self.drop_flow(flows::output_flow_id(*id)).await
+            }
             Command::SetOutputSound { id, feed, bus } => {
                 // The switcher sends it only for an output with sound before
                 // and after; one without would have no input to move.
@@ -2398,6 +2518,147 @@ mod tests {
         (format!("http://{addr}"), calls)
     }
 
+    /// strom's media directory as files by path; every request as
+    /// method and path.
+    type MediaFiles = std::sync::Arc<std::sync::Mutex<std::collections::HashMap<String, String>>>;
+    type Calls = std::sync::Arc<std::sync::Mutex<Vec<String>>>;
+
+    /// A strom stand-in with a media directory: files are read and
+    /// uploaded (multipart, one file); flows are not there.
+    async fn media_strom() -> (StromEngine, MediaFiles, Calls) {
+        let (files, calls): (MediaFiles, Calls) = Default::default();
+        let (store, seen) = (files.clone(), calls.clone());
+        let app = axum::Router::new().fallback(move |request: axum::extract::Request| {
+            let (store, seen) = (store.clone(), seen.clone());
+            async move {
+                let path = request.uri().path().to_string();
+                let query = request.uri().query().unwrap_or_default().to_string();
+                seen.lock()
+                    .unwrap()
+                    .push(format!("{} {path}", request.method()));
+                if let Some(file) = path.strip_prefix("/api/media/file/") {
+                    return match store.lock().unwrap().get(file) {
+                        Some(text) => (StatusCode::OK, text.clone()),
+                        None => (StatusCode::NOT_FOUND, String::new()),
+                    };
+                }
+                if path != "/api/media/upload" {
+                    return (StatusCode::NOT_FOUND, String::new());
+                }
+                let body = axum::body::to_bytes(request.into_body(), 1 << 20)
+                    .await
+                    .unwrap();
+                let body = String::from_utf8(body.to_vec()).unwrap();
+                let name = body.split("filename=\"").nth(1).unwrap();
+                let name = &name[..name.find('"').unwrap()];
+                let (_, content) = body.split_once("\r\n\r\n").unwrap();
+                let content = &content[..content.rfind("\r\n--").unwrap()];
+                let folder = query.strip_prefix("path=").unwrap();
+                let key = format!("{folder}/{name}");
+                store.lock().unwrap().insert(key, content.to_string());
+                (StatusCode::OK, "{}".into())
+            }
+        });
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let addr = listener.local_addr().unwrap();
+        tokio::spawn(async move { axum::serve(listener, app).await.unwrap() });
+        let engine = StromEngine::new(
+            format!("http://{addr}"),
+            MixerBackend::Cpu,
+            MonitorOut::None,
+        );
+        (engine, files, calls)
+    }
+
+    fn recording_mark(output: OutputId, at_s: u64, text: &str) -> RecordingMark {
+        const START_MS: u64 = 1_793_000_000_000;
+        RecordingMark {
+            output,
+            folder: "show".into(),
+            since_ms: START_MS,
+            at_ms: START_MS + at_s * 1000,
+            text: text.into(),
+        }
+    }
+
+    /// REC.8: each mark writes the whole protocol beside the file strom
+    /// reported, one upload per mark; what a protocol held before
+    /// lmix-core restarted stays.
+    #[tokio::test]
+    async fn marks_go_beside_the_recording() {
+        let (engine, files, calls) = media_strom().await;
+        let id = OutputId::new();
+        let stem = "show/lmix-00000000_20261101_143000";
+        engine.recorder_files.lock().unwrap().insert(
+            flows::output_flow_id(id),
+            marks::RecorderFile {
+                path: format!("{stem}_00000.mkv"),
+                opened_ms: 1_793_000_000_000,
+            },
+        );
+        let protocol = format!("{stem}.marks.csv");
+        files
+            .lock()
+            .unwrap()
+            .insert(protocol.clone(), format!("{}earlier\n", marks::HEADER));
+
+        engine
+            .mark_recordings(&[recording_mark(id, 5, "intro")])
+            .await
+            .unwrap();
+        engine
+            .mark_recordings(&[recording_mark(id, 65, "Q&A")])
+            .await
+            .unwrap();
+
+        let text = files.lock().unwrap()[&protocol].clone();
+        let lines: Vec<&str> = text.lines().collect();
+        assert_eq!(lines.len(), 4, "{text}");
+        assert_eq!(lines[1], "earlier");
+        assert!(lines[2]
+            .ends_with(",0:00:05,\"lmix-00000000_20261101_143000_00000.mkv\",0:00:05,\"intro\""));
+        assert!(lines[3]
+            .ends_with(",0:01:05,\"lmix-00000000_20261101_143000_00000.mkv\",0:01:05,\"Q&A\""));
+        // Read once, when the run's protocol begins; then one upload a mark.
+        let calls = calls.lock().unwrap().clone();
+        assert_eq!(
+            calls,
+            [
+                format!("GET /api/media/file/{protocol}"),
+                "POST /api/media/upload".into(),
+                "POST /api/media/upload".into(),
+            ]
+        );
+    }
+
+    /// Before strom reported a file the protocol goes into the folder,
+    /// named after the start; an upload that fails is the mark's error.
+    #[tokio::test]
+    async fn a_mark_before_the_first_file_names_the_start() {
+        let (engine, files, _) = media_strom().await;
+        let mark = recording_mark(OutputId::new(), 1, "");
+
+        engine
+            .mark_recordings(std::slice::from_ref(&mark))
+            .await
+            .unwrap();
+
+        let (path, text) = files.lock().unwrap().clone().into_iter().next().unwrap();
+        assert!(path.starts_with("show/recording_"), "{path}");
+        assert!(path.ends_with(".marks.csv"), "{path}");
+        assert!(text.ends_with(",0:00:01,\"\",,\"\"\n"), "{text}");
+
+        let unreachable = StromEngine {
+            base_url: "http://127.0.0.1:9".into(),
+            ..engine
+        };
+        let other = RecordingMark {
+            output: OutputId::new(),
+            ..mark
+        };
+        assert!(unreachable.mark_recordings(&[other]).await.is_err());
+    }
+
     /// Whether a flow runs: strom's answer, a missing flow is stopped, and
     /// no answer counts as running (the failure watcher keeps its window).
     #[tokio::test]
@@ -2517,6 +2778,8 @@ mod tests {
             container: lmix_types::Container::Mkv,
             video_kbps: 6000,
             encoding: Default::default(),
+            split_minutes: 0,
+            split_mb: 0,
         };
 
         for _ in 0..3 {
