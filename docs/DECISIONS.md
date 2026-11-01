@@ -7058,8 +7058,12 @@ Leeren mit EOS. strom wartet darauf höchstens 5 s
 Sekunden aber in Echtzeit aus; bei 30 s Verzögerung kämen 5 s an, der Rest
 (die Verabschiedung) nicht, und jeder Stopp hinge 5 s. Wirklich ausspielen
 hieße ein Zeitlimit je Flow in strom (Upstream-Kandidat) und einen Status
-„stoppt, sendet noch n s“. Eine Show-Datei mit mehr als 60 s (von Hand
-bearbeitet; geladene Shows werden nicht geprüft) baut höchstens 60 s auf.
+„stoppt, sendet noch n s“. Ohne EOS schließt SRT sauber; RTMP schickt
+sein Abmelden (FCUnpublish, deleteStream) nur bei EOS, eine Plattform sieht
+einen Verbindungsabbruch statt eines Endes und hält die Sendung unter
+Umständen noch eine Weile offen. Eine Show-Datei mit mehr als 60 s (von Hand
+bearbeitet) lädt mit 60 s (`send_delays_in_range` in `show.rs`), so sehen
+Engine, Countdown und ein neu gestarteter Kern dieselbe Verzögerung.
 
 **Countdown**: Die Oberfläche rechnet ihn aus `since_ms` und `delay_s`
 (Ausgänge-Seite: in der Zeile „−0:07“ statt der Laufzeit, im Detail die
