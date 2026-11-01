@@ -272,6 +272,26 @@ TestCase {
         compare(shell.dialogWindow, shell)
     }
 
+    // In the main window (a Kirigami window, with its passive notifications
+    // in the overlay) the toasts are content, in the Tab order; only a modal
+    // dialog raises them above it.
+    function test_the_toasts_rise_only_over_a_dialog_in_the_main_window() {
+        const layer = findChild(shell, "toastLayer")
+        verify(layer !== null)
+        const toasts = layer.parent
+        compare(toasts.dimmed, 0)
+        compare(toasts.column.parent, toasts)
+        verify(!layer.opened)
+        shell.openShellDialog("resetSettings")
+        tryVerify(() => layer.opened)
+        verify(toasts.column.parent !== toasts)
+        const dialog = findChild(shell, "resetSettingsDialog")
+        dialog.close()
+        tryCompare(dialog, "visible", false)
+        tryVerify(() => !layer.visible)
+        compare(toasts.column.parent, toasts)
+    }
+
     function test_the_small_program_only_without_one_elsewhere() {
         shell.showPage("show")
         verify(!shell.programElsewhere)
