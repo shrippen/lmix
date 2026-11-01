@@ -492,7 +492,8 @@ rec_rate() { curl -sf "$CORE/outputs/stats" | jq -e --arg id "$(output_id Rec)" 
 wait_for "$SETTLE_S" rec_rate || fail "no measured rate for the recording: $(curl -sf "$CORE/outputs/stats")"
 # How the engine keeps up with it (STR.7): its buffer, and its encoder from the second reading.
 rec_load() { curl -sf "$CORE/outputs/stats" | jq -e --arg id "$(output_id Rec)" '.[] | select(.output == $id and .load.buffer_max_ms == 500 and .load.encoder_percent != null)' >/dev/null; }
-wait_for "$SETTLE_S" rec_load || fail "no load for the recording: $(curl -sf "$CORE/outputs/stats")"
+rec_flow() { curl -sf "$STROM/api/flows" | jq -r --arg name "lmix output $(output_id Rec)" '.flows[] | select(.name == $name) | .id'; }
+wait_for "$SETTLE_S" rec_load || fail "no load for the recording: $(curl -sf "$CORE/outputs/stats"); strom block stats: $(curl -s --max-time 5 "$STROM/api/flows/$(rec_flow)/rtp-stats")"
 wait "$receiver" || true
 [[ $(stat -c %s "$WORK/srt.ts" 2>/dev/null || echo 0) -gt 50000 ]] || fail "SRT output delivered nothing"
 act '{"action":"stop_output","output":"Rec"}' >/dev/null

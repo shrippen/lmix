@@ -8033,6 +8033,13 @@ Latenz“ ohne Anteil, die Warnfarbe folgt nur dem Puffer, `/metrics` lässt
 `lmix_output_encoder_percent` weg; sonst stünde ein NVENC mit zwei Bildern in
 Arbeit dauernd gelb, obwohl er mitkommt.
 
+**GStreamer 1.24** (CI-Lauf von #234): `appsrc` zählt verworfene Puffer
+(`dropped`) erst ab GStreamer 1.28; auf Ubuntu 24.04 (1.24, Zielsystem von
+strom) lieferte der Inter Input darum gar keine Statistik und lmix keine Last.
+strom #64 zählt die Verwürfe vor 1.28 aus der Bus-Nachricht `dropped-buffer`,
+die der Inter-Empfänger je Verwurf schickt (nur beim Verwerfen, nichts je
+Bild). Lokal (1.28) nicht nachzustellen; der VM-Test in der CI prüft den Weg.
+
 **Last nur mit Rate** (Review #234): Bei RTMP und Aufnahmen kommt die Last mit
 der Rate, nicht ohne sie. Ohne Rate sind nur die erste Lesung (eine Sekunde)
 und Aufnahmen ohne Byte-Zähler (MKV über `splitmuxsink` vor GStreamer 1.26).
