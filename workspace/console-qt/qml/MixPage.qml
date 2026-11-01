@@ -208,6 +208,7 @@ AppPage {
         act: root.act
         inputs: root.inputs
         outputs: root.show ? root.show.outputs : []
+        targets: root.show && root.show.targets ? root.show.targets : []
     }
 
     TitlesDialog {

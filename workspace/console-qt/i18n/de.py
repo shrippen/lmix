@@ -1458,4 +1458,13 @@ DE = {
     'Decoder delay %1 ms is above %2 ms.': 'Decoder-Verzögerung %1 ms liegt über %2 ms.',
     'A passphrase has %1 to %2 bytes, this one %3; umlauts and other special characters count twice or more.': 'Eine Passphrase hat %1 bis %2 Bytes, diese %3; Umlaute und andere Sonderzeichen zählen doppelt oder mehr.',
     'A stream id has at most %1 bytes.': 'Eine Stream-ID hat höchstens %1 Bytes.',
+    'OSC message': 'OSC-Nachricht',
+    'Action %1 needs an OSC target (Output targets)': 'Aktion %1 braucht ein OSC-Ziel (Ausgabeziele)',
+    'Action %1: the OSC address starts with / and has no spaces': 'Aktion %1: Die OSC-Adresse beginnt mit / und hat keine Leerzeichen',
+    'OSC target of action %1': 'OSC-Ziel von Aktion %1',
+    'OSC address of action %1': 'OSC-Adresse von Aktion %1',
+    'OSC arguments of action %1': 'OSC-Argumente von Aktion %1',
+    'Arguments: 1 0.5 "text" true': 'Argumente: 1 0.5 "Text" true',
+    'Separated by spaces: 1 is a whole number, 0.5 a decimal, "two words" text, true/false a truth value, nil empty; any other word is text.': 'Durch Leerzeichen getrennt: 1 ist eine ganze Zahl, 0.5 eine Dezimalzahl, "zwei Wörter" Text, true/false ein Wahrheitswert, nil leer; jedes andere Wort ist Text.',
+    'sends to target %1, which speaks another protocol (HTTP or OSC)': 'sendet an Ziel %1, das ein anderes Protokoll spricht (HTTP oder OSC)',
 }

@@ -4,7 +4,7 @@
   <context>
     <name>ActionListDialog</name>
     <message>
-      <location filename="../qml/ActionListDialog.qml" line="+29" />
+      <location filename="../qml/ActionListDialog.qml" line="+31" />
       <source>Apply</source>
       <translation>Übernehmen</translation>
     </message>
@@ -17,7 +17,7 @@
   <context>
     <name>ActionRows</name>
     <message>
-      <location filename="../qml/ActionRows.qml" line="+31" />
+      <location filename="../qml/ActionRows.qml" line="+36" />
       <source>—</source>
       <translation>—</translation>
     </message>
@@ -113,11 +113,26 @@
     </message>
     <message>
       <location line="+1" />
+      <source>OSC message</source>
+      <translation>OSC-Nachricht</translation>
+    </message>
+    <message>
+      <location line="+1" />
       <source>Other (JSON)</source>
       <translation>Andere (JSON)</translation>
     </message>
     <message>
-      <location line="+114" />
+      <location line="+117" />
+      <source>Action %1 needs an OSC target (Output targets)</source>
+      <translation>Aktion %1 braucht ein OSC-Ziel (Ausgabeziele)</translation>
+    </message>
+    <message>
+      <location line="+4" />
+      <source>Action %1: the OSC address starts with / and has no spaces</source>
+      <translation>Aktion %1: Die OSC-Adresse beginnt mit / und hat keine Leerzeichen</translation>
+    </message>
+    <message>
+      <location line="+10" />
       <source>Action %1 is not valid JSON</source>
       <translation>Aktion %1 ist kein gültiges JSON</translation>
     </message>
@@ -127,9 +142,34 @@
       <translation>Aktionen, in dieser Reihenfolge</translation>
     </message>
     <message>
-      <location line="+24" />
+      <location line="+38" />
       <source>Action %1</source>
       <translation>Aktion %1</translation>
+    </message>
+    <message>
+      <location line="+16" />
+      <source>OSC target of action %1</source>
+      <translation>OSC-Ziel von Aktion %1</translation>
+    </message>
+    <message>
+      <location line="+11" />
+      <source>OSC address of action %1</source>
+      <translation>OSC-Adresse von Aktion %1</translation>
+    </message>
+    <message>
+      <location line="+7" />
+      <source>Arguments: 1 0.5 "text" true</source>
+      <translation>Argumente: 1 0.5 "Text" true</translation>
+    </message>
+    <message>
+      <location line="+2" />
+      <source>OSC arguments of action %1</source>
+      <translation>OSC-Argumente von Aktion %1</translation>
+    </message>
+    <message>
+      <location line="+3" />
+      <source>Separated by spaces: 1 is a whole number, 0.5 a decimal, "two words" text, true/false a truth value, nil empty; any other word is text.</source>
+      <translation>Durch Leerzeichen getrennt: 1 ist eine ganze Zahl, 0.5 eine Dezimalzahl, "zwei Wörter" Text, true/false ein Wahrheitswert, nil leer; jedes andere Wort ist Text.</translation>
     </message>
   </context>
   <context>
@@ -798,7 +838,7 @@
   <context>
     <name>AppShell</name>
     <message>
-      <location filename="../qml/AppShell.qml" line="+634" />
+      <location filename="../qml/AppShell.qml" line="+635" />
       <location line="+113" />
       <source>Open show</source>
       <translation>Show öffnen</translation>
@@ -1698,7 +1738,7 @@
       <translation>Videos und Standbilder (*.mp4 *.mov *.mkv *.webm *.png *.jpg *.jpeg)</translation>
     </message>
     <message>
-      <location line="+11" />
+      <location line="+12" />
       <source>Actions of the new cue</source>
       <translation>Aktionen des neuen Cues</translation>
     </message>
@@ -1725,12 +1765,12 @@
   <context>
     <name>CueListsDialog</name>
     <message>
-      <location filename="../qml/CueListsDialog.qml" line="+39" />
+      <location filename="../qml/CueListsDialog.qml" line="+41" />
       <source>Cue lists</source>
       <translation>Cue-Listen</translation>
     </message>
     <message>
-      <location line="+16" />
+      <location line="+17" />
       <location line="+159" />
       <source>Cue %1</source>
       <translation>Cue %1</translation>
@@ -3260,7 +3300,7 @@
       <translation>Ordner mit den fehlenden Dateien</translation>
     </message>
     <message>
-      <location line="+199" />
+      <location line="+200" />
       <source>Inputs from a show…</source>
       <translation>Inputs aus einer Show …</translation>
     </message>
@@ -3351,7 +3391,7 @@
       <translation>Ansicht</translation>
     </message>
     <message>
-      <location line="-501" />
+      <location line="-502" />
       <source>FTB</source>
       <comment>fade to black</comment>
       <translation>FTB</translation>
@@ -3367,7 +3407,7 @@
       <translation>Schwarzblende: Programm auf Schwarz und zurück (SWI.9); Show und Ausgänge laufen weiter</translation>
     </message>
     <message>
-      <location line="+538" />
+      <location line="+539" />
       <source>Multiview</source>
       <translation>Multiview</translation>
     </message>
@@ -3506,18 +3546,18 @@
   <context>
     <name>MoodsDialog</name>
     <message>
-      <location filename="../qml/MoodsDialog.qml" line="+535" />
+      <location filename="../qml/MoodsDialog.qml" line="+536" />
       <source>Moods</source>
       <translation>Stimmungen</translation>
     </message>
     <message>
-      <location line="-332" />
-      <location line="+971" />
+      <location line="-333" />
+      <location line="+972" />
       <source>Off</source>
       <translation>Aus</translation>
     </message>
     <message>
-      <location line="-971" />
+      <location line="-972" />
       <source>Sound</source>
       <translation>Ton</translation>
     </message>
@@ -3528,17 +3568,17 @@
     </message>
     <message>
       <location line="+2" />
-      <location line="+966" />
+      <location line="+967" />
       <source>Actions</source>
       <translation>Aktionen</translation>
     </message>
     <message>
-      <location line="-965" />
+      <location line="-966" />
       <source>From the base</source>
       <translation>Aus der Basis</translation>
     </message>
     <message>
-      <location line="+304" />
+      <location line="+305" />
       <source>Actions of the layer</source>
       <translation>Aktionen der Ebene</translation>
     </message>
@@ -3630,7 +3670,7 @@
       <translation>Zuerst Ebenen anlegen (Reiter Ebenen): was eine Stimmung setzt, z. B. Licht, Musik, Atmo.</translation>
     </message>
     <message>
-      <location line="-408" />
+      <location line="-409" />
       <source>Drag to move</source>
       <translation>Zum Verschieben ziehen</translation>
     </message>
@@ -3685,7 +3725,7 @@
       <translation>Blendet mit der Ebene ein und aus: mit ihrer eigenen Blende, sonst mit der Wechselzeit.</translation>
     </message>
     <message>
-      <location line="+149" />
+      <location line="+150" />
       <location line="+345" />
       <location line="+101" />
       <source>Move up</source>
@@ -3868,8 +3908,8 @@
       <translation>+ Ebene</translation>
     </message>
     <message>
-      <location line="-566" />
-      <location line="+567" />
+      <location line="-567" />
+      <location line="+568" />
       <source>Layer</source>
       <translation>Ebene</translation>
     </message>
@@ -5642,7 +5682,7 @@
   <context>
     <name>ShortcutEditDialog</name>
     <message>
-      <location filename="../qml/ShortcutEditDialog.qml" line="+22" />
+      <location filename="../qml/ShortcutEditDialog.qml" line="+24" />
       <source>Shortcut %1</source>
       <translation>Belegung %1</translation>
     </message>
@@ -6238,7 +6278,7 @@
       <translation>Aktionen bearbeiten …</translation>
     </message>
     <message>
-      <location line="+18" />
+      <location line="+19" />
       <source>Actions of %1</source>
       <translation>Aktionen von %1</translation>
     </message>
@@ -6429,6 +6469,11 @@
     </message>
     <message>
       <location line="+1" />
+      <source>sends to target %1, which speaks another protocol (HTTP or OSC)</source>
+      <translation>sendet an Ziel %1, das ein anderes Protokoll spricht (HTTP oder OSC)</translation>
+    </message>
+    <message>
+      <location line="+1" />
       <source>uses input %1, which is not there</source>
       <translation>nutzt Input %1, den es nicht gibt</translation>
     </message>
@@ -6588,7 +6633,7 @@
       <translation>Cues…</translation>
     </message>
     <message>
-      <location line="+16" />
+      <location line="+17" />
       <source>Zones…</source>
       <translation>Zonen…</translation>
     </message>
@@ -8741,7 +8786,7 @@
   <context>
     <name>TriggersDialog</name>
     <message>
-      <location filename="../qml/TriggersDialog.qml" line="+30" />
+      <location filename="../qml/TriggersDialog.qml" line="+32" />
       <source>Goes on program</source>
       <translation>Geht auf Programm</translation>
     </message>
@@ -8791,7 +8836,7 @@
       <translation>Auslöser speichern</translation>
     </message>
     <message>
-      <location line="+16" />
+      <location line="+17" />
       <source>Actions of trigger %1</source>
       <translation>Aktionen von Auslöser %1</translation>
     </message>

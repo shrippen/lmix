@@ -594,6 +594,7 @@ Kirigami.ApplicationWindow {
         core: root.backend
         inputs: root.inputs
         outputs: root.show ? root.show.outputs : []
+        targets: root.show && root.show.targets ? root.show.targets : []
     }
 
     Component.onCompleted: {

@@ -177,6 +177,7 @@ RowLayout {
         anchors.centerIn: parent
         inputs: bar.showView.show ? bar.showView.show.inputs : []
         outputs: bar.showView.show ? bar.showView.show.outputs : []
+        targets: bar.showView.show && bar.showView.show.targets ? bar.showView.show.targets : []
         needsAction: true
         title: qsTr("Actions of the new cue")
         onDone: (label, actions) => bar.add("actions", { actions: actions }, bar.after)

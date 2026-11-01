@@ -91,6 +91,45 @@ TestCase {
         shortcut.close()
     }
 
+    // EXT.6: an OSC message has a row of its own; the targets offered are
+    // the OSC ones, a target this machine lacks stays as it was.
+    function test_osc_messages_edit_in_their_row() {
+        const rows = createTemporaryObject(rowsComponent, test, {
+            targets: [
+                { name: "Haus", kind: "http" },
+                { name: "Pult", kind: "osc_tcp" },
+                { name: "Licht", kind: "osc_udp" }
+            ]
+        })
+        compare(rows.oscTargets, ["Pult", "Licht"])
+        const go = { action: "osc_send", target: "Licht", address: "/eos/go", args: "1 \"Szene 2\"" }
+        const gone = { action: "osc_send", target: "Alt", address: "/x" }
+        rows.load([go, gone])
+        compare(rows.error, "")
+        compare(rows.collect(), [go, { action: "osc_send", target: "Alt", address: "/x", args: "" }])
+
+        // A new row picks the first OSC target; the address must be one.
+        const row = findChild(rows, "actionRowRepeater").itemAt(2)
+        row.kindIndex = rows.kinds.findIndex(k => k.kind === "osc")
+        compare(row.osc().target, "Pult")
+        verify(rows.error !== "", "no address yet")
+        row.setOsc({ target: "Pult", address: "/eos/cue/1 fire", args: "" })
+        verify(rows.error !== "", "a space in the address")
+        row.setOsc({ target: "Pult", address: "/eos/cue/1/fire", args: "" })
+        compare(rows.error, "")
+        compare(rows.collect()[2], { action: "osc_send", target: "Pult", address: "/eos/cue/1/fire", args: "" })
+    }
+
+    // Without OSC targets the row cannot be saved.
+    function test_osc_needs_a_target() {
+        const rows = createTemporaryObject(rowsComponent, test)
+        rows.load([])
+        const row = findChild(rows, "actionRowRepeater").itemAt(0)
+        row.kindIndex = rows.kinds.findIndex(k => k.kind === "osc")
+        row.setOsc({ target: "", address: "/go", args: "" })
+        verify(rows.error.indexOf("target") >= 0, rows.error)
+    }
+
     function test_sixteen_actions_come_back_whole() {
         const rows = createTemporaryObject(rowsComponent, test)
         compare(rows.shown, 8)

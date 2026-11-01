@@ -9,13 +9,16 @@ import Kante
  * AUTOMATION_ACTIONS and SHORTCUT_ACTIONS): eight show, another one
  * each time the last shown is used. Actions come from a
  * few presets; anything else as JSON, the same text the API takes.
- * Shared by shortcuts, triggers and cues.
+ * Shared by shortcuts, triggers and cues. An OSC message (EXT.6) has
+ * fields of its own: target, address, arguments as lmix-core reads them.
  */
 ColumnLayout {
     id: editor
 
     required property var inputs
     required property var outputs
+    /** Output targets of this machine (`state.targets`); OSC ones are offered. */
+    property var targets: []
     /** Why the rows cannot be saved; empty when they can. */
     property string error: ""
     /** Rows that hold an action. */
@@ -26,6 +29,8 @@ ColumnLayout {
     readonly property int rows: 16
     /** Rows shown: eight, and one after the last used. */
     readonly property int shown: Math.max(8, Math.min(rows, lastUsed + 2))
+    /** Names of the targets that speak OSC. */
+    readonly property var oscTargets: (targets || []).filter(t => t.kind !== "http").map(t => t.name)
     /** Preset kinds; `param` says what the second field picks. */
     readonly property var kinds: [
         { kind: "", label: qsTr("—"), param: "" },
@@ -47,6 +52,7 @@ ColumnLayout {
         { kind: "mark_recording", label: qsTr("Mark in recordings"), param: "" },
         { kind: "audio_on", label: qsTr("Sound of input on"), param: "input" },
         { kind: "audio_off", label: qsTr("Sound of input off"), param: "input" },
+        { kind: "osc", label: qsTr("OSC message"), param: "osc" },
         { kind: "json", label: qsTr("Other (JSON)"), param: "json" }
     ]
 
@@ -60,8 +66,9 @@ ColumnLayout {
         return []
     }
 
-    /** Preset row → action; `null` for an empty row. */
-    function actionOf(kind, index, json) {
+    /** Preset row → action; `null` for an empty row. `osc`: target,
+     *  address and arguments of an OSC row. */
+    function actionOf(kind, index, json, osc) {
         var n = index + 1
         switch (kind) {
         case "": return null
@@ -83,6 +90,7 @@ ColumnLayout {
         case "mark_recording": return { action: "mark_recording" }
         case "audio_on": return { action: "set_audio", input: n, on: true }
         case "audio_off": return { action: "set_audio", input: n, on: false }
+        case "osc": return { action: "osc_send", target: osc.target, address: osc.address.trim(), args: osc.args.trim() }
         default: return JSON.parse(json)
         }
     }
@@ -114,6 +122,8 @@ ColumnLayout {
         if (a.action === "mark_recording" && !a.text) return { kind: "mark_recording", index: 0 }
         if (a.action === "set_audio" && typeof a.input === "number")
             return { kind: a.on ? "audio_on" : "audio_off", index: number(a.input) }
+        if (a.action === "osc_send" && plain <= 4)
+            return { kind: "osc", index: 0, osc: { target: a.target, address: a.address, args: a.args || "" } }
         return { kind: "json", index: 0, json: JSON.stringify(a) }
     }
 
@@ -125,6 +135,7 @@ ColumnLayout {
             row.kindIndex = Math.max(0, kinds.findIndex(k => k.kind === r.kind))
             row.paramIndex = r.index
             row.json = r.json || ""
+            row.setOsc(r.osc || { target: "", address: "", args: "" })
         }
         validate()
     }
@@ -134,7 +145,7 @@ ColumnLayout {
         var actions = []
         for (var i = 0; i < rows; i++) {
             var row = actionRows.itemAt(i)
-            var action = actionOf(kinds[row.kindIndex].kind, row.paramIndex, row.json)
+            var action = actionOf(kinds[row.kindIndex].kind, row.paramIndex, row.json, row.osc())
             if (action)
                 actions.push(action)
         }
@@ -156,6 +167,18 @@ ColumnLayout {
         lastUsed = last
         for (var i = 0; i < rows; i++) {
             var row = actionRows.itemAt(i)
+            if (row && kinds[row.kindIndex].kind === "osc") {
+                var osc = row.osc()
+                if (osc.target === "") {
+                    error = qsTr("Action %1 needs an OSC target (Output targets)").arg(i + 1)
+                    return
+                }
+                if (!/^\/\S*$/.test(osc.address.trim())) {
+                    error = qsTr("Action %1: the OSC address starts with / and has no spaces").arg(i + 1)
+                    return
+                }
+                continue
+            }
             if (!row || kinds[row.kindIndex].kind !== "json")
                 continue
             try {
@@ -173,6 +196,7 @@ ColumnLayout {
     KanteSectionLabel { text: qsTr("Actions, in this order") }
     Repeater {
         id: actionRows
+        objectName: "actionRowRepeater"
         model: editor.rows
 
         RowLayout {
@@ -183,6 +207,19 @@ ColumnLayout {
             property alias json: jsonField.text
             onJsonChanged: editor.validate()
             readonly property string param: editor.kinds[kindBox.currentIndex].param
+            /** A target the action names that this machine does not have. */
+            property string oscGone: ""
+            readonly property var oscChoices: oscGone !== "" ? [oscGone].concat(editor.oscTargets) : editor.oscTargets
+
+            function osc() {
+                return { target: oscTarget.currentIndex >= 0 ? oscTarget.currentText : "", address: oscAddress.text, args: oscArgs.text }
+            }
+            function setOsc(o) {
+                oscGone = o.target !== "" && editor.oscTargets.indexOf(o.target) < 0 ? o.target : ""
+                oscTarget.currentIndex = o.target === "" ? (oscChoices.length > 0 ? 0 : -1) : oscChoices.indexOf(o.target)
+                oscAddress.text = o.address
+                oscArgs.text = o.args
+            }
             Layout.fillWidth: true
             visible: row.index < editor.shown
 
@@ -201,9 +238,39 @@ ColumnLayout {
             QQC2.ComboBox {
                 id: paramBox
                 Layout.fillWidth: true
-                visible: row.param !== "" && row.param !== "json"
+                visible: row.param !== "" && row.param !== "json" && row.param !== "osc"
                 model: editor.choicesFor(row.param)
                 KanteFieldSkin { control: paramBox }
+            }
+            QQC2.ComboBox {
+                id: oscTarget
+                Layout.preferredWidth: Kirigami.Units.gridUnit * 7
+                visible: row.param === "osc"
+                model: row.oscChoices
+                Accessible.name: qsTr("OSC target of action %1").arg(row.index + 1)
+                // Not while the rows are built: their kinds are not set yet.
+                onCurrentIndexChanged: if (row.param === "osc") editor.validate()
+                KanteFieldSkin { control: oscTarget }
+            }
+            KanteTextField {
+                id: oscAddress
+                Layout.fillWidth: true
+                visible: row.param === "osc"
+                placeholderText: "/eos/go"
+                font.family: KanteStyle.monoFamily
+                Accessible.name: qsTr("OSC address of action %1").arg(row.index + 1)
+                onTextChanged: if (row.param === "osc") editor.validate()
+            }
+            KanteTextField {
+                id: oscArgs
+                Layout.fillWidth: true
+                visible: row.param === "osc"
+                placeholderText: qsTr("Arguments: 1 0.5 \"text\" true")
+                font.family: KanteStyle.monoFamily
+                Accessible.name: qsTr("OSC arguments of action %1").arg(row.index + 1)
+                QQC2.ToolTip.visible: hovered
+                QQC2.ToolTip.delay: Kirigami.Units.toolTipDelay
+                QQC2.ToolTip.text: qsTr("Separated by spaces: 1 is a whole number, 0.5 a decimal, \"two words\" text, true/false a truth value, nil empty; any other word is text.")
             }
             KanteTextField {
                 id: jsonField

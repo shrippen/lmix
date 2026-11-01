@@ -918,6 +918,7 @@ KanteCard {
         anchors.centerIn: parent
         inputs: inspector.showView.show ? inspector.showView.show.inputs : []
         outputs: inspector.showView.show ? inspector.showView.show.outputs : []
+        targets: inspector.showView.show && inspector.showView.show.targets ? inspector.showView.show.targets : []
         needsAction: true
         title: inspector.cue ? qsTr("Actions of %1").arg(inspector.showView.cueName(inspector.cue)) : ""
         onDone: (label, actions) => inspector.save({ actions: actions })
