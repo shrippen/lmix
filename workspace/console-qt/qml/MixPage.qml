@@ -464,6 +464,7 @@ AppPage {
                     implicitHeight: previewMonitor.implicitHeight
                     Monitor {
                         id: previewMonitor
+                        objectName: "previewMonitor"
                         anchors.horizontalCenter: parent.horizontalCenter
                         label: qsTr("Preview")
                         detail: root.busLabel(root.show ? root.show.preview : null)
@@ -510,6 +511,7 @@ AppPage {
                     implicitHeight: programMonitor.implicitHeight
                     Monitor {
                         id: programMonitor
+                        objectName: "programMonitor"
                         anchors.horizontalCenter: parent.horizontalCenter
                         label: qsTr("Program")
                         detail: root.busLabel(root.show ? root.show.program : null)
@@ -547,15 +549,25 @@ AppPage {
                     text: qsTr("View")
                     emphasis: KanteButton.Emphasis.Quiet
                     onClicked: viewPopover.openAt(viewButton)
-                    // P01 A: two columns, the inputs left, the multiview and
-                    // the page right; the button names it, so no title.
+                    // P01 A: columns, the inputs left, the multiview and the
+                    // page beside them, the guides (OUT.12) right or, in a
+                    // window too narrow for three, below the two; the button
+                    // names it, so no title.
                     KantePopover {
                         id: viewPopover
+                        objectName: "viewPopover"
                         readonly property var multiview: root.show && root.show.multiview ? root.show.multiview : ({ program: "right", meters: "shown" })
+                        /** Width of the three columns side by side, with the popover's padding and a margin to the window's edges. */
+                        readonly property real threeWide: inputsColumn.implicitWidth + pageColumn.implicitWidth + guidesPicker.implicitWidth
+                            + 2 * viewGrid.columnSpacing + leftPadding + rightPadding + 2 * Kirigami.Units.largeSpacing
                         GridLayout {
-                            columns: 3
+                            id: viewGrid
+                            objectName: "viewGrid"
+                            columns: viewButton.Window.width >= viewPopover.threeWide ? 3 : 2
                             columnSpacing: Kirigami.Units.largeSpacing * 2
+                            rowSpacing: Kirigami.Units.largeSpacing
                             ColumnLayout {
+                                id: inputsColumn
                                 Layout.alignment: Qt.AlignTop
                                 spacing: Kirigami.Units.smallSpacing
                                 KanteSectionLabel { text: qsTr("Inputs") }
@@ -580,6 +592,7 @@ AppPage {
                                 }
                             }
                             ColumnLayout {
+                                id: pageColumn
                                 Layout.alignment: Qt.AlignTop
                                 spacing: Kirigami.Units.smallSpacing
                                 // OUT.10: program left or right, meters on the tiles;
@@ -623,7 +636,10 @@ AppPage {
                             }
                             // OUT.12: guides in the console's monitors only, never in an output.
                             GuidesPicker {
+                                id: guidesPicker
+                                objectName: "guidesPicker"
                                 Layout.alignment: Qt.AlignTop
+                                Layout.columnSpan: viewGrid.columns === 3 ? 1 : 2
                                 frame: viewSettings.guideFrame
                                 crop: viewSettings.guideCrop
                                 thirds: viewSettings.guideThirds
@@ -1048,6 +1064,7 @@ AppPage {
                         onDoubleTapped: monitor.doubleClicked()
                     }
                     SafeAreaGuides {
+                        objectName: monitor.objectName + "Guides"
                         anchors.fill: parent
                         visible: monitor.guides && shown
                         aspect: root.aspect

@@ -1477,4 +1477,9 @@ DE = {
     'Guides on the preview monitor': 'Hilfslinien auf dem Vorschau-Monitor',
     'Guides on the program monitor': 'Hilfslinien auf dem Programm-Monitor',
     'Guides on both monitors': 'Hilfslinien auf beiden Monitoren',
+    'Safe-area frame': 'Rahmen für den Schutzbereich',
+    'Crop for another aspect': 'Ausschnitt für ein anderes Seitenverhältnis',
+    'Show on': 'Zeigen auf',
+    'Show guides on': 'Hilfslinien zeigen auf',
+    ('%1 %', 'a safe-area frame: its share of the picture'): '%1 %',
 }

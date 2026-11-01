@@ -7368,21 +7368,32 @@ setzt, sieht bisher nicht, was dort abgeschnitten wird.
 **Entscheidung**: Option 3. `SafeAreaGuides` liegt über dem `LiveView`
 der Monitore Vorschau und Programm der Mix-Seite und passt sich ins Bild
 im Programmformat ein (wie das Video, mittig). Auswahl im Menü „Ansicht“
-in einer dritten Spalte „Hilfslinien“ (`GuidesPicker`):
+in einer dritten Spalte „Hilfslinien“ (`GuidesPicker`); ist das Fenster
+dafür zu schmal (eine Seite im eigenen Fenster ab 540 px), steht sie unter
+den beiden anderen:
 - **Rahmen**: keiner, 93/90 % (bildsicher 93 % durchgezogen, titelsicher
   90 % gestrichelt; EBU R 95, SMPTE ST 2046-1 nennen dieselben Werte für
   16:9), 90 % oder 80 %. Ein Rahmen zur Zeit: zwei durchgezogene Rahmen
   nebeneinander sind nicht zu unterscheiden.
 - **Ausschnitt**: keiner, 4:3, 1:1, 9:16, mittig und so groß wie möglich;
-  der Rest ist abgedunkelt (Bühnengrund `stageColor`, halb deckend). Ein
+  der Rest ist abgedunkelt (`scrimColor`, der Schleier von Kante). Ein
   Ausschnitt im Seitenverhältnis des Programms (9:16 auf einem
   Hochkant-Format) zeichnet nichts.
-- **Drittel**: gestrichelte Linien bei einem und zwei Dritteln; mit
-  Ausschnitt in diesem, denn dort wird das Bild gestaltet.
+- **Rahmen und Drittel im Ausschnitt**: Ist ein Ausschnitt gewählt, liegen
+  Schutzrahmen und Drittel in ihm, nicht im ganzen Bild. Der Ausschnitt ist
+  das Bild, das ein Hochkant-Stream sendet; eine Bauchbinde dafür muss in
+  dessen titelsicherem Rahmen bleiben (Hinweis aus dem Review).
+- **Drittel**: gestrichelte Linien bei einem und zwei Dritteln.
+- **Legende**: Jeder Rahmen trägt seinen Anteil („93 %“, „90 %“) oben
+  links, sobald das Bild mindestens 8 Rastereinheiten breit ist.
 - **Wo**: Vorschau (Standard), Programm oder beide.
 
 Linien in `stageTextColor`, der Kante-Farbe für Marken auf dem Bühnengrund
-(kein eigenes Token), 1 px auf dem Pixelraster. Der kleine Programm-Monitor
+(kein eigenes Token), mit einem Schatten in `stageColor` einen Pixel
+versetzt, damit sie auch auf hellem Bild sichtbar bleiben; 1 Gerätepixel
+breit, auf das Pixelraster des Fensters gelegt (auch bei gebrochener
+Skalierung und halb versetzten Monitoren). Die Elemente stehen fest, eine
+Größenänderung verschiebt nur ihre Punkte. Der kleine Programm-Monitor
 in der Leiste anderer Seiten und die Input-Kacheln bekommen keine Linien:
 zu klein, um daran etwas auszurichten.
 

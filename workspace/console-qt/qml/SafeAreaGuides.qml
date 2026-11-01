@@ -1,5 +1,7 @@
 import QtQuick
 import QtQuick.Shapes
+import QtQuick.Controls as QQC2
+import org.kde.kirigami as Kirigami
 import Kante
 
 /**
@@ -8,11 +10,16 @@ import Kante
  * an output: the engine does not know them.
  *
  * The picture is fitted into the item as the video is (centred, `aspect`
- * width over height). `frame`: "" none, "ebu" action safe 93 % and title
+ * width over height). `crop`: "", "4:3", "1:1" or "9:16"; outside it the
+ * picture is dimmed. `frame`: "" none, "ebu" action safe 93 % and title
  * safe 90 % (EBU R 95, SMPTE ST 2046-1; the title frame dashed), "90" or
- * "80" one frame at that share. `crop`: "", "4:3", "1:1" or "9:16"; outside
- * it the picture is dimmed. `thirds`: lines at a third, inside the crop
- * when there is one.
+ * "80" one frame at that share. Frames and thirds lie in the crop when
+ * there is one: that is the picture a portrait stream sends, its lower
+ * third must stay inside its own title-safe frame. A label names each
+ * frame's share at its corner, where the picture is large enough.
+ *
+ * Every line has a dark twin one pixel lower right, so it shows on a
+ * bright picture too. The items are fixed; a resize moves their points.
  */
 Item {
     id: guides
@@ -23,8 +30,16 @@ Item {
     property string crop: ""
     property bool thirds: false
 
-    readonly property var shapes: layout(width, height, aspect, frame, crop, thirds)
+    readonly property real dpr: Window.window ? Window.window.devicePixelRatio : 1
+    // Read again on a window resize too: it moves a centred monitor, and
+    // the lines go on the window's pixel grid (crisp).
+    readonly property var shapes: {
+        void Window.width
+        return layout(width, height, aspect, frame, crop, thirds)
+    }
     readonly property bool shown: shapes.frames.length > 0 || shapes.crop !== null || shapes.lines.length > 0
+    /** Frame labels only where there is room for them. */
+    readonly property bool labelled: shapes.area !== null && shapes.area.width >= Kirigami.Units.gridUnit * 8
 
     /** Width over height of a crop name, 0 for none. */
     function cropAspect(name) {
@@ -38,19 +53,21 @@ Item {
     }
 
     /** A rectangle `share` of r, centred in it. */
-    function inset(r, share, dashed) {
+    function inset(r, share, dashed, label) {
         const dx = r.width * (1 - share) / 2
         const dy = r.height * (1 - share) / 2
-        return { x: r.x + dx, y: r.y + dy, width: r.width - 2 * dx, height: r.height - 2 * dy, dashed: dashed }
+        return { x: r.x + dx, y: r.y + dy, width: r.width - 2 * dx, height: r.height - 2 * dy, dashed: dashed, label: label }
     }
 
     /**
      * What to draw in an item of w × h: `picture` (the fitted picture),
-     * `frames` (rectangles, `dashed` or not), `crop` (rectangle or null)
-     * and `lines` ({x1, y1, x2, y2}). Pure, for the tests.
+     * `crop` (rectangle or null), `area` (the crop, else the picture),
+     * `frames` (rectangles in the area, `dashed` or not, with a `label`)
+     * and `lines` (the thirds in the area, {x1, y1, x2, y2}). Pure, for
+     * the tests.
      */
     function layout(w, h, aspect, frame, crop, thirds) {
-        const result = { picture: null, frames: [], crop: null, lines: [] }
+        const result = { picture: null, crop: null, area: null, frames: [], lines: [] }
         if (!(w > 0 && h > 0 && aspect > 0)) {
             return result
         }
@@ -58,14 +75,6 @@ Item {
         const ph = pw / aspect
         const picture = { x: (w - pw) / 2, y: (h - ph) / 2, width: pw, height: ph }
         result.picture = picture
-        if (frame === "ebu") {
-            result.frames.push(inset(picture, 0.93, false))
-            result.frames.push(inset(picture, 0.90, true))
-        } else if (frame === "90") {
-            result.frames.push(inset(picture, 0.90, false))
-        } else if (frame === "80") {
-            result.frames.push(inset(picture, 0.80, false))
-        }
         const ca = cropAspect(crop)
         // A crop as wide as the picture (9:16 on a portrait format) cuts nothing.
         if (ca > 0 && Math.abs(ca - aspect) / aspect > 0.01) {
@@ -73,93 +82,149 @@ Item {
             const ch = ca < aspect ? ph : pw / ca
             result.crop = { x: picture.x + (pw - cw) / 2, y: picture.y + (ph - ch) / 2, width: cw, height: ch }
         }
+        const area = result.crop !== null ? result.crop : picture
+        result.area = area
+        if (frame === "ebu") {
+            result.frames.push(inset(area, 0.93, false, "93"))
+            result.frames.push(inset(area, 0.90, true, "90"))
+        } else if (frame === "90") {
+            result.frames.push(inset(area, 0.90, false, "90"))
+        } else if (frame === "80") {
+            result.frames.push(inset(area, 0.80, false, "80"))
+        }
         if (thirds) {
-            const r = result.crop !== null ? result.crop : picture
             for (const t of [1 / 3, 2 / 3]) {
-                result.lines.push({ x1: r.x + r.width * t, y1: r.y, x2: r.x + r.width * t, y2: r.y + r.height })
-                result.lines.push({ x1: r.x, y1: r.y + r.height * t, x2: r.x + r.width, y2: r.y + r.height * t })
+                result.lines.push({ x1: area.x + area.width * t, y1: area.y, x2: area.x + area.width * t, y2: area.y + area.height })
+                result.lines.push({ x1: area.x, y1: area.y + area.height * t, x2: area.x + area.width, y2: area.y + area.height * t })
             }
         }
         return result
     }
 
-    /** On the pixel grid, for a sharp 1 px line. */
-    function crisp(v) {
-        return Math.round(v) + 0.5
+    /** x (or y, `vertical`) in the middle of a device pixel of the window. */
+    function crisp(v, vertical) {
+        const origin = mapToItem(null, 0, 0)
+        const o = vertical ? origin.y : origin.x
+        // A hair over, as 400 × 0.1 comes out at 39.999…
+        return (Math.floor((v + o) * dpr + 1e-6) + 0.5) / dpr - o
     }
+
+    /** The points around rectangle r, on the pixel grid; [] for none. */
+    function outline(r) {
+        if (!r) {
+            return []
+        }
+        const x1 = crisp(r.x, false)
+        const y1 = crisp(r.y, true)
+        const x2 = crisp(r.x + r.width - 1 / dpr, false)
+        const y2 = crisp(r.y + r.height - 1 / dpr, true)
+        return [Qt.point(x1, y1), Qt.point(x2, y1), Qt.point(x2, y2), Qt.point(x1, y2), Qt.point(x1, y1)]
+    }
+
+    readonly property var cropPoints: outline(shapes.crop)
+    readonly property var solidPoints: outline(shapes.frames.length > 0 ? shapes.frames[0] : null)
+    readonly property var dashedPoints: outline(shapes.frames.length > 1 ? shapes.frames[1] : null)
+    readonly property var thirdLines: shapes.lines.map(l => [
+        Qt.point(crisp(l.x1, false), crisp(l.y1, true)),
+        Qt.point(crisp(l.x2, false), crisp(l.y2, true))
+    ])
+    readonly property var pic: shapes.picture
+    readonly property var cut: shapes.crop
 
     visible: shown
     Accessible.role: Accessible.Graphic
     Accessible.name: qsTr("Guides")
 
-    // Dimmed outside the crop: the parts of the picture a 9:16 stream (or
-    // another crop) loses. Only one pair is ever not empty.
-    Repeater {
-        model: {
-            const c = guides.shapes.crop
-            const p = guides.shapes.picture
-            if (c === null || p === null) {
-                return []
-            }
-            return [
-                { x: p.x, y: p.y, width: c.x - p.x, height: p.height },
-                { x: c.x + c.width, y: p.y, width: p.x + p.width - c.x - c.width, height: p.height },
-                { x: c.x, y: p.y, width: c.width, height: c.y - p.y },
-                { x: c.x, y: c.y + c.height, width: c.width, height: p.y + p.height - c.y - c.height }
-            ].filter(r => r.width > 0.5 && r.height > 0.5)
-        }
-        delegate: Rectangle {
-            required property var modelData
-            objectName: "guideShade"
-            x: modelData.x
-            y: modelData.y
-            width: modelData.width
-            height: modelData.height
-            color: KanteStyle.stageColor
-            opacity: 0.55
-        }
+    // Dimmed outside the crop: what a 9:16 stream (or another crop) loses.
+    component Shade: Rectangle {
+        objectName: "guideShade"
+        color: KanteStyle.scrimColor
+        visible: guides.cut !== null && width > 0.5 && height > 0.5
+    }
+    Shade {
+        x: guides.pic ? guides.pic.x : 0
+        y: guides.pic ? guides.pic.y : 0
+        width: guides.cut ? guides.cut.x - guides.pic.x : 0
+        height: guides.pic ? guides.pic.height : 0
+    }
+    Shade {
+        x: guides.cut ? guides.cut.x + guides.cut.width : 0
+        y: guides.pic ? guides.pic.y : 0
+        width: guides.cut ? guides.pic.x + guides.pic.width - guides.cut.x - guides.cut.width : 0
+        height: guides.pic ? guides.pic.height : 0
+    }
+    Shade {
+        x: guides.cut ? guides.cut.x : 0
+        y: guides.pic ? guides.pic.y : 0
+        width: guides.cut ? guides.cut.width : 0
+        height: guides.cut ? guides.cut.y - guides.pic.y : 0
+    }
+    Shade {
+        x: guides.cut ? guides.cut.x : 0
+        y: guides.cut ? guides.cut.y + guides.cut.height : 0
+        width: guides.cut ? guides.cut.width : 0
+        height: guides.cut ? guides.pic.y + guides.pic.height - guides.cut.y - guides.cut.height : 0
     }
 
-    // Frames (the crop, the safe areas) and the thirds, in the stage's ink.
-    Repeater {
-        model: {
-            const paths = []
-            const rect = (r, dashed) => ({
-                dashed: dashed,
-                points: [
-                    Qt.point(guides.crisp(r.x), guides.crisp(r.y)),
-                    Qt.point(guides.crisp(r.x + r.width), guides.crisp(r.y)),
-                    Qt.point(guides.crisp(r.x + r.width), guides.crisp(r.y + r.height)),
-                    Qt.point(guides.crisp(r.x), guides.crisp(r.y + r.height)),
-                    Qt.point(guides.crisp(r.x), guides.crisp(r.y))
-                ]
-            })
-            if (guides.shapes.crop !== null) {
-                paths.push(rect(guides.shapes.crop, false))
-            }
-            for (const f of guides.shapes.frames) {
-                paths.push(rect(f, f.dashed))
-            }
-            for (const l of guides.shapes.lines) {
-                paths.push({ dashed: true, points: [Qt.point(guides.crisp(l.x1), guides.crisp(l.y1)), Qt.point(guides.crisp(l.x2), guides.crisp(l.y2))] })
-            }
-            return paths
+    // All lines in one shape: crop and first frame solid, the title frame
+    // and the thirds dashed.
+    component Lines: Shape {
+        id: lines
+        property color ink
+        width: guides.width
+        height: guides.height
+        ShapePath {
+            strokeColor: lines.ink
+            strokeWidth: 1 / guides.dpr
+            fillColor: "transparent"
+            capStyle: ShapePath.FlatCap
+            PathPolyline { path: guides.cropPoints }
         }
-        delegate: Shape {
-            required property var modelData
-            objectName: "guidePath"
-            anchors.fill: parent
-            ShapePath {
-                strokeColor: KanteStyle.stageTextColor
-                strokeWidth: 1
-                fillColor: "transparent"
-                capStyle: ShapePath.FlatCap
-                strokeStyle: modelData.dashed ? ShapePath.DashLine : ShapePath.SolidLine
-                dashPattern: [4, 3]
-                PathPolyline {
-                    path: modelData.points
-                }
-            }
+        ShapePath {
+            strokeColor: lines.ink
+            strokeWidth: 1 / guides.dpr
+            fillColor: "transparent"
+            capStyle: ShapePath.FlatCap
+            PathPolyline { path: guides.solidPoints }
+        }
+        ShapePath {
+            strokeColor: lines.ink
+            strokeWidth: 1 / guides.dpr
+            fillColor: "transparent"
+            capStyle: ShapePath.FlatCap
+            strokeStyle: ShapePath.DashLine
+            dashPattern: [4, 3]
+            PathPolyline { path: guides.dashedPoints }
+            PathMultiline { paths: guides.thirdLines }
+        }
+    }
+    Lines {
+        objectName: "guideShadow"
+        x: 1 / guides.dpr
+        y: 1 / guides.dpr
+        ink: KanteStyle.stageColor
+    }
+    Lines {
+        objectName: "guideLines"
+        ink: KanteStyle.stageTextColor
+    }
+
+    // The legend: each frame's share, stacked at the top left inside the
+    // first (outer) frame.
+    Repeater {
+        model: guides.labelled ? guides.shapes.frames.length : 0
+        delegate: QQC2.Label {
+            required property int index
+            objectName: "guideLabel"
+            readonly property var outer: guides.shapes.frames.length > 0 ? guides.shapes.frames[0] : null
+            readonly property var own: guides.shapes.frames[index] ?? null
+            x: own ? own.x + KanteStyle.unit(3) : 0
+            y: outer ? outer.y + KanteStyle.unit(2) + index * height : 0
+            text: own ? qsTr("%1 %", "a safe-area frame: its share of the picture").arg(own.label) : ""
+            font: KanteStyle.smallFont
+            color: KanteStyle.stageTextColor
+            style: Text.Outline
+            styleColor: KanteStyle.stageColor
         }
     }
 }

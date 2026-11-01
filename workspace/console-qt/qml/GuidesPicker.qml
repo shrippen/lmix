@@ -30,6 +30,7 @@ ColumnLayout {
     KanteSectionLabel { text: qsTr("Guides") }
     KanteSegmented {
         objectName: "guideFrame"
+        Accessible.name: qsTr("Safe-area frame")
         model: [qsTr("No frame"), qsTr("93/90 %"), qsTr("90 %"), qsTr("80 %")]
         tooltips: [qsTr("No safe-area frame"),
             qsTr("Action safe 93 % and title safe 90 %, dashed (EBU R 95, SMPTE)"),
@@ -44,6 +45,7 @@ ColumnLayout {
     }
     KanteSegmented {
         objectName: "guideCrop"
+        Accessible.name: qsTr("Crop for another aspect")
         model: [qsTr("No crop"), "4:3", "1:1", "9:16"]
         tooltips: [qsTr("The whole picture"),
             qsTr("What a 4:3 picture keeps; the rest dimmed"),
@@ -65,8 +67,13 @@ ColumnLayout {
             checked = Qt.binding(() => picker.thirds)
         }
     }
+    KanteSectionLabel {
+        Layout.topMargin: Kirigami.Units.smallSpacing
+        text: qsTr("Show on")
+    }
     KanteSegmented {
         objectName: "guideOn"
+        Accessible.name: qsTr("Show guides on")
         model: [qsTr("Preview"), qsTr("Program"), qsTr("Both")]
         tooltips: [qsTr("Guides on the preview monitor"), qsTr("Guides on the program monitor"), qsTr("Guides on both monitors")]
         currentIndex: Math.max(0, picker.monitors.indexOf(picker.monitor))

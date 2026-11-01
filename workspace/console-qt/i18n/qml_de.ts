@@ -2116,6 +2116,11 @@
     </message>
     <message>
       <location line="+3" />
+      <source>Safe-area frame</source>
+      <translation>Rahmen für den Schutzbereich</translation>
+    </message>
+    <message>
+      <location line="+1" />
       <source>No frame</source>
       <translation>Kein Rahmen</translation>
     </message>
@@ -2156,6 +2161,11 @@
     </message>
     <message>
       <location line="+10" />
+      <source>Crop for another aspect</source>
+      <translation>Ausschnitt für ein anderes Seitenverhältnis</translation>
+    </message>
+    <message>
+      <location line="+1" />
       <source>No crop</source>
       <translation>Kein Ausschnitt</translation>
     </message>
@@ -2186,6 +2196,16 @@
     </message>
     <message>
       <location line="+9" />
+      <source>Show on</source>
+      <translation>Zeigen auf</translation>
+    </message>
+    <message>
+      <location line="+4" />
+      <source>Show guides on</source>
+      <translation>Hilfslinien zeigen auf</translation>
+    </message>
+    <message>
+      <location line="+1" />
       <source>Preview</source>
       <translation>Vorschau</translation>
     </message>
@@ -3383,12 +3403,12 @@
       <translation>Einige Sekunden lang Aufnahme bis Programm messen</translation>
     </message>
     <message>
-      <location line="+50" />
+      <location line="+51" />
       <source>Preview</source>
       <translation>Vorschau</translation>
     </message>
     <message>
-      <location line="+46" />
+      <location line="+47" />
       <source>Program</source>
       <translation>Programm</translation>
     </message>
@@ -3399,7 +3419,7 @@
     </message>
     <message>
       <location line="+9" />
-      <location line="+17" />
+      <location line="+27" />
       <source>Inputs</source>
       <translation>Inputs</translation>
     </message>
@@ -3444,22 +3464,22 @@
       <translation>Dazu Overlay-Tasten und Tonleiste</translation>
     </message>
     <message>
-      <location line="+118" />
+      <location line="+122" />
       <source>Add input…</source>
       <translation>Input hinzufügen…</translation>
     </message>
     <message>
-      <location line="+376" />
+      <location line="+377" />
       <source>Level of %1</source>
       <translation>Pegel von %1</translation>
     </message>
     <message>
-      <location line="-519" />
+      <location line="-534" />
       <source>View</source>
       <translation>Ansicht</translation>
     </message>
     <message>
-      <location line="-510" />
+      <location line="-512" />
       <source>FTB</source>
       <comment>fade to black</comment>
       <translation>FTB</translation>
@@ -3475,7 +3495,7 @@
       <translation>Schwarzblende: Programm auf Schwarz und zurück (SWI.9); Show und Ausgänge laufen weiter</translation>
     </message>
     <message>
-      <location line="+547" />
+      <location line="+560" />
       <source>Multiview</source>
       <translation>Multiview</translation>
     </message>
@@ -3495,7 +3515,7 @@
       <translation>Seite</translation>
     </message>
     <message>
-      <location line="+74" />
+      <location line="+77" />
       <source>More input actions</source>
       <translation>Weitere Input-Aktionen</translation>
     </message>
@@ -3550,7 +3570,7 @@
       <translation>Breite der Tonspalte</translation>
     </message>
     <message>
-      <location line="-354" />
+      <location line="-357" />
       <source>Audio at the edge</source>
       <translation>Ton am Rand</translation>
     </message>
@@ -3560,7 +3580,7 @@
       <translation>Einfacher Modus</translation>
     </message>
     <message>
-      <location line="+91" />
+      <location line="+94" />
       <source>Find missing files…</source>
       <translation>Fehlende Dateien suchen…</translation>
     </message>
@@ -5469,9 +5489,15 @@
   <context>
     <name>SafeAreaGuides</name>
     <message>
-      <location filename="../qml/SafeAreaGuides.qml" line="+93" />
+      <location filename="../qml/SafeAreaGuides.qml" line="+136" />
       <source>Guides</source>
       <translation>Hilfslinien</translation>
+    </message>
+    <message>
+      <location line="+87" />
+      <source>%1 %</source>
+      <comment>a safe-area frame: its share of the picture</comment>
+      <translation>%1 %</translation>
     </message>
   </context>
   <context>
