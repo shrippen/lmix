@@ -380,6 +380,28 @@ pub enum DisplayMode {
     Drm { connector: u32 },
 }
 
+/// `rtmp://host/app/KEY` as `rtmp://host/app/…`; an address with no
+/// part after the application stays.
+fn without_last_part(url: &str) -> String {
+    let (base, query) = url
+        .split_once('?')
+        .map_or((url, None), |(b, q)| (b, Some(q)));
+    let after_host = base.find("://").map_or(0, |at| at + 3);
+    let path_parts = base[after_host..]
+        .trim_end_matches('/')
+        .matches('/')
+        .count();
+    let mut out = match base.trim_end_matches('/').rsplit_once('/') {
+        Some((head, _)) if path_parts >= 2 => format!("{head}/…"),
+        _ => base.to_string(),
+    };
+    if let Some(query) = query {
+        out.push('?');
+        out.push_str(query);
+    }
+    out
+}
+
 impl OutputSpec {
     /// Its video encoding; `None` for outputs that send raw picture.
     pub fn encoding(&self) -> Option<&VideoEncoding> {
@@ -495,9 +517,32 @@ impl OutputSpec {
         }
     }
 
+    /// The output with its secrets as `…`, for logs: an RTMP stream key,
+    /// an SRT passphrase, a `user:password@` in an address.
+    pub fn without_secrets(&self) -> Self {
+        use crate::srt::redact_url;
+        let mut spec = self.clone();
+        match &mut spec {
+            Self::Srt { uri, .. } => *uri = redact_url(uri),
+            Self::Rtmp { url, key, .. } => {
+                *url = redact_url(url);
+                if key.is_empty() {
+                    // The whole ingest address with the key as its last
+                    // part (`rtmp://host/app/KEY`).
+                    *url = without_last_part(url);
+                } else {
+                    *key = "…".into();
+                }
+            }
+            _ => {}
+        }
+        spec
+    }
+
     pub fn default_name(&self) -> String {
         match self {
-            Self::Srt { uri, .. } => format!("SRT {uri}"),
+            // Without the query: it can hold a passphrase.
+            Self::Srt { uri, .. } => format!("SRT {}", crate::srt::public_uri(uri)),
             Self::Rtmp { url, .. } => format!("RTMP {url}"),
             Self::Record { folder, .. } => format!("Record {folder}"),
             Self::Ndi { name } => format!("NDI {name}"),

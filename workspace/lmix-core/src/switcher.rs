@@ -331,6 +331,34 @@ pub enum Command {
     },
 }
 
+impl Command {
+    /// The command with its secrets as `…` (SRT passphrase, RTMP stream
+    /// key, `user:password@`), for logs.
+    pub fn without_secrets(&self) -> Command {
+        match self {
+            Command::SetSlot {
+                slot,
+                source: Some(source),
+            } => Command::SetSlot {
+                slot: *slot,
+                source: Some(source.without_secrets()),
+            },
+            Command::StartOutput {
+                id,
+                spec,
+                feed,
+                bus,
+            } => Command::StartOutput {
+                id: *id,
+                spec: spec.without_secrets(),
+                feed: *feed,
+                bus: *bus,
+            },
+            other => other.clone(),
+        }
+    }
+}
+
 /// What the engine's playback flow is built for.
 #[derive(Clone, Debug, PartialEq)]
 pub struct Playback {
@@ -6743,9 +6771,7 @@ fn check_source(source: &SourceSpec) -> Result<(), ActionError> {
             decoder_delay_ms,
         } => lmix_types::srt::check_srt(uri, *decoder_delay_ms)
             .map(|_| ())
-            .map_err(|problem| ActionError::BadSrt {
-                reason: problem.to_string(),
-            }),
+            .map_err(|problem| ActionError::BadSrt { problem }),
         SourceSpec::Card { pair, .. } if CardChannels::holding(*pair).is_none() => {
             Err(ActionError::BadCard {
                 reason: format!("channel pair {pair}, 1 to 8"),
@@ -13411,6 +13437,71 @@ mod tests {
         let state = sw.state();
         let names: Vec<&str> = state.inputs.iter().map(|i| i.name.as_str()).collect();
         assert!(names.contains(&"srt://cam:9000"), "{names:?}");
+    }
+
+    #[test]
+    fn an_srt_refusal_carries_the_problem_for_the_console() {
+        let mut sw = Switcher::new(SLOTS);
+        let refused = sw.apply(Action::AddInput {
+            source: SourceSpec::Srt {
+                uri: "srt://cam:9000?passphrase=short".into(),
+                decoder_delay_ms: None,
+            },
+            name: None,
+        });
+        let Err(error) = refused else {
+            panic!("accepted")
+        };
+        let json = serde_json::to_value(&error).unwrap();
+        assert_eq!(json["error"], "bad_srt");
+        assert_eq!(json["problem"]["problem"], "passphrase_length");
+        assert_eq!(json["problem"]["bytes"], 5);
+        assert!(error
+            .to_string()
+            .starts_with("SRT: a passphrase has 10 to 79 bytes"));
+        // Hosts in other scripts resolve (GLib turns them into Punycode).
+        assert!(sw
+            .apply(Action::AddInput {
+                source: SourceSpec::Srt {
+                    uri: "srt://kamera-b%C3%BCro.local:9000".into(),
+                    decoder_delay_ms: None,
+                },
+                name: None,
+            })
+            .is_ok());
+    }
+
+    #[test]
+    fn logged_commands_keep_no_secrets() {
+        let slot = Command::SetSlot {
+            slot: 0,
+            source: Some(SourceSpec::Srt {
+                uri: r#"srt://:9000?passphrase=ab"cd efgh"#.into(),
+                decoder_delay_ms: None,
+            }),
+        };
+        let shown = format!("{:?}", slot.without_secrets());
+        assert!(!shown.contains("ab") && !shown.contains("efgh"), "{shown}");
+        let output = Command::StartOutput {
+            id: OutputId::new(),
+            spec: OutputSpec::Rtmp {
+                url: "rtmp://live.example/app".into(),
+                key: "streamkey-123".into(),
+                video_kbps: 6000,
+                encoding: Default::default(),
+                delay_s: 0,
+            },
+            feed: Feed::Program,
+            bus: None,
+        };
+        let shown = format!("{:?}", output.without_secrets());
+        assert!(!shown.contains("streamkey"), "{shown}");
+        assert!(shown.contains("live.example"), "{shown}");
+        // Other commands stay as they are.
+        assert_eq!(
+            Command::CardOff { slot: 1 }.without_secrets(),
+            Command::CardOff { slot: 1 }
+        );
     }
 
     #[test]

@@ -331,7 +331,7 @@
       <translation>AES-%1</translation>
     </message>
     <message>
-      <location line="+40" />
+      <location line="+44" />
       <source>lmix calls the sender at this address.</source>
       <translation>lmix ruft den Sender unter dieser Adresse an.</translation>
     </message>
@@ -434,12 +434,12 @@
     <message>
       <location line="+1" />
       <location line="+72" />
-      <location line="+102" />
+      <location line="+107" />
       <source>Address</source>
       <translation>Adresse</translation>
     </message>
     <message>
-      <location line="-160" />
+      <location line="-165" />
       <source>device id</source>
       <translation>Geräte-ID</translation>
     </message>
@@ -474,7 +474,7 @@
       <translation>Host oder IP, oder srt://… einfügen</translation>
     </message>
     <message>
-      <location line="+21" />
+      <location line="+26" />
       <source>Port</source>
       <translation>Port</translation>
     </message>
@@ -570,12 +570,12 @@
       <translation>Name</translation>
     </message>
     <message>
-      <location line="-618" />
+      <location line="-624" />
       <source>This address does not read: %1</source>
       <translation>Diese Adresse liest sich nicht: %1</translation>
     </message>
     <message>
-      <location line="+625" />
+      <location line="+631" />
       <source>optional</source>
       <translation>optional</translation>
     </message>

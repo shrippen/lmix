@@ -453,7 +453,12 @@ impl qobject::Core {
                 true
             }
             Err(e) => {
-                tracing::error!(%action, error = %e, "QML sent no valid action");
+                // Not the text itself: it can hold a passphrase or a key.
+                tracing::error!(
+                    bytes = action.to_string().len(),
+                    error = %e,
+                    "QML sent no valid action"
+                );
                 false
             }
         }
@@ -1124,7 +1129,7 @@ fn actions() -> &'static tokio::sync::mpsc::UnboundedSender<Queued> {
             while let Some((action, thread)) = rx.recv().await {
                 let refused = post_action(&action).await;
                 if let Some(reason) = &refused {
-                    tracing::info!(?action, %reason, "lmix-core refused");
+                    tracing::info!(action = ?action.without_secrets(), %reason, "lmix-core refused");
                 }
                 let text = refused.unwrap_or_default();
                 let json = serde_json::to_string(&action).unwrap_or_default();

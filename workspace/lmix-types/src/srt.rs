@@ -180,13 +180,23 @@ impl SrtAddress {
         Ok(address)
     }
 
+    /// The host without the brackets an IPv6 address is often typed in
+    /// (`[fd00::5]`).
+    fn bare_host(&self) -> &str {
+        self.host
+            .strip_prefix('[')
+            .and_then(|h| h.strip_suffix(']'))
+            .unwrap_or(&self.host)
+    }
+
     /// The host as it stands in a URI: IPv6 in brackets.
     fn uri_host(&self, encoded: bool) -> String {
-        match (self.host.contains(':'), encoded) {
-            (true, true) => format!("[{}]", self.host.replace('%', "%25")),
-            (true, false) => format!("[{}]", self.host),
-            (false, true) => encode(&self.host),
-            (false, false) => self.host.clone(),
+        let host = self.bare_host();
+        match (host.contains(':'), encoded) {
+            (true, true) => format!("[{}]", host.replace('%', "%25")),
+            (true, false) => format!("[{host}]"),
+            (false, true) => encode(host),
+            (false, false) => host.to_string(),
         }
     }
 
@@ -195,7 +205,7 @@ impl SrtAddress {
     /// without host says so: without `mode` it would read as a listener.
     pub fn uri(&self) -> String {
         let mut query: Vec<(String, String)> = Vec::new();
-        if self.mode != SrtMode::Caller || self.host.is_empty() {
+        if self.mode != SrtMode::Caller || self.bare_host().is_empty() {
             query.push(("mode".into(), self.mode.word().into()));
         }
         if let Some(latency) = self.latency_ms {
@@ -226,10 +236,10 @@ impl SrtAddress {
     /// What strom cannot use, or what SRT refuses: a host that is no name
     /// or address, a passphrase outside 10–79 bytes (SRT counts bytes).
     pub fn check(&self) -> Result<(), SrtProblem> {
-        if self.host.is_empty() && self.mode != SrtMode::Listener {
+        if self.bare_host().is_empty() && self.mode != SrtMode::Listener {
             return Err(SrtProblem::NeedsHost { mode: self.mode });
         }
-        if !self.host.is_empty() && !is_host(&self.host) {
+        if !self.bare_host().is_empty() && !is_host(self.bare_host()) {
             return Err(SrtProblem::BadHost {
                 host: self.host.clone(),
             });
@@ -287,16 +297,27 @@ pub fn check_srt(uri: &str, decoder_delay_ms: Option<u32>) -> Result<SrtAddress,
     }
 }
 
-/// A host name (letters, digits, `-`, `_`, `.`), an IPv4 address or an
-/// IPv6 address (with a zone after `%`). Not `user@host`, a path, a port
-/// or blanks.
+/// A host name (letters of any script, ASCII digits, `-`, `_`, `.`:
+/// `srtsrc` resolves through GLib, which turns `bücher.example` into
+/// Punycode; no `²` and the like),
+/// an IPv4 address or an IPv6 address, with a zone after `%` of
+/// `A–Z a–z 0–9 _ . -` (an interface name). Not `user@host`, a path, a
+/// port or blanks.
 fn is_host(host: &str) -> bool {
     if host.contains(':') {
-        let address = host.split_once('%').map_or(host, |(a, _)| a);
-        return address.parse::<std::net::Ipv6Addr>().is_ok();
+        let (address, zone) = match host.split_once('%') {
+            Some((address, zone)) => (address, Some(zone)),
+            None => (host, None),
+        };
+        let zone_ok = zone.is_none_or(|z| {
+            !z.is_empty()
+                && z.bytes()
+                    .all(|b| b.is_ascii_alphanumeric() || b"_.-".contains(&b))
+        });
+        return zone_ok && address.parse::<std::net::Ipv6Addr>().is_ok();
     }
-    host.bytes()
-        .all(|b| b.is_ascii_alphanumeric() || b"-_.".contains(&b))
+    host.chars()
+        .all(|c| c.is_alphabetic() || c.is_ascii_digit() || "-_.".contains(c))
         && !host.starts_with(['.', '-'])
 }
 
@@ -309,23 +330,63 @@ pub fn public_uri(uri: &str) -> String {
     }
 }
 
-/// `text` (a logged command, a URI) with the value of every `passphrase=`
-/// replaced by `…`, so no log shows it.
-pub fn redact(text: &str) -> String {
-    const KEY: &str = "passphrase=";
-    let mut out = String::with_capacity(text.len());
-    let mut rest = text;
-    while let Some(at) = rest.find(KEY) {
-        out.push_str(&rest[..at + KEY.len()]);
-        rest = &rest[at + KEY.len()..];
-        let end = rest
-            .find(|c: char| c == '&' || c == '"' || c == '\'' || c.is_whitespace())
-            .unwrap_or(rest.len());
-        out.push('…');
-        rest = &rest[end..];
-    }
-    out.push_str(rest);
-    out
+/// Query parameters whose values are secrets (`SECRET_KEYS`, any case).
+const SECRET_KEYS: [&str; 15] = [
+    "passphrase",
+    "password",
+    "passwd",
+    "pass",
+    "pwd",
+    "token",
+    "access_token",
+    "auth",
+    "authorization",
+    "key",
+    "api_key",
+    "apikey",
+    "secret",
+    "sig",
+    "signature",
+];
+
+/// `url` without its secrets, for logs and names: the value of a
+/// `passphrase`, `password`, `token`, `key` … parameter (whatever
+/// characters it has, up to the next `&`) and a `user:password@` before
+/// the host become `…`.
+pub fn redact_url(url: &str) -> String {
+    let (base, query) = match url.split_once('?') {
+        Some((base, query)) => (base, Some(query)),
+        None => (url, None),
+    };
+    let base = match base.split_once("://") {
+        Some((scheme, rest)) => {
+            let authority_end = rest.find('/').unwrap_or(rest.len());
+            match rest[..authority_end].rfind('@') {
+                Some(at) => format!("{scheme}://…{}", &rest[at..]),
+                None => base.to_string(),
+            }
+        }
+        None => base.to_string(),
+    };
+    let Some(query) = query else {
+        return base;
+    };
+    let query: Vec<String> = query
+        .split('&')
+        .map(|pair| {
+            let key = pair.split_once('=').map_or(pair, |(k, _)| k);
+            let key_text = decode(key);
+            if SECRET_KEYS
+                .iter()
+                .any(|secret| key_text.eq_ignore_ascii_case(secret))
+            {
+                format!("{key}=…")
+            } else {
+                pair.to_string()
+            }
+        })
+        .collect();
+    format!("{base}?{}", query.join("&"))
 }
 
 /// Percent-encode all but RFC 3986's unreserved characters.
@@ -562,15 +623,80 @@ mod tests {
     }
 
     #[test]
-    fn logs_never_show_a_passphrase() {
-        assert_eq!(
-            redact(
-                r#"SetSlot { source: Srt { uri: "srt://:1?passphrase=geheim%20x&pbkeylen=32" } }"#
+    fn logs_never_show_a_passphrase_or_a_password() {
+        for (url, shown) in [
+            (
+                "srt://:1?passphrase=geheim%20x&pbkeylen=32",
+                "srt://:1?passphrase=…&pbkeylen=32",
             ),
-            r#"SetSlot { source: Srt { uri: "srt://:1?passphrase=…&pbkeylen=32" } }"#
+            // Raw quotes, blanks and ampersand-free tails: all of it goes.
+            (
+                r#"srt://:1?mode=listener&passphrase=ab"cd efgh"#,
+                "srt://:1?mode=listener&passphrase=…",
+            ),
+            (
+                "srt://:1?PASSPHRASE=x&streamid=a",
+                "srt://:1?PASSPHRASE=…&streamid=a",
+            ),
+            ("srt://:1?pass%70hrase=x", "srt://:1?pass%70hrase=…"),
+            ("rtsp://user:pw@cam/stream", "rtsp://…@cam/stream"),
+            ("rtmp://live.example/app", "rtmp://live.example/app"),
+            (
+                "rtmp://h/app?username=u&password=p w&Token=t",
+                "rtmp://h/app?username=u&password=…&Token=…",
+            ),
+            (
+                "https://ha.local/?access_token=abc",
+                "https://ha.local/?access_token=…",
+            ),
+            ("srt://h:1?pbkeylen=16", "srt://h:1?pbkeylen=16"),
+            ("http://host/a@b", "http://host/a@b"),
+            ("no secret", "no secret"),
+        ] {
+            assert_eq!(redact_url(url), shown, "{url}");
+        }
+    }
+
+    #[test]
+    fn hosts_in_other_scripts_brackets_and_zones() {
+        let host = |h: &str| SrtAddress {
+            host: h.into(),
+            port: 9000,
+            ..Default::default()
+        };
+        assert_eq!(host("kamera-büro.local").check(), Ok(()));
+        assert!(matches!(
+            host("x²").check(),
+            Err(SrtProblem::BadHost { .. })
+        ));
+        // Brackets around nothing are no host: a caller needs one, and the
+        // URI keeps the caller's mode (it would read as a listener).
+        let mut empty = host("[]");
+        assert!(matches!(empty.check(), Err(SrtProblem::NeedsHost { .. })));
+        assert_eq!(empty.uri(), "srt://:9000?mode=caller");
+        empty.mode = SrtMode::Listener;
+        assert_eq!(empty.check(), Ok(()));
+        assert_eq!(
+            host("kamera-büro.local").uri(),
+            "srt://kamera-b%C3%BCro.local:9000"
         );
-        assert_eq!(redact("no secret"), "no secret");
-        assert_eq!(redact("passphrase="), "passphrase=…");
+        // Typed with brackets: the same as without.
+        assert_eq!(host("[fd00::5]").check(), Ok(()));
+        assert_eq!(host("[fd00::5]").uri(), "srt://[fd00::5]:9000");
+        assert_eq!(host("[fd00::5]").public(), "srt://[fd00::5]:9000");
+        assert_eq!(host("fe80::1%eth0").check(), Ok(()));
+        for bad in [
+            "fe80::1%eth 0",
+            "fe80::1%",
+            "fe80::1%e/x",
+            "[cam]x",
+            "[fd00::5",
+        ] {
+            assert!(
+                matches!(host(bad).check(), Err(SrtProblem::BadHost { .. })),
+                "{bad}"
+            );
+        }
     }
 
     #[test]
