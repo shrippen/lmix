@@ -65,13 +65,18 @@ AppPage {
         }
         return all
     }
+    /** Ids of those pads: a collection keeps the cues of a list switched
+     *  off (lmix-core), shown and counted only while it has pads. */
+    readonly property var padIds: new Set(pads.map(p => p.cue.id))
     readonly property var runningIds: ((show && show.running_cues) || []).map(r => r.cue)
 
     /** Groups shown: all, or those with a mood in the collection. */
     readonly property var shownGroups: groups.filter(g => composing || !collection
         || inCollection(g.id) || (g.variants || []).some(v => inCollection(v.id)))
+    /** Pads of the collection shown, to look up without a search. */
+    readonly property var collectionPads: new Set(collection ? collection.pads || [] : [])
     readonly property var shownPads: pads.filter(p => composing || !collection
-        || (collection.pads || []).indexOf(p.cue.id) >= 0)
+        || collectionPads.has(p.cue.id))
 
     /** The fade of the last change, 0..1; 1 when done. */
     property real fadeProgress: 1
@@ -346,10 +351,11 @@ AppPage {
                         required property var modelData
                         focusOnClick: false
                         readonly property string cid: modelData ? modelData.id : ""
+                        objectName: modelData ? "collection:" + modelData.name : "collection:"
                         Layout.fillWidth: true
                         text: modelData ? modelData.name : qsTr("All")
                         subtitle: modelData
-                            ? root.moodCount((modelData.moods || []).length) + " · " + root.shotCount((modelData.pads || []).length)
+                            ? root.moodCount((modelData.moods || []).length) + " · " + root.shotCount((modelData.pads || []).filter(id => root.padIds.has(id)).length)
                             : qsTr("Every mood and one-shot")
                         selected: root.shownCollectionId === cid
                         onClicked: {
@@ -590,7 +596,7 @@ AppPage {
                                 focusPolicy: Qt.NoFocus
                                 readonly property var cue: modelData.cue
                                 readonly property bool runs: root.runningIds.indexOf(cue.id) >= 0
-                                readonly property bool member: root.collection !== null && (root.collection.pads || []).indexOf(cue.id) >= 0
+                                readonly property bool member: root.collectionPads.has(cue.id)
                                 objectName: "pad:" + cue.name
                                 width: Kirigami.Units.gridUnit * 9
                                 emphasis: root.memberEmphasis(runs, member, true)

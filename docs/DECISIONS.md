@@ -6670,7 +6670,8 @@ gesperrt blieb und `set_moods` Unstimmiges annahm.
   von Sammlungen je einmal und nicht die einer Stimmung (eine Id für
   Stimmungen und Sammlungen); in einer Sammlung nur Stimmungen und Pads,
   die es gibt, jede einmal. Pads, die es nicht mehr gibt (Cue entfernt,
-  Liste entfernt oder keine Pads mehr), fallen still aus den Sammlungen:
+  Liste entfernt; „keine Pads mehr“ aufgehoben, siehe „Pads einer Liste
+  ohne Pads bleiben in Sammlungen“), fallen still aus den Sammlungen:
   beim Bearbeiten der Listen, beim Öffnen einer Show, beim Wiederherstellen
   und in `set_moods` selbst (der Dialog kann ein Pad noch haben, das
   inzwischen anderswo gelöscht wurde; abgelehnt würde sein Speichern).
@@ -7589,8 +7590,9 @@ nicht mit (die unterste von 16 Ebenen ging nicht in einem Zug nach oben).
   weggescrollte: die Markierung ist immer zu sehen.
   Nicht in der Liste der Gruppen und Varianten: deren `ListView` gibt
   eine weit aus dem Bild gescrollte Zeile samt ihrem Ziehen auf.
-- **Nicht geändert**: Pads, deren Liste keine Pads mehr ist, fallen weiter
-  aus den Sammlungen und kommen beim Wiedereinschalten nicht zurück
+- **Nicht geändert** (aufgehoben, siehe „Pads einer Liste ohne Pads
+  bleiben in Sammlungen“): Pads, deren Liste keine Pads mehr ist, fallen
+  weiter aus den Sammlungen und kommen beim Wiedereinschalten nicht zurück
   (Stufe 7a). Sie zu behalten hieße, Sammlungen Einträge zu lassen, die
   keine Pads sind (Prüfung, Zählung, Seite); ein Rückgängig über
   `Removed::Moods` ist ein eigenes Thema.
@@ -7723,13 +7725,24 @@ bearbeitet wird (verbietet Bedienung auf Sendung, die Vorrang hat).
   eine andere Console (oder ein Rückgängig) ein Layout davor, träfe die
   Nummer beim Öffnen ein anderes Layout und überschriebe es, womöglich auf
   Sendung. Ist das bearbeitete Layout selbst weg, sagt es der Hinweis
-  (Warnung, ohne „Neu laden“), Speichern ist gesperrt.
-- Grenze: Boxen werden über ihre Stelle in der Liste zugeordnet (die
-  Boxen haben keine Id). Ersetzt eine andere Console das Layout mit gleich
-  vielen, aber anderen Boxen, gilt der Abgleich trotzdem Stelle für Stelle;
-  der Hinweis erscheint, der Inhalt kann aber gemischt werden. Mit
-  `swap_boxes`, `set_box_input` und `show_box` (die die Boxen nicht
-  umordnen) passt die Zuordnung immer.
+  (Warnung, ohne „Neu laden“), und Speichern heißt „Als neues Layout
+  speichern“: `add_layout` mit dem Gezeigten, unter dem alten Namen, ist
+  er vergeben, mit Nummer wie bei Inputs („Interview (2)“, ohne
+  Groß/Klein). Die Arbeit im Dialog geht so nicht verloren.
+- Boxen werden über ihre Stelle in der Liste zugeordnet. Das gilt nur,
+  solange das Layout anderswo bloß so geändert wurde, wie es
+  `swap_boxes`, `set_box_input` und `show_box` tun: gleich viele Boxen,
+  jede mit demselben Platz, Rahmen und derselben Sperre. Sonst (eine
+  andere Console speicherte andere Boxen: umgeordnet, eine entfernt und
+  eine hinzugefügt) ersetzt Speichern das Layout durch das Gezeigte, mit
+  Warnung; kein stilles Mischen von Teilen verschiedener Boxen. Ändert
+  eine andere Console nur Rahmen oder Platz einer Box, gilt das ebenso
+  (nicht zu unterscheiden von einer anderen Box; die Warnung sagt es,
+  „Neu laden“ übernimmt es).
+  Verworfen: feste Ids für Boxen in lmix-core. Mehr Umbau (Show-Datei,
+  Vorlagen, Aktionen, Migration) für denselben Zweck: die Aktionen im
+  Betrieb ordnen nie um, nur `set_layout` tut es, und das ersetzt die
+  ganze Liste, sodass auch Ids dort von der sendenden Console abhingen.
 - Muster wie `AddOutputDialog` (Zustand der Show als Eigenschaft, der
   Dialog vergleicht selbst); kein Rückfrage-Dialog beim Speichern, der
   im Betrieb aufhielte.
@@ -7739,10 +7752,63 @@ Tausch während offen bleibt mit eigenem Platz, eigene Änderung am selben
 Teil gewinnt, entfernte Box, doppelter Input fällt auf das Gezeigte
 zurück, unverändert ohne Hinweis, Boxen anderswo hinzugefügt mit Hinweis
 und „Neu laden“, neues Layout unverändert, Speichern über die Id nach
-Entfernen des Layouts davor, entferntes Layout gesperrt mit Hinweis.
+Entfernen des Layouts davor, entferntes Layout als neues gespeichert
+(Name frei, sonst nummeriert), anderswo umgeordnete Boxen und eine
+entfernte plus eine hinzugefügte nicht gemischt (alle drei vor der
+Änderung rot).
 Switcher-Test `set_layout_by_id_hits_its_layout_after_one_before_is_gone`
 (Id als Text wie aus der Console, nach Entfernen des Layouts davor; ein
 Layout, das wie die Id heißt, gewinnt nicht).
+
+## 2026-11-01 — Pads einer Liste ohne Pads bleiben in Sammlungen
+
+**Kontext**: Schaltete man bei einer Liste „Pads“ aus, fielen ihre Cues aus
+allen Sammlungen (Stufe 7a, in 7d nicht geändert); wieder eingeschaltet,
+fehlten sie, die Sammlungen waren von Hand neu zu füllen. Der User will
+das nicht (1.11.2026).
+
+**Optionen**: (a) Einträge behalten, solange der Cue in einer Liste steht;
+Seite und Zählung nehmen nur die von Listen mit Pads. (b) Beim Ausschalten
+merken, was entfiel, und beim Einschalten zurücklegen: zweiter Speicher in
+der Show-Datei, der mit jedem Bearbeiten der Sammlungen veralten kann.
+
+**Entscheidung**: (a).
+- `pads` einer Sammlung nennt Cues der Show (oberste Ebene einer Liste);
+  Pads sind sie, solange ihre Liste Pads hat. Aus den Sammlungen fallen
+  sie nur, wenn der Cue oder seine Liste entfernt ist (`prune_pads`);
+  `set_cue_list_pads` ändert die Sammlungen nicht mehr.
+- `set_moods` und das Öffnen einer Show nehmen solche Einträge an, auch
+  Cues von Listen, die nie Pads waren. Die Grenze von 256 Einträgen je
+  Sammlung zählt sie mit (sie stehen in der Datei); weil die Seite sie
+  nicht zeigt, sagt es der eigene Fehler `collection_full` („Sammlung …
+  fasst höchstens 256 Einträge, Oneshots von Listen ohne Pads
+  mitgezählt“).
+- Ein Cue, der in der Datei in eine Liste ohne Pads wandert, bleibt als
+  ruhender Eintrag und ist wieder Pad, sobald sie Pads bekommt. Per
+  Aktion verschiebt sich kein Cue zwischen Listen (eine Cue-Id steht nur
+  einmal in der Show): er verlässt erst die alte Liste und damit die
+  Sammlungen.
+- Die Seite Stimmungen zeigt und zählt nur Pads von Listen mit Pads
+  (`padIds`, ein `Set`, Nachschlagen ohne Suche je Eintrag);
+  „Zusammenstellen“ ändert die Sammlung als Ganzes und behält die übrigen.
+- Der Kern nutzt `pads` einer Sammlung nur zum Prüfen; zur Laufzeit
+  ändert sich nichts.
+
+**Bricht**: das Format bleibt; eine zu volle Sammlung meldet
+`collection_full` statt `bad_mood`. Einträge, die frühere Stände beim
+Ausschalten entfernten, kommen nicht zurück.
+
+**Geprüft**: `switcher::tests::a_pad_switched_off_and_on_keeps_its_collections`
+(vorher: Sammlung nach dem Ausschalten leer),
+`a_pad_moved_to_a_list_without_pads_waits_in_its_collections`,
+`a_full_collection_says_that_waiting_pads_count` (vorher allgemeines
+`bad_mood`),
+`moods_need_distinct_names_ids_and_entries_that_are_there` (ausgeschaltet
+gültig, Liste entfernt fällt weg); QML `tst_moods_page.qml`
+`test_a_list_switched_off_keeps_its_one_shots_in_the_collection` (vorher
+„1 one-shot“ statt „0 one-shots“),
+`test_a_full_collection_says_that_hidden_one_shots_count`. Alle Tests von
+lmix-core (587) und QML (363).
 
 ## 2026-11-01 — Nachträge der Reviews: Rückgängig, TCP-Schließen, OSC gegen liblo, Toasts für Screenreader
 

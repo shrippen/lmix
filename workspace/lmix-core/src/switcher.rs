@@ -673,8 +673,8 @@ fn check_cue(cue: &Cue, depth: usize) -> Result<(), ActionError> {
 
 /// Moods of a show (MOOD): limits, names to find them by, layers that
 /// are there, contents a cue could have, a panic mood of actions only,
-/// collections of moods and pads (cues of `lists` with pads) that are
-/// there, each once.
+/// collections of moods and pads (cues of `lists`, with pads or switched
+/// off) that are there, each once.
 fn check_moods(moods: &lmix_types::Moods, lists: &[ShowCueList]) -> Result<(), ActionError> {
     use lmix_types::mood::{name_key, MOOD_COLLECTIONS, MOOD_GROUPS, MOOD_LAYERS, MOOD_NAME_MAX};
     use lmix_types::{LayerContent, LayerId};
@@ -684,14 +684,21 @@ fn check_moods(moods: &lmix_types::Moods, lists: &[ShowCueList]) -> Result<(), A
         || moods.groups.len() > MOOD_GROUPS
         || moods.groups.iter().any(|g| g.variants.len() > MOOD_GROUPS)
         || moods.collections.len() > MOOD_COLLECTIONS
-        || moods
-            .collections
-            .iter()
-            .any(|c| c.moods.len() + c.pads.len() > MOOD_GROUPS)
     {
         return bad(format!(
-            "at most {MOOD_LAYERS} layers, {MOOD_COLLECTIONS} collections and {MOOD_GROUPS} groups, variants of a group or entries of a collection"
+            "at most {MOOD_LAYERS} layers, {MOOD_COLLECTIONS} collections and {MOOD_GROUPS} groups or variants of a group"
         ));
+    }
+    // Pads of lists without pads count: the page hides them, so say so.
+    if let Some(full) = moods
+        .collections
+        .iter()
+        .find(|c| c.moods.len() + c.pads.len() > MOOD_GROUPS)
+    {
+        return Err(ActionError::CollectionFull {
+            collection: full.name.clone(),
+            max: MOOD_GROUPS,
+        });
     }
     for ms in [moods.change_ms, moods.inside_ms]
         .into_iter()
@@ -829,17 +836,16 @@ fn check_moods(moods: &lmix_types::Moods, lists: &[ShowCueList]) -> Result<(), A
     Ok(())
 }
 
-/// The pads of the show: the cues of its lists with pads (RUN.12, MOOD.8).
+/// What a collection may keep as a pad (MOOD.8): a cue of a list, which
+/// is a pad while its list has pads (RUN.12). A list switched off keeps
+/// its cues in the collections, so switching it on brings them back;
+/// the page shows only those of lists with pads.
 fn pad_cues(lists: &[ShowCueList]) -> impl Iterator<Item = lmix_types::CueId> + '_ {
-    lists
-        .iter()
-        .filter(|l| l.pads)
-        .flat_map(|l| l.cues.iter().map(|c| c.id))
+    lists.iter().flat_map(|l| l.cues.iter().map(|c| c.id))
 }
 
-/// Collections keep only pads the show still has: a pad cue removed, its
-/// list removed or no longer pads, it leaves them (MOOD.8). Whether one
-/// went.
+/// Collections keep only pads the show still has: a cue removed or its
+/// list removed, it leaves them (MOOD.8). Whether one went.
 fn prune_pads(moods: &mut lmix_types::Moods, lists: &[ShowCueList]) -> bool {
     // Most shows have no pads in collections: nothing to look up.
     if moods.collections.iter().all(|c| c.pads.is_empty()) {
@@ -1700,7 +1706,6 @@ impl Switcher {
             Action::SetCueListPads { list, on } => {
                 let index = self.find_cue_list(&list)?;
                 self.show.cue_lists[index].pads = on;
-                prune_pads(&mut self.show.moods, &self.show.cue_lists);
                 Ok(Vec::new())
             }
             Action::SetEmergencyList { list } => {
@@ -11242,8 +11247,12 @@ mod tests {
                 "{what}"
             );
         }
-        // A list no longer pads: its cues leave the collections.
+        // A list no longer pads keeps its cues in the collections; a
+        // list removed takes them out.
         lists[0].pads = false;
+        check_moods(&good, &lists).expect("kept while off");
+        assert!(!prune_pads(&mut good, &lists));
+        lists.clear();
         assert!(check_moods(&good, &lists).is_err());
         assert!(prune_pads(&mut good, &lists));
         assert!(good.collections[0].pads.is_empty());
@@ -11283,6 +11292,122 @@ mod tests {
         })
         .unwrap();
         assert!(sw.show().moods.collections[0].pads.is_empty());
+    }
+
+    #[test]
+    fn a_pad_switched_off_and_on_keeps_its_collections() {
+        let pad = Cue::actions("Tusch", vec![Action::FadeToBlack { duration_ms: 0 }]);
+        let pad_id = pad.id;
+        let mut sw = Switcher::new(SLOTS);
+        sw.apply(Action::AddCueList {
+            name: "Pads".into(),
+            cues: vec![pad],
+            source: None,
+        })
+        .unwrap();
+        let pads = |on| Action::SetCueListPads {
+            list: InputRef::Text("Pads".into()),
+            on,
+        };
+        sw.apply(pads(true)).unwrap();
+        let moods: lmix_types::Moods = serde_json::from_value(serde_json::json!({
+            "collections": [{"name": "Akt 1", "pads": [pad_id]}]
+        }))
+        .expect("moods");
+        sw.apply(Action::SetMoods {
+            moods: moods.clone(),
+        })
+        .unwrap();
+
+        // Off: the entry stays, set_moods and a reopened show take it.
+        sw.apply(pads(false)).unwrap();
+        assert_eq!(sw.show().moods, moods);
+        sw.apply(Action::SetMoods {
+            moods: moods.clone(),
+        })
+        .unwrap();
+        let show = sw.show().clone();
+        sw.replace(show, None).unwrap();
+        assert_eq!(sw.show().moods, moods);
+
+        // On again: the pad is back in its collection.
+        sw.apply(pads(true)).unwrap();
+        assert_eq!(sw.show().moods, moods);
+    }
+
+    #[test]
+    fn a_pad_moved_to_a_list_without_pads_waits_in_its_collections() {
+        let pad = Cue::actions("Tusch", vec![Action::FadeToBlack { duration_ms: 0 }]);
+        let pad_id = pad.id;
+        let mut sw = Switcher::new(SLOTS);
+        for (name, cues) in [("Pads", vec![pad.clone()]), ("Show", Vec::new())] {
+            sw.apply(Action::AddCueList {
+                name: name.into(),
+                cues,
+                source: None,
+            })
+            .unwrap();
+        }
+        let pads = |list: &str, on| Action::SetCueListPads {
+            list: InputRef::Text(list.into()),
+            on,
+        };
+        sw.apply(pads("Pads", true)).unwrap();
+        let moods: lmix_types::Moods = serde_json::from_value(serde_json::json!({
+            "collections": [{"name": "Akt 1", "pads": [pad_id]}]
+        }))
+        .expect("moods");
+        sw.apply(Action::SetMoods {
+            moods: moods.clone(),
+        })
+        .unwrap();
+
+        // Moved in the file to "Show" (no pads), the show opened: it
+        // stays. Actions cannot move it: a cue id is once in a show, so
+        // the cue leaves "Pads" first, and with it the collection.
+        let mut show = sw.show().clone();
+        show.cue_lists[0].cues.clear();
+        show.cue_lists[1].cues.push(pad);
+        sw.replace(show, None).unwrap();
+        assert_eq!(sw.show().moods, moods);
+        assert_eq!(sw.show().cue_lists[1].cues[0].id, pad_id);
+
+        // "Show" gets pads: the cue is a pad of the collection again.
+        sw.apply(pads("Show", true)).unwrap();
+        assert_eq!(sw.show().moods, moods);
+    }
+
+    #[test]
+    fn a_full_collection_says_that_waiting_pads_count() {
+        use lmix_types::mood::MOOD_GROUPS;
+        let cues: Vec<Cue> = (0..=MOOD_GROUPS)
+            .map(|i| {
+                Cue::actions(
+                    &format!("{i}"),
+                    vec![Action::FadeToBlack { duration_ms: 0 }],
+                )
+            })
+            .collect();
+        let ids: Vec<_> = cues.iter().map(|c| c.id).collect();
+        let lists = vec![ShowCueList {
+            id: InputId::new(),
+            name: "Aus".into(),
+            cues,
+            source: None,
+            standby: None,
+            pads: false,
+        }];
+        let moods: lmix_types::Moods = serde_json::from_value(serde_json::json!({
+            "collections": [{"name": "Akt 1", "pads": ids}]
+        }))
+        .expect("moods");
+        assert_eq!(
+            check_moods(&moods, &lists),
+            Err(ActionError::CollectionFull {
+                collection: "Akt 1".into(),
+                max: MOOD_GROUPS
+            })
+        );
     }
 
     #[test]
