@@ -7331,6 +7331,17 @@ die MP4 gestoppt und entfernt, lmix-core neu gestartet, im Ordner eine
 `Talk-9bed0bb1_….marks.csv` neben der laufenden Datei (0:00:10), das alte
 Protokoll blieb unverändert.
 
+**Nachtrag (Schluss-Review)**: Marken laufen ohne die Sperre des Switchers,
+also neben `StartOutput`/`StopOutput`. Wird ein Ausgang gestoppt und neu
+gestartet, während eine Marke den Präfix aus dem alten Flow liest, gewinnt
+der Präfix des neuen Starts: Der gelesene wird nur gemerkt, wenn der
+Ausgang nicht frisch gestartet ist und noch keinen Präfix hat. Bleibt der
+Flow unlesbar oder ohne `filename_prefix`, steht das im Debug-Log, bevor
+`lmix-<Id>` gilt. Die Prüfung des Musters setzt die Platzhalter im selben
+einen Durchgang ein wie das Einsetzen, `{sour{output}ce}` wird also
+abgelehnt. Ein beim Laden der Show verworfenes Muster nennt im Log die Id
+des Ausgangs.
+
 **Geprüft und zurückgestellt: STR.7 „Puffer, Encoder-Last“** (vor REC.5
 untersucht, an strom a0ac38f9 mit SRT-Ausgang und ffmpeg als Empfänger):
 `srtsink` liefert keinen Füllstand des Sendepuffers (`snd_buf_level_ms`
