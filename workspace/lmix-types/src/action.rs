@@ -1554,6 +1554,14 @@ pub enum Action {
     },
 }
 
+/// A request body or service data in a log: only how long it is, it can
+/// hold a password or a token.
+fn blank(value: &mut Option<serde_json::Value>) {
+    if let Some(v) = value {
+        *v = serde_json::Value::String(format!("… ({} bytes)", v.to_string().len()));
+    }
+}
+
 impl Action {
     /// The action with its secrets as `…`, for logs: an SRT passphrase,
     /// an RTMP stream key, `user:password@` and tokens in addresses
@@ -1576,10 +1584,18 @@ impl Action {
                     *address = crate::srt::redact_url(address);
                 }
             }
-            Action::HttpRequest { path, headers, .. } => {
+            Action::HttpRequest {
+                path,
+                headers,
+                body,
+                ..
+            } => {
                 *path = crate::srt::redact_url(path);
                 headers.values_mut().for_each(|value| *value = "…".into());
+                blank(body);
             }
+            Action::HaService { data, .. } => blank(data),
+            Action::AddDataSource { spec, .. } => *spec = spec.without_secrets(),
             _ => {}
         }
         action
@@ -1797,7 +1813,10 @@ mod secret_tests {
             {"action": "add_output", "spec": {"kind": "rtmp", "url": "rtmp://live.example/app", "key": "geheim-key"}},
             {"action": "update_output", "output": 1, "spec": {"kind": "srt", "uri": "srt://cdn:9000?passphrase=geheim0123"}},
             {"action": "set_target", "target": {"name": "ha", "kind": "http", "addresses": ["http://u:geheim@ha.local"], "secret": "geheim-token"}},
-            {"action": "http_request", "target": "ha", "path": "/api?token=geheim", "headers": {"Authorization": "Bearer geheim"}},
+            {"action": "http_request", "target": "ha", "path": "/api?token=geheim", "headers": {"Authorization": "Bearer geheim"}, "body": {"password": "geheim"}},
+            {"action": "ha_service", "target": "ha", "service": "lock.unlock", "data": {"code": "geheim"}},
+            {"action": "add_data_source", "spec": {"kind": "json", "path": "https://feed.example/scores.json?token=geheim"}},
+            {"action": "add_data_source", "spec": {"kind": "feed", "path": "https://u:geheim@feed.example/rss"}},
         ]))
         .unwrap();
         for action in actions {

@@ -326,4 +326,19 @@ TestCase {
             problem: { problem: "passphrase_length", bytes: 8, min: 10, max: 79 } } })),
             "SRT: A passphrase has 10 to 79 bytes, this one 8; umlauts and other special characters count twice or more.")
     }
+
+    function test_a_corrected_paste_over_a_refused_one_fills_the_fields() {
+        var dialog = openSrt()
+        var host = named(dialog.contentItem, "srtHost")
+        host.forceActiveFocus()
+        host.text = "srt://camz:9001"
+        host.textEdited()
+        verify(named(dialog.contentItem, "srtProblem").text.indexOf("does not read") >= 0)
+        // All selected, a corrected address of the same length pasted: an
+        // address before too, but more than one character is new.
+        host.text = "srt://cams:9000"
+        host.textEdited()
+        compare(host.text, "cams")
+        compare(named(dialog.contentItem, "srtPort").text, "9000")
+    }
 }

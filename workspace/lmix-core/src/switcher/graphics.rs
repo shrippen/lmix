@@ -509,7 +509,15 @@ impl Switcher {
                         .clone()
                         .filter(|r| !r.trim().is_empty())
                         .map_or_else(|| "Google Sheet".into(), |r| format!("Google Sheet {r}")),
-                    _ => file_name(spec.path()),
+                    // An address's query or `user:password@` can hold a
+                    // secret: not in the name, nor the `…@` left of it.
+                    _ => file_name(
+                        &lmix_types::srt::redact_url(spec.path())
+                            .split('?')
+                            .next()
+                            .unwrap_or_default()
+                            .replace("…@", ""),
+                    ),
                 });
                 self.show.data_sources.push(ShowDataSource {
                     id: InputId::new(),
@@ -1278,6 +1286,30 @@ mod tests {
             }),
             Err(ActionError::UnknownDataset { .. })
         ));
+    }
+
+    #[test]
+    fn a_data_source_from_an_address_is_named_without_its_secrets() {
+        let mut sw = switcher();
+        for path in [
+            "https://feed.example/scores.json?token=geheim",
+            "https://u:geheim@feed.example",
+        ] {
+            sw.apply(Action::AddDataSource {
+                spec: DataSourceSpec::Json { path: path.into() },
+                name: None,
+            })
+            .unwrap();
+        }
+        let names: Vec<String> = sw
+            .state()
+            .data_sources
+            .iter()
+            .map(|s| s.name.clone())
+            .collect();
+        assert!(names.iter().all(|n| !n.contains("geheim")), "{names:?}");
+        assert_eq!(names[0], "scores");
+        assert_eq!(names[1], "feed");
     }
 
     fn with_source(sw: &mut Switcher) -> InputId {
