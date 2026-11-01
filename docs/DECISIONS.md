@@ -8155,3 +8155,41 @@ Bildern, Last aus zwei Lesungen, Neustart, veraltete Lesung),
 `outputs_report_their_load` (über einen strom-Stand-in), Anfragen je Poll im
 RTMP-Test gezählt, `/metrics`; QML `tst_output_menu`, `tst_outputs_page`;
 VM-Test prüft die Last der Aufnahme an echtem strom.
+
+## 2026-11-01 — vm-check: Multiview staut Program, abgehängter Abgriff zeigt altes Bild (strom)
+
+Branch `vm-slot-return`, strom #65 `mixer-monitor-queues` und #66 `thumbnail-drop-stale` (beide in
+strom `dev` gemergt, daran hängt das Submodul).
+
+- **„program black after the source came back“ / „logo not on program before the loss“**
+  (41284928306): Jeder Input des Mischers geht über ein Tee an den Program-Compositor und an
+  die Zweige der Multiview (Kachel, PVW, PiP), auf `dev` auch an Vorschau- und Kachel-Ausgang.
+  Das Tee schiebt nacheinander in alle Zweige, und deren Queues blockierten, wenn sie voll
+  waren. Kam die Multiview unter Last nicht nach (sie skaliert jeden Input, das 1280×720-Logo
+  auf einem belegten Kern), standen alle Tees und mit ihnen Program: der live laufende
+  Program-Compositor bekam die Bilder zu spät oder gar nicht und zeigte bei „black“ schwarz.
+  „hold“ verdeckt das mit dem letzten Bild. Nachgestellt lokal mit `taskset -c 0` und einem
+  dritten Input (Schnee): Logo weg, Flow gestoppt, zurück, Program bleibt schwarz, meist in
+  Runde 1 oder 2; im gdb-Abzug hängen alle `intersrc`- und Tee-Threads in
+  `gst_queue_chain_buffer_or_list` vor den Multiview-Queues, `mixer:sink_1..3` bekamen kein
+  Bild mehr, während der Mischer weiter 30 Bilder/s ausgab. **Entscheidung:** die Queues zu den
+  Zweigen, die nur zeigen (Multiview, Vorschau-, Kachel-Ausgang), werfen ihr ältestes Bild weg
+  (`leaky=downstream`, 2 Bilder). Program behält seine blockierende Queue. Verworfen: Queues
+  größer machen (verschiebt den Stau nur) und den Program-Compositor auf Zeit warten lassen
+  (`latency`; macht Program träger und behebt den Stau nicht). Beleg: strom-Tests
+  `a_stalled_multiview_does_not_hold_up_program` und
+  `stalled_preview_and_tile_outputs_do_not_hold_up_program` (Ausgang blockiert, vorher 0 Bilder
+  von Input 0 an Program in 2 s, jetzt volle Rate); die Nachstellung läuft mit dem Fix durch. Preis: ist PVW oder die
+  Multiview auf einen Ausgang gelegt (OUT.2), ruckelt dieses Signal unter Überlast (der
+  Compositor wiederholt das letzte Bild), statt dass Program steht. Im Normalbetrieb wirft
+  nichts weg: die Aggregator-Pads puffern selbst bis zu ihrer Latenz, zwei Bilder in der Queue
+  genügen.
+- **Abgehängter Abgriff liefert sein altes Bild (Entscheidung aus dem 1.11.):** Er verwirft es
+  jetzt beim Abhängen; nach dem nächsten Anhängen antwortet er 504, bis ein neues Bild da ist.
+  Ein altes Bild sieht aus wie ein laufendes und verdeckte in strom, dass nichts mehr kommt.
+  lmix-core hält unter „hold“ (für Program immer) weiter sein eigenes letztes Bild und gibt es
+  nach dem Wiederanhängen aus, bis ein neues kommt; ob dieser Speicher ein Höchstalter braucht,
+  steht in todo.md. Kein Grund dagegen gefunden: ein
+  pausierter oder am Ende gehaltener Clip wiederholt sein letztes Bild (`hold_still`), liefert
+  also auch nach dem Anhängen wieder ein Bild. Beleg: strom-Test
+  `test_reattached_tap_does_not_serve_a_picture_from_before` (vorher altes JPEG, jetzt Timeout).
