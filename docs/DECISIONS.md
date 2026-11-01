@@ -7776,22 +7776,35 @@ der Show-Datei, der mit jedem Bearbeiten der Sammlungen veralten kann.
   Pads sind sie, solange ihre Liste Pads hat. Aus den Sammlungen fallen
   sie nur, wenn der Cue oder seine Liste entfernt ist (`prune_pads`);
   `set_cue_list_pads` ändert die Sammlungen nicht mehr.
-- `set_moods` und das Öffnen einer Show nehmen solche Einträge an; die
-  Grenze von 256 Einträgen je Sammlung zählt sie mit (sie stehen in der
-  Datei).
+- `set_moods` und das Öffnen einer Show nehmen solche Einträge an, auch
+  Cues von Listen, die nie Pads waren. Die Grenze von 256 Einträgen je
+  Sammlung zählt sie mit (sie stehen in der Datei); weil die Seite sie
+  nicht zeigt, sagt es der eigene Fehler `collection_full` („Sammlung …
+  fasst höchstens 256 Einträge, Oneshots von Listen ohne Pads
+  mitgezählt“).
+- Ein Cue, der in der Datei in eine Liste ohne Pads wandert, bleibt als
+  ruhender Eintrag und ist wieder Pad, sobald sie Pads bekommt. Per
+  Aktion verschiebt sich kein Cue zwischen Listen (eine Cue-Id steht nur
+  einmal in der Show): er verlässt erst die alte Liste und damit die
+  Sammlungen.
 - Die Seite Stimmungen zeigt und zählt nur Pads von Listen mit Pads
   (`padIds`, ein `Set`, Nachschlagen ohne Suche je Eintrag);
   „Zusammenstellen“ ändert die Sammlung als Ganzes und behält die übrigen.
 - Der Kern nutzt `pads` einer Sammlung nur zum Prüfen; zur Laufzeit
   ändert sich nichts.
 
-**Bricht**: nichts; das Format bleibt. Einträge, die frühere Stände beim
+**Bricht**: das Format bleibt; eine zu volle Sammlung meldet
+`collection_full` statt `bad_mood`. Einträge, die frühere Stände beim
 Ausschalten entfernten, kommen nicht zurück.
 
 **Geprüft**: `switcher::tests::a_pad_switched_off_and_on_keeps_its_collections`
 (vorher: Sammlung nach dem Ausschalten leer),
+`a_pad_moved_to_a_list_without_pads_waits_in_its_collections`,
+`a_full_collection_says_that_waiting_pads_count` (vorher allgemeines
+`bad_mood`),
 `moods_need_distinct_names_ids_and_entries_that_are_there` (ausgeschaltet
 gültig, Liste entfernt fällt weg); QML `tst_moods_page.qml`
 `test_a_list_switched_off_keeps_its_one_shots_in_the_collection` (vorher
-„1 one-shot“ statt „0 one-shots“). Alle Tests von lmix-core (585) und QML
-(359).
+„1 one-shot“ statt „0 one-shots“),
+`test_a_full_collection_says_that_hidden_one_shots_count`. Alle Tests von
+lmix-core (587) und QML (363).

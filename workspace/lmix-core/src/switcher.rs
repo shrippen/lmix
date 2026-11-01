@@ -684,14 +684,21 @@ fn check_moods(moods: &lmix_types::Moods, lists: &[ShowCueList]) -> Result<(), A
         || moods.groups.len() > MOOD_GROUPS
         || moods.groups.iter().any(|g| g.variants.len() > MOOD_GROUPS)
         || moods.collections.len() > MOOD_COLLECTIONS
-        || moods
-            .collections
-            .iter()
-            .any(|c| c.moods.len() + c.pads.len() > MOOD_GROUPS)
     {
         return bad(format!(
-            "at most {MOOD_LAYERS} layers, {MOOD_COLLECTIONS} collections and {MOOD_GROUPS} groups, variants of a group or entries of a collection"
+            "at most {MOOD_LAYERS} layers, {MOOD_COLLECTIONS} collections and {MOOD_GROUPS} groups or variants of a group"
         ));
+    }
+    // Pads of lists without pads count: the page hides them, so say so.
+    if let Some(full) = moods
+        .collections
+        .iter()
+        .find(|c| c.moods.len() + c.pads.len() > MOOD_GROUPS)
+    {
+        return Err(ActionError::CollectionFull {
+            collection: full.name.clone(),
+            max: MOOD_GROUPS,
+        });
     }
     for ms in [moods.change_ms, moods.inside_ms]
         .into_iter()
@@ -11326,6 +11333,81 @@ mod tests {
         // On again: the pad is back in its collection.
         sw.apply(pads(true)).unwrap();
         assert_eq!(sw.show().moods, moods);
+    }
+
+    #[test]
+    fn a_pad_moved_to_a_list_without_pads_waits_in_its_collections() {
+        let pad = Cue::actions("Tusch", vec![Action::FadeToBlack { duration_ms: 0 }]);
+        let pad_id = pad.id;
+        let mut sw = Switcher::new(SLOTS);
+        for (name, cues) in [("Pads", vec![pad.clone()]), ("Show", Vec::new())] {
+            sw.apply(Action::AddCueList {
+                name: name.into(),
+                cues,
+                source: None,
+            })
+            .unwrap();
+        }
+        let pads = |list: &str, on| Action::SetCueListPads {
+            list: InputRef::Text(list.into()),
+            on,
+        };
+        sw.apply(pads("Pads", true)).unwrap();
+        let moods: lmix_types::Moods = serde_json::from_value(serde_json::json!({
+            "collections": [{"name": "Akt 1", "pads": [pad_id]}]
+        }))
+        .expect("moods");
+        sw.apply(Action::SetMoods {
+            moods: moods.clone(),
+        })
+        .unwrap();
+
+        // Moved in the file to "Show" (no pads), the show opened: it
+        // stays. Actions cannot move it: a cue id is once in a show, so
+        // the cue leaves "Pads" first, and with it the collection.
+        let mut show = sw.show().clone();
+        show.cue_lists[0].cues.clear();
+        show.cue_lists[1].cues.push(pad);
+        sw.replace(show, None).unwrap();
+        assert_eq!(sw.show().moods, moods);
+        assert_eq!(sw.show().cue_lists[1].cues[0].id, pad_id);
+
+        // "Show" gets pads: the cue is a pad of the collection again.
+        sw.apply(pads("Show", true)).unwrap();
+        assert_eq!(sw.show().moods, moods);
+    }
+
+    #[test]
+    fn a_full_collection_says_that_waiting_pads_count() {
+        use lmix_types::mood::MOOD_GROUPS;
+        let cues: Vec<Cue> = (0..=MOOD_GROUPS)
+            .map(|i| {
+                Cue::actions(
+                    &format!("{i}"),
+                    vec![Action::FadeToBlack { duration_ms: 0 }],
+                )
+            })
+            .collect();
+        let ids: Vec<_> = cues.iter().map(|c| c.id).collect();
+        let lists = vec![ShowCueList {
+            id: InputId::new(),
+            name: "Aus".into(),
+            cues,
+            source: None,
+            standby: None,
+            pads: false,
+        }];
+        let moods: lmix_types::Moods = serde_json::from_value(serde_json::json!({
+            "collections": [{"name": "Akt 1", "pads": ids}]
+        }))
+        .expect("moods");
+        assert_eq!(
+            check_moods(&moods, &lists),
+            Err(ActionError::CollectionFull {
+                collection: "Akt 1".into(),
+                max: MOOD_GROUPS
+            })
+        );
     }
 
     #[test]

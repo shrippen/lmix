@@ -255,6 +255,11 @@ TestCase {
         compare(findChild(p, "collection:Act 1").subtitle, "1 mood · 1 one-shot")
     }
 
+    function test_a_full_collection_says_that_hidden_one_shots_count() {
+        compare(Texts.message(JSON.stringify({ error: { error: "collection_full", collection: "Act 1", max: 256 } })),
+            "Collection Act 1 holds at most 256 entries, one-shots of lists without pads included")
+    }
+
     function test_the_side_bars_fold() {
         const p = page()
         const collections = findChild(p, "collections")

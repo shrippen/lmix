@@ -21,6 +21,11 @@
 //!              "variants": [{"id": "…", "name": "Night", "layers": {…}}]}],
 //!  "collections": [{"id": "…", "name": "Act 1", "moods": ["<mood id>"], "pads": ["<cue id>"]}]}
 //! ```
+//!
+//! `pads` of a collection takes any top-level cue of a list; it is a pad
+//! (one-shot) only while its list has pads, and waits there otherwise.
+//! At most `MOOD_GROUPS` entries, waiting ones included
+//! (`collection_full`).
 
 use std::collections::BTreeMap;
 
