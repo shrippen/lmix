@@ -2273,7 +2273,7 @@ impl Switcher {
         // Cues of the old show stop without a word; nothing starts, and
         // standby is where the show kept it (SAF.6).
         self.cues = Runner::default();
-        self.moods = Default::default();
+        self.moods.reset();
         self.cues.restore_standby(&self.show.cue_lists);
         self.distinct_shortcut_ids();
         self.path = path;
@@ -2351,13 +2351,16 @@ impl Switcher {
     /// restart. The sources keep running (no clip starts over).
     fn mixer_rebuilt(&mut self) -> Vec<Command> {
         let before = self.playback_sent.clone();
+        let preloaded = self.preload_sent.clone();
         let mut commands = self.restore_commands();
         commands.retain(|c| !matches!(c, Command::SetSlot { .. }));
         // Nor do sounds and pictures, unless the stages' rate changed:
-        // their flow is not the mixer's.
+        // their flow is not the mixer's. It still holds what it held: the
+        // next preload compares with that, not with what was not sent.
         if self.playback_sent == before {
             commands
                 .retain(|c| !matches!(c, Command::SetPlayback { .. } | Command::SetPreload { .. }));
+            self.preload_sent = preloaded;
         }
         commands
     }
@@ -3899,10 +3902,15 @@ impl Switcher {
         self.moods.media_gone(id)
     }
 
-    /// Cue `cue` of `list` ended, stopped or failed: a sound or picture
+    /// Cue `cue` of `list` ended, stopped or `failed`: a sound or picture
     /// cue gives back the layer it took (MOOD.5). An actions cue keeps it:
-    /// what it set (a light) stays until the next mood.
-    pub fn mood_cue_over(&mut self, list: InputId, cue: lmix_types::CueId) -> bool {
+    /// what it set (a light) stays until the next mood. So does a cue
+    /// started again whose older run ended: the newer one plays on.
+    pub fn mood_cue_over(&mut self, list: InputId, cue: lmix_types::CueId, failed: bool) -> bool {
+        // Most cues hold no layer: no search of the show for them.
+        if !self.moods.holds(list, cue) || (!failed && self.cues.plays(list, cue)) {
+            return false;
+        }
         fn find(cues: &[Cue], id: lmix_types::CueId) -> Option<&Cue> {
             cues.iter()
                 .find_map(|c| (c.id == id).then_some(c).or_else(|| find(&c.children, id)))
