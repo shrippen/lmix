@@ -8454,3 +8454,47 @@ Branch `vm-paused-clip`, nur Doku; strom unverändert (Submodul bleibt auf `dev`
   nachgewiesen), ist aber Überlast, kein Fehler im Test oder in lmix-core. Der Mischer muss
   seine Verspätung darum selbst gegen die Uhr messen und verspätete Ausgabebilder auslassen; das
   wird in strom gebaut (todo), dann Issue/PR bei Eyevinn.
+
+## 2026-11-01 — Mischer lässt verspätete Bilder aus (strom, Self-QoS am Compositor)
+
+Branch `mixer-self-qos`, strom #73 (auf `dev` gemergt, 234f2be; Upstream-Branch `mixer-catch-up` auf Eyevinn `main` 4479d8c, 8a7694f,
+als Eyevinn #1203 eingereicht). Folgt auf „Mischer hinter der Uhr“ (1.11.).
+
+- **Kontext:** Schafft die CPU die Bildrate nicht, rechnet der Live-Compositor trotzdem jedes
+  Ausgabebild und läuft immer weiter hinter der Uhr her; lokal auf zwei belegten Kernen bis 62 s.
+  `videoaggregator` überspringt Bilder nur auf QoS-Events, und Program verlässt den Mischer nur
+  über `intersink` und den Abgriff (beide `qos=false`). Alle Quellen stempeln mit der Uhr, ihre
+  Bilder liegen für ihn in der Zukunft: Program steht oder zeigt Sekunden alte Bilder.
+- **Entscheidung:** Der Mischer misst seine Verspätung selbst. Eine Probe am Src-Pad jedes
+  Compositors (`gst/aggregator_catch_up.rs`; Program und Multiview, alle Backends: `compositor`,
+  `glvideomixerelement`, `cudacompositor`, getestet nur der CPU-`compositor`) prüft
+  jedes 5. Ausgabebild: Laufzeit plus Aggregator-Latenz gegen die Uhr. Liegt es mehr als ein
+  Bild zurück, schickt sie dem Aggregator ein QoS-Event (`Underflow`, diff, timestamp), wie es
+  eine synchronisierende Senke täte; `videoaggregator` lässt dann die verspäteten Bilder aus
+  (kein Konvertieren, kein Mischen) und holt auf. Die übrigen Puffer kosten eine atomare
+  Addition, keine Sperre, keine Allokation. Der Aggregator gibt QoS an seine Eingänge weiter
+  (direkt an den Peer jedes Sink-Pads); dort verwarfen Transforms mit QoS Eingangsbilder, und im
+  VM-Test fror ein neu gestarteter Eingang auf Program für immer ein („program frozen or dark
+  after source swap“, Pad bekam kein Bild mehr). Darum verwirft eine Probe am Peer jedes
+  Eingangs das eigene Event (per Seqnum, Rückgabe `Handled` wie `drop_upstream_qos_events`, weil
+  `Drop` vor GStreamer 1.26 ein NULL-Event freigibt und CRITICAL loggt); sie wandert bei Relinks
+  mit. Nur der Mischer lässt aus. Nicht-live (keine Latenz): keine QoS. Jedes ausgelassene Bild
+  meldet der Mischer als QoS-Nachricht auf dem Bus (QoS-Statistik der Oberfläche).
+- **Verworfen:** QoS an der Program-Senke einschalten (`intersink` mit `qos=true`): die
+  #58-Probe für Block-Senken schluckte genau diese Events, und die Abgriffe und Ausgänge sind
+  keine synchronisierenden Senken. Größere Latenz am Mischer: verschiebt den Rückstand nur.
+  Eine eigene Aggregator-Eigenschaft: gibt es nicht, QoS ist der vorgesehene Weg.
+- **Preis:** Unter Überlast fehlen in Program, Multiview und Ausgängen Bilder (es ruckelt), statt
+  dass alles Sekunden zu spät kommt. Encoder und Muxer vertragen die Lücken (x264, flvmux,
+  mp4mux: `videotestsrc` mit `identity drop-probability=0.4` vor `x264enc`, beide Dateien
+  dekodiert `ffmpeg -v error … -f null -` ohne Fehler).
+- **Beleg:** strom-Test `a_slow_mixer_stays_on_the_clock` (jedes Ausgabebild 100 ms bei 33 ms
+  Budget): ohne Catch-up etwa 2,05 s Rückstand nach 3 s, mit ihm 0,5–0,65 s, und kein QoS-Event
+  am Eingang (rot, solange die Probe am Sink-Pad statt am Peer saß). Gekürzter VM-Test (Kopie von
+  `scripts/test-m2b-vm.sh` mit wenigen Prüfungen) auf `taskset -c 0,1` (Rechner daneben belegt);
+  Rückstand aus `GST_DEBUG=videoaggregator:5` („Producing buffer for <ts>“: Log-Zeit minus
+  Laufzeit des Puffers, relativ zum ersten Bild) des Program-Mischers: im Mittel 0,1–0,3 s,
+  höchstens 0,5–3 s (kurz bei Neubauten), vorher bis 62 s und wachsend; „paused clip held on
+  program“ in 4 von 4 Läufen grün. Ganzer VM-Test auf allen Kernen grün (51, mit RTMP und
+  Aufnahmen). Auf `taskset -c 0-3` scheitert „delayed RTMP output sent data in its countdown“
+  unter Fremdlast, ohne die Änderung ebenso (1 von 2); nicht Teil dieser Änderung (todo).
