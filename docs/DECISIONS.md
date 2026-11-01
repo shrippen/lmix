@@ -7019,3 +7019,78 @@ Umstellung der Skripte (CPU-Mischer, ohne Hardware) fanden
 `test-channel-delay`, `measure-av`, `measure-switch-gaps` und
 `measure-mixer-growth` ihre Aufnahmen; die übrigen brauchen SDI-Karte,
 GPU oder Bildschirm und sind nur mit `bash -n` geprüft.
+
+## 2026-11-01 — SRT-Input mit Feldern statt URI (SRC.12)
+
+**Anlass**: Ein SRT-Input ließ sich in der Console nur als URI anlegen;
+Modus, Latenz, Passphrase und Stream-ID musste man in der Schreibweise von
+GStreamer kennen. Dabei zeigte sich ein Fehler: strom setzt die Latenz von
+`srtsrc` nach der URI aus seiner Block-Eigenschaft `latency` (Vorgabe
+125 ms). Ein `latency=` in der URI wirkte also nie (mit GStreamer 1.28
+geprüft: nach `uri` und `latency` liest `srtsrc` 125). Die
+Decoder-Verzögerung (`tsdemux_latency` des Blocks) ließ sich gar nicht
+setzen.
+
+**Optionen**: (a) `SourceSpec::Srt` bekommt je Option ein Feld, der Kern
+baut die URI; (b) die URI bleibt, was gespeichert wird, die Console nimmt
+sie in Felder auseinander und setzt sie wieder zusammen; der Kern liest aus
+ihr, was strom als Eigenschaft braucht.
+**Entscheidung**: (b). Die URI ist die Sprache von SRT-Sendern, Encodern und
+GStreamer: wer eine Adresse aus OBS oder einem Encoder hat, fügt sie ein,
+und Parameter ohne eigenes Feld (`poll-timeout`, `localport` …) bleiben, wie
+sie sind. Ein zweiter Ort für dieselbe Angabe (Feld und URI) hätte Vorrang-
+regeln gebraucht.
+- `lmix_types::srt::SrtAddress`: Modus (Caller, Listener, Rendezvous),
+  Host (leer: beim Listener alle Adressen), Port, Latenz, Passphrase,
+  Schlüssellänge (16/24/32 Byte, sonst die des Senders), Stream-ID, übrige
+  Parameter in ihrer Reihenfolge. `parse` und `uri` sind umkehrbar; Werte
+  sind prozentkodiert (`srtsrc` dekodiert sie, mit GStreamer 1.28 geprüft,
+  `+` bleibt `+`). Vorgaben (Caller, keine Passphrase) bleiben aus der URI.
+- Der Kern prüft beim Anlegen und Ersetzen (`bad_srt`): `srt://`, Port
+  1–65535, Host außer beim Listener, Passphrase 10–79 Zeichen (Grenzen von
+  SRT), Schlüssellänge nur mit Passphrase, Latenz und Decoder-Verzögerung
+  höchstens 10 s, Stream-ID höchstens 512 Zeichen.
+- Engine: steht `latency` in der URI, geht es zusätzlich als
+  Block-Eigenschaft `latency` an strom; `decoder_delay_ms` (neues,
+  optionales Feld von `SourceSpec::Srt`, 0 wird nicht gespeichert) als
+  `tsdemux_latency`. Ohne beides bleiben strom's Vorgaben (125 ms, 0 ms),
+  bestehende Shows laufen gleich.
+- Console: Im Dialog „Input hinzufügen“ bzw. „Quelle ersetzen“ statt des
+  Adressfelds: Modus als Umschalter mit einem Satz, was er heißt; Adresse
+  und Port, Latenz, Passphrase (verdeckt), Schlüssellänge, Stream-ID,
+  Decoder-Verzögerung. Darunter die fertige Adresse zum Kopieren, ohne
+  Passphrase. Fügt man `srt://…` ins Adressfeld ein, füllt das die Felder.
+  Was fehlt (Port, Host, Länge der Passphrase), sagt eine Zeile, „Hinzufügen“
+  bleibt bis dahin gesperrt. Zusammensetzen und Zerlegen in Rust
+  (`forms::srt_uri`, `forms::srt_fields`), die Grenzen aus `srt_limits`.
+- **Passphrase**: Der Name eines neuen SRT-Inputs und die Quelle in den
+  Input-Einstellungen zeigen die Adresse ohne Abfrage, also ohne
+  Passphrase. Gespeichert wird sie weiter in der Show (wie der Schlüssel
+  eines SRT- oder RTMP-Ausgangs). In die Rechner-Einstellungen
+  (Geheimnisse dort, Entscheidung 7) gehört sie erst mit den Ausgabezielen
+  für Inputs; das bleibt offen. strom schreibt die URI samt Passphrase ins
+  Log (`SRT source configured: uri=…`); ein Kandidat für ein Issue bei
+  Eyevinn, hier nicht geändert.
+
+**Gemessen** mit strom `a0ac38f9` (vorgebautes Paket), lmix-core als
+Release, CPU-Mischer: Listener-Input
+`srt://:9555?mode=listener&latency=400&passphrase=correct%20horse%26battery&pbkeylen=32`
+mit Decoder-Verzögerung 200 ms. strom meldet `latency=400ms,
+tsdemux_latency=200ms` (vorher wären es 125 ms gewesen). Ein Sender
+(`gst-launch-1.0 … mpegtsmux ! srtsink`, AES-256) mit falscher Passphrase:
+Pegel des Inputs −100 dB, kein Demuxer; mit der richtigen (Leerzeichen und
+`&` prozentkodiert): Pegel −1,7 dB, Ton und Bild kommen. Eine zu kurze
+Passphrase lehnt der Kern ab (`bad_srt`). H.23 (echte Kamera-Encoder,
+Abbruch und Wiederkehr) bleibt offen.
+
+**Persona P3** (Handy-Kameras über SRT, wackliges Netz): Die Latenz ist
+jetzt wirksam einstellbar (mehr Puffer gegen Verluste), die Adresse aus der
+Sender-App lässt sich einfügen, und ein Listener braucht nur den Port.
+
+**Bricht**: nichts. `SourceSpec::Srt` hat ein neues optionales Feld; alte
+Shows laden unverändert. Der vorgeschlagene Name eines neuen SRT-Inputs ist
+jetzt `srt://host:port` ohne Abfrage.
+
+**Offen** (SRC.12): Wahl des Hardware-Decoders, HEVC mit echtem Sender
+prüfen, mehrere Tonspuren zu Mehrkanal (strom kann `num_audio_tracks`, der
+Slot nimmt eine Spur).
