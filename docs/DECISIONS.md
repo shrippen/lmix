@@ -8226,9 +8226,51 @@ strom `dev` gemergt, daran hängt das Submodul).
   also auch nach dem Anhängen wieder ein Bild. Beleg: strom-Test
   `test_reattached_tap_does_not_serve_a_picture_from_before` (vorher altes JPEG, jetzt Timeout).
 
-## 2026-11-01 — vm-check: „paused clip not held on program“, Bilder nur frisch
+## 2026-11-01 — Bilder der API ohne eigenen Speicher (`/api/pictures`)
 
-Branch `vm-paused-clip`, strom unverändert (Submodul bleibt auf `dev` c426a7e).
+Branch `picture-age`; todo „Bild-Speicher von lmix-core ohne Höchstalter“.
+
+**Kontext:** `Service::picture` merkte sich das letzte Bild je Abgriff (Program, Slot). Antwortete
+strom 504 (kein Bild), gab lmix-core unter „hold“ (Program immer) dieses Bild aus, unter
+„black“ 503 mit Retry-After. Eingeführt am 8.10. (`dd4dce30`), damit ein pausierter Clip oder
+ein Standbild sein Bild behält. Das braucht es nicht mehr: beide wiederholen ihr letztes Bild
+(`hold_still`), der Abgriff bekommt weiter Bilder. Wann strom 504 sagt: nur bis zum ersten Bild
+eines frisch angehängten Abgriffs. Ein angehängter Abgriff gibt immer sein letztes Bild;
+abgehängt wird er erst nach mehr als 10 s ohne Abfrage und verwirft dabei sein Bild (strom #66).
+Ein stehender Slot antwortet 404 (bei lmix-core 502), und `SetSlot` (Failback, neue Quelle)
+vergaß das Slot-Bild ohnehin. Der Speicher überbrückte also bei Slots nur das Wiederanhängen,
+und dann mit einem Bild, das mindestens 10 s alt ist: genau der Fehler aus dem todo. Bei Program
+überbrückte er außerdem das erste Bild nach einem Neubau des Mischers (`SetFormat`, Neustart
+von strom), etwa eine Sekunde, mit einem Bild, das so auch nicht mehr auf Sendung ist.
+Abnehmer von `/api/pictures`: die Web-Seiten `/mixer` und `/keys` (nur Inputs, alle 1,5 s; bei
+503 bleibt die Kachel leer), die VM-Tests (`test-m2b-vm.sh`, `test-looks-gl.sh`,
+`test-sdi-loop.sh`; sie wiederholen bei 503 und prüfen Bewegung, ein altes Bild verfälscht das)
+und fremde Programme (P5). Die Console liest `/api/pictures` nicht, sie zeigt die Live-Bilder
+über die Sockets.
+
+**Entscheidung:** lmix-core hält keine Bilder mehr. Hat strom keins, antwortet die API 503 mit
+Retry-After 1, für Program und Inputs, unter „hold“ wie unter „black“. Kein Zustand, keine
+Sperre, keine Kopie je Abfrage. Kein API-Bruch: 503 kannten alle Abnehmer schon. Für die
+Bedienung (P1, P2, P5): eine leere Kachel sagt „kein aktuelles Bild“, ein altes Bild lügt. Der
+Mischer selbst hält unter „hold“ weiter das letzte Bild eines Inputs; das betrifft nur die
+Bilder der API.
+
+**Verworfen:**
+- Speicher mit Höchstalter (erster Stand dieses PRs, 5 s): bei Slots überbrückt er nach dem
+  Wiederanhängen nie etwas (Bild ≥10 s alt), bei Program nur rund eine Sekunde nach einem
+  Neubau des Mischers, die Abnehmer ohnehin per Retry-After abwarten. Zustand ohne Nutzen.
+- Speicher behalten, Alter im Header melden (`Age` oder `X-Picture-Age`): `<img>` und `curl -f`
+  sehen keine Header, das alte Bild sähe weiter live aus.
+
+**Offen (strom):** Solange ein Abgriff angehängt ist und abgefragt wird, gibt strom sein letztes
+Bild aus, auch wenn die Quelle keins mehr liefert (`ThumbnailTap::get_thumbnail`, `cache_ttl`
+ungenutzt). Das kann lmix-core nicht sehen; eigenes Thema.
+
+Beleg: `a_tap_without_a_frame_gives_no_picture` (gegen `main` rot: altes Bild statt `NotReady`).
+
+## 2026-11-01 — vm-check: „paused clip not held on program“ erledigt, Mischer hinter der Uhr
+
+Branch `vm-paused-clip`, nur Doku; strom unverändert (Submodul bleibt auf `dev` c426a7e).
 
 - **CI-Verlauf seit 25.10.:** 5 Fehlschläge mit „paused clip not held on program“ (40261817405,
   40668775295, 40960842473, 40968188881, 41012411347, 26.–30.10.), alle mit strom vor #55 (Pins
@@ -8239,29 +8281,26 @@ Branch `vm-paused-clip`, strom unverändert (Submodul bleibt auf `dev` c426a7e).
   und 41012411347 standen dazu die Multiview- und Kachel-Queues voll (das Muster von #65).
   **Entscheidung:** der Punkt gilt als durch strom #55 und #65 behoben, todo geschlossen.
 - **Was der Test prüfte:** `held_bright` holt Program zweimal im Abstand von 2 s über lmix-core
-  und will beide hell. lmix-core gibt für Program immer (und für Inputs unter „hold“) sein
-  letztes Bild aus, solange strom 504 antwortet. Der Program-Abgriff war bis dahin über 10 s
-  unbenutzt und abgehängt; der erste Abruf hängt ihn an (seit strom #66 504 bis zum nächsten
-  Bild), lmix-core lieferte also das Program-Bild vom Quellentausch eine Minute vorher (Ball,
-  hell). Nachgewiesen lokal: das erste `hold.jpg` war byte-gleich mit `b.jpg` aus
-  `moving_bright`. Die erste Hälfte der Prüfung war damit wertlos, und `program_moves`/
-  `clips_move` konnten ein altes gegen ein neues Bild vergleichen und „bewegt sich“ melden.
-  **Entscheidung:** `picture` fragt zuerst den strom-Abgriff dahinter (Program: `tap_pgm`,
-  Input: `tap` des Slot-Flows) und holt das Bild erst, wenn der 200 sagt; 504 ist ein weiterer
-  Versuch, kein Fehler. Verworfen: im Test länger warten (prüft weiter alte Bilder) und den
-  Speicher von lmix-core ändern (Höchstalter, Branch `picture-age`, eigene Arbeit).
+  und will beide hell. Der Program-Abgriff war bis dahin über 10 s unbenutzt und abgehängt; der
+  erste Abruf hängt ihn an (seit strom #66 504 bis zum nächsten Bild), und lmix-core gab bis
+  #238 sein letztes Program-Bild aus, das vom Quellentausch eine Minute vorher (Ball, hell).
+  Lokal nachgewiesen: das erste `hold.jpg` war byte-gleich mit `b.jpg` aus `moving_bright`; die
+  erste Hälfte der Prüfung war wertlos. Seit #238 („Bilder der API ohne eigenen Speicher“)
+  antwortet lmix-core dann 503, `picture` versucht es weiter und bekommt das erste frische Bild.
+  **Entscheidung:** am Test nichts ändern. Verworfen: im Test erst den strom-Abgriff fragen
+  (erster Stand dieses Branches; doppelt zu #238) und länger warten (prüft nichts Neues).
 - **Warum das Video in CI Sekunden hinter der Uhr lag:** Lokal nachgestellt mit dem ganzen
   VM-Test auf `taskset -c 0` (3 von 3 rot) bzw. `0,1` (2 von 6 rot), der Rechner daneben mit
-  anderen Builds belegt; mit aktuellem strom, auch mit frischen Bildern. Program zeigt dann bis
-  20 s lang dasselbe Bild aus Clip a. Ohne `taskset` läuft der ganze Test mit der Änderung grün.
-  Grund laut `videoaggregator:5`/`aggregator:6`: der CPU-Mischer schafft keine 30 Bilder/s mehr,
-  und der Live-Compositor rechnet trotzdem jedes Ausgabebild; wartet er nicht auf die Uhr („all
-  pads have data“), läuft seine Ausgabe immer weiter hinter ihr her (0,2–0,55 s je Sekunde, bis
-  62 s; auf `0-3` in einem grünen Lauf 0 s). Nichts meldet ihm die Verspätung (die Senken in
-  strom verwerfen QoS), also überspringt er keine Bilder; er holt nur auf, wenn die CPU wieder
-  Luft hat (62 → 28 s). Alle Quellen stempeln mit der Uhr, ihre Bilder liegen für den Mischer
-  dann so weit in der Zukunft, und das Pad hält bis dahin sein altes Bild (Log: „Keeping buffer
-  until …“, 27 s voraus). Das erklärt wohl auch die „bis 6 s“ in CI (dort ohne Log nicht
-  nachgewiesen), ist aber Überlast, kein Fehler im Test oder in lmix-core. Ob strom den Mischer
-  bei Verspätung Bilder auslassen lässt (eigene QoS am Compositor), ist eine Entscheidung für
-  upstream (todo).
+  anderen Builds belegt; mit aktuellem strom und nur frischen Bildern (erster Stand dieses
+  Branches). Program zeigt dann bis 20 s lang dasselbe Bild aus Clip a. Ohne `taskset` läuft der
+  ganze Test grün. Grund laut `videoaggregator:5`/`aggregator:6`: der CPU-Mischer schafft keine
+  30 Bilder/s mehr, und der Live-Compositor rechnet trotzdem jedes Ausgabebild; wartet er nicht
+  auf die Uhr („all pads have data“), läuft seine Ausgabe immer weiter hinter ihr her (0,2–0,55
+  s je Sekunde, bis 62 s; auf `0-3` in einem grünen Lauf 0 s). Nichts meldet ihm die Verspätung
+  (die Senken in strom verwerfen QoS), also überspringt er keine Bilder; er holt nur auf, wenn
+  die CPU wieder Luft hat (62 → 28 s). Alle Quellen stempeln mit der Uhr, ihre Bilder liegen für
+  den Mischer dann so weit in der Zukunft, und das Pad hält bis dahin sein altes Bild (Log:
+  „Keeping buffer until …“, 27 s voraus). Das erklärt wohl auch die „bis 6 s“ in CI (dort ohne
+  Log nicht nachgewiesen), ist aber Überlast, kein Fehler im Test oder in lmix-core. Ob strom
+  den Mischer bei Verspätung Bilder auslassen lässt (eigene QoS am Compositor), ist eine
+  Entscheidung für upstream (todo).
