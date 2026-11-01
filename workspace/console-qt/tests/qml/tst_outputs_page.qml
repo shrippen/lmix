@@ -1,5 +1,6 @@
 import QtQuick
 import QtTest
+import Kante
 import "../../qml"
 
 /**
@@ -60,6 +61,7 @@ TestCase {
 
     function init() {
         sent = []
+        fakeShell.backend.links = ""
         outputs[1].status = { state: "stopped" }
         fakeShell.show = { outputs: outputs.slice(), buses: [] }
     }
@@ -119,6 +121,41 @@ TestCase {
             return labels.some(l => /^\u22120:0[67]$/.test(l.text))
         })
     }
+    // STR.7: an encoded output's load in the detail, marked while it
+    // falls behind (buffer half full or the encoder near real time).
+    function test_the_load_shows_and_warns() {
+        const page = createTemporaryObject(pageComponent, test.parent)
+        const load = findChild(page, "loadDetail")
+        page.selectedId = "o3"
+        verify(!load.visible, "nothing measured")
+        const links = (l) => JSON.stringify({ o3: { output: "o3", kbps: 5000, load: l } })
+        fakeShell.backend.links = links({ buffer_ms: 33, buffer_max_ms: 500, frames_dropped: 2,
+            encode_ms: 8.5, encoder_percent: 24 })
+        verify(load.visible)
+        compare(load.value, Texts.loadDetail({ buffer_ms: 33, buffer_max_ms: 500, frames_dropped: 2,
+            encode_ms: 8.5, encoder_percent: 24 }))
+        verify(load.value.indexOf("frames dropped 2") >= 0, load.value)
+        compare(load.valueColor, KanteStyle.textColor)
+        fakeShell.backend.links = links({ buffer_ms: 300, buffer_max_ms: 500, frames_dropped: 2,
+            encode_ms: null, encoder_percent: null })
+        compare(load.valueColor, KanteStyle.warningColor)
+        verify(load.value.endsWith("encoder –"), load.value)
+        fakeShell.backend.links = links({ buffer_ms: 0, buffer_max_ms: 500, frames_dropped: 0,
+            encode_ms: 30, encoder_percent: 95 })
+        compare(load.valueColor, KanteStyle.warningColor)
+        // A GPU encoder's 140 % is latency, it keeps up: no warning.
+        fakeShell.backend.links = links({ buffer_ms: 0, buffer_max_ms: 500, frames_dropped: 0,
+            encode_ms: 46, encoder_percent: 140, hardware_encoder: true })
+        compare(load.valueColor, KanteStyle.textColor)
+        verify(load.value.endsWith("encoder " + Texts.encoderLoad({ encode_ms: 46, encoder_percent: 140,
+            hardware_encoder: true })), load.value)
+        verify(load.value.indexOf("%") < 0, "no busy share for a GPU encoder: " + load.value)
+        // No buffer limit is no warning.
+        fakeShell.backend.links = links({ buffer_ms: 40, buffer_max_ms: 0, frames_dropped: 0,
+            encode_ms: 2, encoder_percent: 6 })
+        compare(load.valueColor, KanteStyle.textColor)
+    }
+
     function collect(item, name, into) {
         for (const child of item.children || []) {
             if (child.objectName === name)

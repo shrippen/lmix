@@ -73,6 +73,7 @@ Abgleich mit upstream: `git fetch https://github.com/Eyevinn/strom main` und
 | DeckLink-Karten als Videoquellen auflisten | #49 | PR | offen |
 | Audiomischer: Kanäle im Lauf hinzufügen und entfernen; Bildmischer ab einem Eingang mit freien Plätzen, Kachelbild für einen Teil der Eingänge | #56, #57 | Issue | offen; mit #41, #43 zusammen vorschlagen |
 | Byte-Zähler der Ausgänge (`/flows/{id}/output-bytes`: RTMP, Live Recorder) | #54 | PR | offen; passt ohne Konflikt auf upstream `main` |
+| Block-Statistik: Warteschlange des Inter Input (wartend, verworfen) und Encoder-Zeit des Video Encoder (`/flows/{id}/rtp-stats`) | #61, #64 | Issue | offen; Branch `lmix-output-load` auf upstream `main` (b66588b), gleicher Patch auf `dev` |
 
 ## Von upstream übernommen (nichts zu tun)
 
