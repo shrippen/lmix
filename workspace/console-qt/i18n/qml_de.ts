@@ -7483,7 +7483,7 @@
   <context>
     <name>Texts</name>
     <message>
-      <location filename="../qml/Texts.qml" line="+41" />
+      <location filename="../qml/Texts.qml" line="+54" />
       <source>Test pattern</source>
       <translation>Testbild</translation>
     </message>
