@@ -31,13 +31,30 @@ TestCase {
     property var saved: null
     property string organization: ""
 
+    /** Only in a settings folder of its own (scripts/test-qml.sh sets
+     *  XDG_CONFIG_HOME): never in the user's ~/.config. */
+    readonly property bool ownSettings: StandardPaths.writableLocation(StandardPaths.GenericConfigLocation).toString()
+        !== StandardPaths.writableLocation(StandardPaths.HomeLocation).toString() + "/.config"
+
+    function init() {
+        if (!ownSettings) {
+            skip("needs a settings folder of its own: run scripts/test-qml.sh")
+        }
+    }
+
     function initTestCase() {
+        if (!ownSettings) {
+            return
+        }
         organization = Qt.application.organization
         Qt.application.organization = "lmix-test"
         saved = savedComponent.createObject(test)
     }
 
     function cleanupTestCase() {
+        if (!saved) {
+            return
+        }
         saved.destroy()
         Qt.application.organization = organization
     }
@@ -65,6 +82,9 @@ TestCase {
     }
 
     function cleanup() {
+        if (!saved) {
+            return
+        }
         if (shell) {
             shell.quitting = true
             shell.close()

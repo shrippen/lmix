@@ -465,7 +465,8 @@ AppPage {
                     Monitor {
                         id: previewMonitor
                         objectName: "previewMonitor"
-                        anchors.horizontalCenter: parent.horizontalCenter
+                        // Centred on whole pixels: the guides' lines stay sharp.
+                        x: Math.round((parent.width - width) / 2)
                         label: qsTr("Preview")
                         detail: root.busLabel(root.show ? root.show.preview : null)
                         tally: KanteStyle.positiveTextColor
@@ -512,7 +513,8 @@ AppPage {
                     Monitor {
                         id: programMonitor
                         objectName: "programMonitor"
-                        anchors.horizontalCenter: parent.horizontalCenter
+                        // Centred on whole pixels: the guides' lines stay sharp.
+                        x: Math.round((parent.width - width) / 2)
                         label: qsTr("Program")
                         detail: root.busLabel(root.show ? root.show.program : null)
                         tally: KanteStyle.negativeTextColor

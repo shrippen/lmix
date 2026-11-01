@@ -157,6 +157,18 @@ TestCase {
         verify(guides.solidPoints[0].x > x)
     }
 
+    // Before Qt 6.11 a window has no devicePixelRatio in QML: the
+    // screen's counts, and nothing gives 0 (lines would vanish).
+    function test_the_pixel_ratio_never_fails() {
+        const guides = createTemporaryObject(guidesComponent, test.Window.contentItem, { frame: "80" })
+        compare(guides.pixelRatio(undefined, 1.5), 1.5)
+        compare(guides.pixelRatio(2, 1), 2)
+        compare(guides.pixelRatio(0, 0), 1)
+        compare(guides.pixelRatio(undefined, undefined), 1)
+        verify(guides.dpr > 0)
+        verify(isFinite(guides.solidPoints[0].x))
+    }
+
     function test_no_labels_on_a_small_picture() {
         const guides = createTemporaryObject(guidesComponent, test.Window.contentItem, { width: 100, height: 56.25, frame: "ebu" })
         compare(named(guides, "guideLabel").length, 0)

@@ -30,7 +30,9 @@ Item {
     property string crop: ""
     property bool thirds: false
 
-    readonly property real dpr: Window.window ? Window.window.devicePixelRatio : 1
+    /** Device pixels per item pixel: the window's (a QML property since
+     *  Qt 6.11), else the screen's; never 0, which would lose every line. */
+    readonly property real dpr: pixelRatio(Window.window ? Window.window.devicePixelRatio : undefined, Screen.devicePixelRatio)
     // Read again on a window resize too: it moves a centred monitor, and
     // the lines go on the window's pixel grid (crisp).
     readonly property var shapes: {
@@ -40,6 +42,14 @@ Item {
     readonly property bool shown: shapes.frames.length > 0 || shapes.crop !== null || shapes.lines.length > 0
     /** Frame labels only where there is room for them. */
     readonly property bool labelled: shapes.area !== null && shapes.area.width >= Kirigami.Units.gridUnit * 8
+
+    /** The first of `fromWindow`, `fromScreen` above 0, else 1. Pure, for the tests. */
+    function pixelRatio(fromWindow, fromScreen) {
+        if (fromWindow > 0) {
+            return fromWindow
+        }
+        return fromScreen > 0 ? fromScreen : 1
+    }
 
     /** Width over height of a crop name, 0 for none. */
     function cropAspect(name) {

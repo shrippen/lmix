@@ -7403,7 +7403,8 @@ Linien in `stageTextColor`, der Kante-Farbe für Marken auf dem Bühnengrund
 (kein eigenes Token), mit einem Schatten in `stageColor` einen Pixel
 versetzt, damit sie auch auf hellem Bild sichtbar bleiben; 1 Gerätepixel
 breit, auf das Pixelraster des Fensters gelegt (auch bei gebrochener
-Skalierung und halb versetzten Monitoren). Die Elemente stehen fest, eine
+Skalierung; die Monitore stehen auf ganzen Pixeln). Das Pixelverhältnis
+kommt vom Fenster, vor Qt 6.11 (dort fehlt es in QML) vom Bildschirm. Die Elemente stehen fest, eine
 Größenänderung verschiebt nur ihre Punkte. Der kleine Programm-Monitor
 in der Leiste anderer Seiten und die Input-Kacheln bekommen keine Linien:
 zu klein, um daran etwas auszurichten.
