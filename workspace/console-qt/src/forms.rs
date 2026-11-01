@@ -98,6 +98,12 @@ pub fn values(list: &str) -> Option<String> {
                     .to_string(),
             )
         }
+        // How long a mood's, layer's or collection's name is (MOOD.12).
+        "mood_limits" => {
+            return Some(
+                serde_json::json!({ "name_max": lmix_types::mood::MOOD_NAME_MAX }).to_string(),
+            )
+        }
         // The range of a zone's volume (SUI.8).
         "level_limits" => {
             return Some(
@@ -1132,6 +1138,9 @@ mod tests {
             serde_json::from_str(&values("bus_limits").unwrap()).unwrap();
         assert_eq!(limits["buses"], lmix_types::BUSES);
         assert_eq!(limits["name_max"], lmix_types::bus::BUS_NAME_MAX);
+        let limits: serde_json::Value =
+            serde_json::from_str(&values("mood_limits").unwrap()).unwrap();
+        assert_eq!(limits["name_max"], lmix_types::mood::MOOD_NAME_MAX);
         assert_eq!(values("nope"), None);
     }
 

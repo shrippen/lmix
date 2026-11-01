@@ -1482,4 +1482,5 @@ DE = {
     'Show on': 'Zeigen auf',
     'Show guides on': 'Hilfslinien zeigen auf',
     ('%1 %', 'a safe-area frame: its share of the picture'): '%1 %',
+    'Messages': 'Meldungen',
 }

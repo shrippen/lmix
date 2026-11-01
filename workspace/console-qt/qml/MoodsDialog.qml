@@ -27,7 +27,7 @@ KanteDialog {
     required property var act
     /** The show (state): moods, stages, inputs, outputs. */
     required property var show
-    /** The core, for the colour names. */
+    /** The core, for the colour names and how long a name is. */
     required property var core
     /** Asks a removal and sends it (AppShell.askRemoveWith). */
     required property var askRemove
@@ -48,6 +48,8 @@ KanteDialog {
     readonly property var groups: moods.groups || []
     readonly property var collections: moods.collections || []
     readonly property var stages: show && show.stages ? show.stages.map(s => s.name) : []
+    /** The longest name lmix-core takes (MOOD_NAME_MAX); 0 without a core. */
+    readonly property int nameMax: core ? JSON.parse(core.choices("mood_limits")).name_max || 0 : 0
 
     /** Groups and variants in order: [{ id, group, variant }]. */
     readonly property var places: {
@@ -283,8 +285,15 @@ KanteDialog {
         id: nameEdit
         /** The name kept now. */
         property string kept
+        /** The longest name to type; 0: Qt's own limit. */
+        property int limit: 0
         signal renamed(string name)
         text: kept
+        // Cut while typing: lmix-core would refuse a longer name.
+        Binding on maximumLength {
+            when: nameEdit.limit > 0
+            value: nameEdit.limit
+        }
         onEditingFinished: {
             const name = text.trim()
             if (name !== "" && name !== kept) {
@@ -334,6 +343,8 @@ KanteDialog {
         and the row it would go to (a place by id, else an index). */
     property string dragList: ""
     property var dropAt: null
+    /** Where the pointer of that drag is, in the window. */
+    property point dragPoint
     /** The row of `repeater` under the pointer at `scenePosition`, or -1. */
     function rowUnder(repeater, scenePosition) {
         for (let i = 0; i < repeater.count; i++) {
@@ -380,6 +391,25 @@ KanteDialog {
         if (at >= 0 && at !== index) {
             edit(copy => move(copy[key], index, at - index))
         }
+    }
+
+    // A drag held at the edge of the layers or collections scrolls them;
+    // the row it would go to follows the rows moving under the pointer.
+    // Not the places: their ListView drops a delegate scrolled far out of
+    // sight, and the drag with it.
+    DragScroll {
+        objectName: "layersScroll"
+        flickable: layersView.contentItem
+        dragging: dialog.dragList === "layers"
+        scenePosition: dialog.dragPoint
+        onScrolled: dialog.dropAt = dialog.rowUnder(layerRows, dialog.dragPoint)
+    }
+    DragScroll {
+        objectName: "collectionsScroll"
+        flickable: collectionsView.contentItem
+        dragging: dialog.dragList === "collections"
+        scenePosition: dialog.dragPoint
+        onScrolled: dialog.dropAt = dialog.rowUnder(collectionRows, dialog.dragPoint)
     }
 
     /** The layer whose sound or picture the level dialog edits. */
@@ -733,6 +763,7 @@ KanteDialog {
                             id: nameField
                             objectName: "moodName"
                             Layout.fillWidth: true
+                            limit: dialog.nameMax
                             kept: dialog.chosen ? (dialog.chosen.variant ? dialog.chosen.variant.name : dialog.chosen.group.name) : ""
                             onRenamed: name => {
                                 const place = dialog.chosen
@@ -955,6 +986,7 @@ KanteDialog {
                                     over: dialog.dragList === "layers" && dialog.dropAt === layerRow.index
                                     onMoved: position => {
                                         dialog.dragList = "layers"
+                                        dialog.dragPoint = position
                                         dialog.dropAt = dialog.rowUnder(layerRows, position)
                                     }
                                     onDropped: position => dialog.dropRow("layers", layerRow.index, dialog.rowUnder(layerRows, position))
@@ -964,6 +996,7 @@ KanteDialog {
                                     id: layerName
                                     objectName: "layerName:" + layerRow.index
                                     Layout.fillWidth: true
+                                    limit: dialog.nameMax
                                     kept: layerRow.modelData.name
                                     Accessible.name: qsTr("Name of the layer")
                                     onRenamed: name => dialog.edit(copy => copy.layers[layerRow.index].name = name)
@@ -1075,6 +1108,7 @@ KanteDialog {
                                     over: dialog.dragList === "collections" && dialog.dropAt === collectionRow.index
                                     onMoved: position => {
                                         dialog.dragList = "collections"
+                                        dialog.dragPoint = position
                                         dialog.dropAt = dialog.rowUnder(collectionRows, position)
                                     }
                                     onDropped: position => dialog.dropRow("collections", collectionRow.index, dialog.rowUnder(collectionRows, position))
@@ -1083,6 +1117,7 @@ KanteDialog {
                                 NameField {
                                     objectName: "collectionName:" + collectionRow.index
                                     Layout.fillWidth: true
+                                    limit: dialog.nameMax
                                     kept: collectionRow.modelData.name
                                     Accessible.name: qsTr("Name of the collection")
                                     onRenamed: name => dialog.edit(copy => copy.collections[collectionRow.index].name = name)

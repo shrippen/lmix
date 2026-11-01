@@ -3292,7 +3292,12 @@
   <context>
     <name>MessageToasts</name>
     <message>
-      <location filename="../qml/MessageToasts.qml" line="+160" />
+      <location filename="../qml/MessageToasts.qml" line="+152" />
+      <source>Messages</source>
+      <translation>Meldungen</translation>
+    </message>
+    <message>
+      <location line="+23" />
       <source>Close</source>
       <translation>Schließen</translation>
     </message>
@@ -3403,12 +3408,12 @@
       <translation>Einige Sekunden lang Aufnahme bis Programm messen</translation>
     </message>
     <message>
-      <location line="+51" />
+      <location line="+52" />
       <source>Preview</source>
       <translation>Vorschau</translation>
     </message>
     <message>
-      <location line="+47" />
+      <location line="+48" />
       <source>Program</source>
       <translation>Programm</translation>
     </message>
@@ -3479,7 +3484,7 @@
       <translation>Ansicht</translation>
     </message>
     <message>
-      <location line="-512" />
+      <location line="-514" />
       <source>FTB</source>
       <comment>fade to black</comment>
       <translation>FTB</translation>
@@ -3495,7 +3500,7 @@
       <translation>Schwarzblende: Programm auf Schwarz und zurück (SWI.9); Show und Ausgänge laufen weiter</translation>
     </message>
     <message>
-      <location line="+560" />
+      <location line="+562" />
       <source>Multiview</source>
       <translation>Multiview</translation>
     </message>
@@ -3634,18 +3639,18 @@
   <context>
     <name>MoodsDialog</name>
     <message>
-      <location filename="../qml/MoodsDialog.qml" line="+535" />
+      <location filename="../qml/MoodsDialog.qml" line="+565" />
       <source>Moods</source>
       <translation>Stimmungen</translation>
     </message>
     <message>
-      <location line="-332" />
-      <location line="+971" />
+      <location line="-360" />
+      <location line="+1004" />
       <source>Off</source>
       <translation>Aus</translation>
     </message>
     <message>
-      <location line="-971" />
+      <location line="-1004" />
       <source>Sound</source>
       <translation>Ton</translation>
     </message>
@@ -3656,28 +3661,28 @@
     </message>
     <message>
       <location line="+2" />
-      <location line="+966" />
+      <location line="+999" />
       <source>Actions</source>
       <translation>Aktionen</translation>
     </message>
     <message>
-      <location line="-965" />
+      <location line="-998" />
       <source>From the base</source>
       <translation>Aus der Basis</translation>
     </message>
     <message>
-      <location line="+304" />
+      <location line="+332" />
       <source>Actions of the layer</source>
       <translation>Aktionen der Ebene</translation>
     </message>
     <message>
       <location line="+22" />
-      <location line="+367" />
+      <location line="+368" />
       <source>Layers</source>
       <translation>Ebenen</translation>
     </message>
     <message>
-      <location line="-367" />
+      <location line="-368" />
       <source>Collections</source>
       <translation>Sammlungen</translation>
     </message>
@@ -3708,27 +3713,27 @@
     </message>
     <message>
       <location line="+16" />
-      <location line="+345" />
-      <location line="+101" />
+      <location line="+348" />
+      <location line="+103" />
       <source>Up</source>
       <translation>Hoch</translation>
     </message>
     <message>
-      <location line="-426" />
-      <location line="+334" />
-      <location line="+101" />
+      <location line="-431" />
+      <location line="+337" />
+      <location line="+103" />
       <source>Down</source>
       <translation>Runter</translation>
     </message>
     <message>
-      <location line="-415" />
-      <location line="+323" />
-      <location line="+101" />
+      <location line="-420" />
+      <location line="+326" />
+      <location line="+103" />
       <source>Remove</source>
       <translation>Entfernen</translation>
     </message>
     <message>
-      <location line="-412" />
+      <location line="-417" />
       <source>Collections forget it; mood cues that set it are marked.</source>
       <translation>Sammlungen vergessen sie; Stimmungs-Cues, die sie setzen, werden markiert.</translation>
     </message>
@@ -3743,7 +3748,7 @@
       <translation>Gruppe entfernen</translation>
     </message>
     <message>
-      <location line="+317" />
+      <location line="+320" />
       <source>Every mood and the panic mood forget what they had on it; cues that take it are marked.</source>
       <translation>Jede Stimmung und die Panik-Stimmung vergessen, was sie darauf hatten; Cues, die sie übernehmen, werden markiert.</translation>
     </message>
@@ -3753,22 +3758,22 @@
       <translation>Ebene entfernen</translation>
     </message>
     <message>
-      <location line="-292" />
+      <location line="-295" />
       <source>Add layers first (Layers tab): what a mood sets, e.g. light, music, ambience.</source>
       <translation>Zuerst Ebenen anlegen (Reiter Ebenen): was eine Stimmung setzt, z. B. Licht, Musik, Atmo.</translation>
     </message>
     <message>
-      <location line="-408" />
+      <location line="-429" />
       <source>Drag to move</source>
       <translation>Zum Verschieben ziehen</translation>
     </message>
     <message>
-      <location line="-198" />
+      <location line="-205" />
       <source>Edit moods</source>
       <translation>Stimmungen bearbeiten</translation>
     </message>
     <message>
-      <location line="+295" />
+      <location line="+323" />
       <source>Layer %1</source>
       <translation>Ebene %1</translation>
     </message>
@@ -3814,20 +3819,20 @@
     </message>
     <message>
       <location line="+149" />
-      <location line="+345" />
-      <location line="+101" />
+      <location line="+348" />
+      <location line="+103" />
       <source>Move up</source>
       <translation>Nach oben</translation>
     </message>
     <message>
-      <location line="-426" />
-      <location line="+334" />
-      <location line="+101" />
+      <location line="-431" />
+      <location line="+337" />
+      <location line="+103" />
       <source>Move down</source>
       <translation>Nach unten</translation>
     </message>
     <message>
-      <location line="-409" />
+      <location line="-414" />
       <source>Remove variant “%1”?</source>
       <translation>Variante „%1“ entfernen?</translation>
     </message>
@@ -3858,7 +3863,7 @@
     </message>
     <message>
       <location line="+5" />
-      <location line="+181" />
+      <location line="+182" />
       <source>Name</source>
       <translation>Name</translation>
     </message>
@@ -3894,7 +3899,7 @@
       <translation>Klangdateien (*.wav *.flac *.ogg *.opus *.mp3 *.aif *.aiff *.m4a)</translation>
     </message>
     <message>
-      <location line="+228" />
+      <location line="+232" />
       <source>Name of the collection</source>
       <translation>Name der Sammlung</translation>
     </message>
@@ -3909,7 +3914,7 @@
       <translation>Sammlung „%1“ entfernt</translation>
     </message>
     <message>
-      <location line="-305" />
+      <location line="-309" />
       <source>Stage of the picture</source>
       <translation>Bühne des Bildes</translation>
     </message>
@@ -3935,12 +3940,12 @@
     </message>
     <message>
       <location line="+5" />
-      <location line="+346" />
+      <location line="+350" />
       <source>Actions: %1…</source>
       <translation>Aktionen: %1…</translation>
     </message>
     <message>
-      <location line="-308" />
+      <location line="-312" />
       <source>Change time</source>
       <translation>Wechselzeit</translation>
     </message>
@@ -3965,7 +3970,7 @@
       <translation>Eigene Blende</translation>
     </message>
     <message>
-      <location line="+47" />
+      <location line="+49" />
       <source>Name of the layer</source>
       <translation>Name der Ebene</translation>
     </message>
@@ -3975,8 +3980,8 @@
       <translation>Blende der Ebene</translation>
     </message>
     <message>
-      <location line="-54" />
-      <location line="+56" />
+      <location line="-56" />
+      <location line="+58" />
       <source>The layer's own fade; empty: the change time</source>
       <translation>Die eigene Blende der Ebene; leer: die Wechselzeit</translation>
     </message>
@@ -3996,8 +4001,8 @@
       <translation>+ Ebene</translation>
     </message>
     <message>
-      <location line="-566" />
-      <location line="+567" />
+      <location line="-569" />
+      <location line="+570" />
       <source>Layer</source>
       <translation>Ebene</translation>
     </message>
@@ -4007,7 +4012,7 @@
       <translation>Was eine Sammlung enthält, wird auf der Seite Stimmungen zusammengestellt (Zusammenstellen).</translation>
     </message>
     <message>
-      <location line="+67" />
+      <location line="+69" />
       <source>Its moods and one-shots stay.</source>
       <translation>Ihre Stimmungen und Oneshots bleiben.</translation>
     </message>
@@ -5489,7 +5494,7 @@
   <context>
     <name>SafeAreaGuides</name>
     <message>
-      <location filename="../qml/SafeAreaGuides.qml" line="+136" />
+      <location filename="../qml/SafeAreaGuides.qml" line="+146" />
       <source>Guides</source>
       <translation>Hilfslinien</translation>
     </message>

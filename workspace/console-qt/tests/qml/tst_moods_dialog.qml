@@ -87,7 +87,8 @@ TestCase {
     QtObject {
         id: fakeCore
         signal answered(string action, string refusal)
-        function choices(what) { return "[]" }
+        /** Like the Console's: names as long as lmix-core takes (MOOD_NAME_MAX). */
+        function choices(what) { return what === "mood_limits" ? JSON.stringify({ name_max: 64 }) : "[]" }
         /** Like lmix-core's types reading and writing an action: keys in a
             fixed order, empty fields and the default `repeat: "once"` left
             out; "" for no action. */
@@ -150,6 +151,27 @@ TestCase {
         const want = JSON.parse(JSON.stringify(test.moods))
         want.groups[0].name = "Inn"
         compare(sent(), want)
+    }
+
+    // Names no longer than lmix-core takes: a longer one is cut while
+    // typing, not refused after sending.
+    function test_names_keep_to_the_length_the_core_takes() {
+        const d = createTemporaryObject(answeredComponent, test)
+        d.open()
+        d.chosenId = "g-tavern"
+        const fields = [findChild(d.contentItem, "moodName")]
+        d.tab = 1
+        waitForRendering(d.contentItem)
+        fields.push(findChild(d.contentItem, "layerName:0"))
+        d.tab = 2
+        waitForRendering(d.contentItem)
+        fields.push(findChild(d.contentItem, "collectionName:0"))
+        for (const field of fields) {
+            verify(field !== null)
+            compare(field.maximumLength, 64, field.objectName)
+            field.text = "M".repeat(70)
+            compare(field.text.length, 64, field.objectName)
+        }
     }
 
     function test_a_variant_takes_the_base_again() {
@@ -563,6 +585,38 @@ TestCase {
         const panic = findChild(d.contentItem, "panicView")
         verify(panic.contentHeight > panic.height)
         verify(inside(d, panic))
+    }
+
+    // A drag held at the edge of a list that scrolls scrolls it: the last
+    // of 16 layers goes to the top in one go; the row it would go to
+    // follows the list, though the pointer stays.
+    function test_a_drag_at_the_edge_scrolls_the_list() {
+        show = Object.assign({}, show, { moods: manyLayers(16) })
+        const d = dialog()
+        d.tab = 1
+        waitForRendering(d.contentItem)
+        const view = findChild(d.contentItem, "layersView")
+        const flick = view.contentItem
+        flick.contentY = flick.contentHeight - flick.height
+        waitForRendering(d.contentItem)
+        const grip = findChild(d.contentItem, "layerGrip:15")
+        const from = grip.mapToItem(null, grip.width / 2, grip.height / 2)
+        // Just inside the list's top edge.
+        const top = view.mapToItem(null, 0, 2).y
+        const root = test.Window.contentItem
+        mousePress(root, from.x, from.y)
+        for (let step = 1; step <= 10; step++) {
+            mouseMove(root, from.x, from.y + (top - from.y) * step / 10, -1, Qt.LeftButton)
+        }
+        const scroll = findChild(d, "layersScroll")
+        verify(scroll.running, "scrolls while held at the edge")
+        tryVerify(() => flick.contentY <= flick.originY, 5000, "scrolled to the top: " + flick.contentY)
+        tryCompare(d, "dropAt", 0)
+        // At the top it stops, though the pointer stays.
+        verify(!scroll.running)
+        mouseRelease(root, from.x, top)
+        compare(show.moods.layers[0].name, "Layer 15")
+        compare(d.dragList, "")
     }
 
     // In a small window the dialog stays inside it; the tabs scroll.
