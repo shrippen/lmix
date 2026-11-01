@@ -161,4 +161,22 @@ TestCase {
         keyClick(Qt.Key_Space)
         tryCompare(shownToasts(toasts), "length", 0)
     }
+
+    // Over a modal dialog the toasts' layer is a popup that stays open: to
+    // a screen reader it is a named pane, not a nameless dialog; each
+    // toast in it is an alert with its text.
+    function test_the_layer_reads_as_a_pane_of_messages() {
+        var toasts = createTemporaryObject(toastsComponent, test.Window.contentItem)
+        var layer = findChild(toasts, "toastLayer")
+        verify(layer !== null)
+        // What a screen reader sees: the popup's own item.
+        var item = layer.contentItem.parent
+        compare(item.Accessible.role, Accessible.Pane)
+        compare(item.Accessible.name, "Messages")
+        fakeCore.answered("{}", refusal("Show is locked"))
+        tryCompare(shownToasts(toasts), "length", 1)
+        var toast = shownToasts(toasts)[0]
+        compare(toast.Accessible.role, Accessible.AlertMessage)
+        compare(toast.Accessible.name, "Show is locked")
+    }
 }

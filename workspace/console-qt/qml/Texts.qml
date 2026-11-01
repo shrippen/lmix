@@ -7,6 +7,14 @@ import QtQuick
  * (i18n/qml_<lang>.ts); Rust passes values and numbers only.
  */
 QtObject {
+    /** `text` without a lone first half of a character at its end: what a
+     *  field's maximumLength leaves when it cuts between the two UTF-16
+     *  units of an emoji (it would come out as "\uFFFD"). */
+    function whole(text) {
+        const last = text.charCodeAt(text.length - 1)
+        return last >= 0xD800 && last <= 0xDBFF ? text.slice(0, -1) : text
+    }
+
     /** Text of one value of a form list (Core.choices). */
     function label(list, value) {
         switch (list) {
