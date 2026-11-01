@@ -28,8 +28,9 @@ KanteDialog {
     standardButtons: QQC2.Dialog.Ok | QQC2.Dialog.Cancel
     acceptText: qsTr("Apply")
     // KanteDialog has a child of its own (KanteScope), so the popup does not
-    // size itself to this one.
-    contentHeight: column.implicitHeight
+    // size itself to this one. Up to sixteen action rows do not fit every
+    // window: taller, the rows scroll.
+    contentHeight: Math.min(column.implicitHeight, kanteRoomHeight * 0.7)
 
     onOpened: {
         labelField.text = label
@@ -40,23 +41,30 @@ KanteDialog {
 
     onAccepted: done(labelField.text.trim(), rows.collect())
 
-    ColumnLayout {
-        id: column
-        width: parent.width
-        spacing: Kirigami.Units.smallSpacing
+    QQC2.ScrollView {
+        id: scroll
+        objectName: "actionScroll"
+        anchors.fill: parent
+        contentWidth: availableWidth
 
-        KanteTextField {
-            id: labelField
-            Layout.fillWidth: true
-            visible: dialog.labelled
-            placeholderText: qsTr("Label")
-        }
+        ColumnLayout {
+            id: column
+            width: scroll.availableWidth
+            spacing: Kirigami.Units.smallSpacing
 
-        ActionRows {
-            id: rows
-            Layout.fillWidth: true
-            inputs: dialog.inputs
-            outputs: dialog.outputs
+            KanteTextField {
+                id: labelField
+                Layout.fillWidth: true
+                visible: dialog.labelled
+                placeholderText: qsTr("Label")
+            }
+
+            ActionRows {
+                id: rows
+                Layout.fillWidth: true
+                inputs: dialog.inputs
+                outputs: dialog.outputs
+            }
         }
     }
 }

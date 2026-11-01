@@ -6556,3 +6556,53 @@ Ende des Dienstes (wenige Ziele, kein Aufwand).
 und `a_mood_cue_waiting_for_the_lock_starts_nothing_after_a_panic` (beide
 schlagen ohne die Prüfung fehl), `a_dropped_hold_preloads_what_waited`,
 `moods::tests::a_new_show_counts_media_ids_on`.
+
+## 2026-11-01 — Stimmungen: Bedienung nachgebessert (MOOD Stufe 6b)
+
+**Anlass**: Offene Punkte aus den Reviews von „Stimmungen bearbeiten“ und
+„Nacharbeiten am Bearbeiten“ (Stufe 5a): In der Liste der Gruppen und
+Varianten sortierte Ziehen über die ganze Zeile um, statt zu scrollen; auf
+Touch blieb nur die Bildlaufleiste. Mit 16 Aktionszeilen wurden der Dialog
+der Aktionsliste und der Kurzbefehl-Dialog höher als das Fenster. Der
+Entwurf zählte jede `set_moods`-Antwort der Console, auch fremde, und
+konnte zu früh enden. Ein abgebrochenes Ziehen galt als Ablegen.
+
+**Entscheidung**:
+- Gruppen und Varianten zieht man am Griff ⠿ wie Ebenen und Sammlungen;
+  der Rest der Zeile gehört der Liste zum Scrollen. Den Griff übernimmt
+  die Liste nicht (`grabPermissions`), ein begonnenes Umsortieren bleibt
+  eins.
+- Ziehen legt nur ab, wenn der Zeiger losgelassen wird (`DropDrag`: die
+  Freigabe kommt mit dem losgelassenen Punkt). Nimmt etwas anderes das
+  Ziehen weg (ein anderes Fenster, eine Liste), endet es ohne Ablegen.
+  Gilt für die Griffe im Stimmungen-Dialog und das Ziehen einer Stimmung
+  in die Cue-Liste.
+- Aktionsliste und Kurzbefehl: der Inhalt scrollt, höchstens 70 % der
+  Fensterhöhe (wie die Einstellungen eines Inputs).
+- Der Entwurf zählt nur seine eigenen Antworten, und zwar kanonisch
+  verglichen: Beim Senden lässt der Dialog die `set_moods`-Aktion von der
+  Bridge lesen und neu schreiben (`core.canonicalAction`, dieselbe
+  Serialisierung wie im Signal `answered`) und merkt sich diesen Text;
+  eine Antwort gehört ihm, wenn sie gleich lautet. Ein toleranter
+  Vergleich gegen das Gesendete reichte nicht, weil lmix-types beim
+  Schreiben auch nicht leere Werte weglässt (`repeat: "once"`,
+  `false`-Felder, unbekannte Felder einer JSON-Aktion) und f32-Werte rundet;
+  dann endete der Entwurf nie und spätere Bearbeitungen überschrieben
+  fremde Änderungen (etwa ein Rückgängig). Fremde Antworten und fremde
+  Ablehnungen lassen ihn stehen. Eine Aktion, die die Bridge nicht lesen
+  kann (leere kanonische Form, `act` gibt false), wartet auf keine
+  Antwort; `AppShell.act` gibt dafür das Ergebnis von `backend.act` zurück.
+- `DropDrag` meldet `ended` genau einmal je Ziehen, nach `dropped`, wenn
+  abgelegt wird (Qt setzt `active` vor dem Wechsel des Grabs zurück). Baut
+  das Ablegen die Zeile neu, fällt ihr `ended` mit weg; die Ablege-
+  Funktionen räumen die Anzeige darum selbst ab.
+- Das Drehfeld „Ebene“ eines Bilds im Pegel-Dialog hat einen
+  `objectName` und einen Test.
+
+**Bricht**: nichts.
+
+**Geprüft**: `tst_moods_dialog.qml` (Umsortieren am Griff, Ziehen neben
+dem Griff bewegt nichts, weggenommenes Ziehen legt nicht ab, Deckkraft und
+Ebene eines Bilds, nur eigene Antworten beenden den Entwurf),
+`tst_action_rows.qml` (16 Zeilen scrollen in beiden Dialogen und bleiben
+im Fenster), `tst_show_moods.qml`; alle QML-Tests (254).

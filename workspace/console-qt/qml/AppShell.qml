@@ -164,9 +164,10 @@ Kirigami.ApplicationWindow {
     }
     readonly property var recent: backend.recent.length > 0 ? JSON.parse(backend.recent) : []
 
-    /** Send an lmix action (the API's JSON, as an object). */
+    /** Send an lmix action (the API's JSON, as an object); false when it
+        is no valid action. */
     function act(action) {
-        backend.act(JSON.stringify(action))
+        return backend.act(JSON.stringify(action))
     }
 
     function inputById(id) {

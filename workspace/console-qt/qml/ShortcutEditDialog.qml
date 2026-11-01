@@ -25,8 +25,9 @@ KanteDialog {
     standardButtons: QQC2.Dialog.Ok | QQC2.Dialog.Cancel
     acceptText: shortcut ? qsTr("Save shortcut") : qsTr("Add shortcut")
     // KanteDialog has a child of its own (KanteScope), so the popup does not
-    // size itself to this one.
-    contentHeight: column.implicitHeight
+    // size itself to this one. Up to sixteen action rows do not fit every
+    // window: taller, the rows scroll.
+    contentHeight: Math.min(column.implicitHeight, kanteRoomHeight * 0.7)
 
     onOpened: {
         label.text = shortcut ? shortcut.label : ""
@@ -48,79 +49,86 @@ KanteDialog {
             act({ action: "add_shortcut", shortcut: spec })
     }
 
-    ColumnLayout {
-        id: column
-        width: parent.width
-        spacing: Kirigami.Units.smallSpacing
+    QQC2.ScrollView {
+        id: scroll
+        objectName: "actionScroll"
+        anchors.fill: parent
+        contentWidth: availableWidth
 
-        RowLayout {
-            Layout.fillWidth: true
-            KanteTextField {
-                id: label
+        ColumnLayout {
+            id: column
+            width: scroll.availableWidth
+            spacing: Kirigami.Units.smallSpacing
+
+            RowLayout {
                 Layout.fillWidth: true
-                placeholderText: qsTr("Label")
-            }
-            // Press a key to set it; Escape clears.
-            KanteButton {
-                id: keyButton
-                property string sequence: ""
-                property bool listening: false
-                text: listening ? qsTr("Press a key…") : (sequence || qsTr("No key"))
-                onClicked: {
-                    listening = true
-                    forceActiveFocus()
+                KanteTextField {
+                    id: label
+                    Layout.fillWidth: true
+                    placeholderText: qsTr("Label")
                 }
-                onActiveFocusChanged: if (!activeFocus) listening = false
-                Keys.onPressed: event => {
-                    if (!listening)
-                        return
-                    event.accepted = true
-                    if (event.key === Qt.Key_Escape) {
-                        sequence = ""
-                        listening = false
-                        return
+                // Press a key to set it; Escape clears.
+                KanteButton {
+                    id: keyButton
+                    property string sequence: ""
+                    property bool listening: false
+                    text: listening ? qsTr("Press a key…") : (sequence || qsTr("No key"))
+                    onClicked: {
+                        listening = true
+                        forceActiveFocus()
                     }
-                    var modifier = [Qt.Key_Control, Qt.Key_Shift, Qt.Key_Alt, Qt.Key_Meta].indexOf(event.key) >= 0
-                    if (modifier)
-                        return
-                    var parts = []
-                    if (event.modifiers & Qt.ControlModifier) parts.push("Ctrl")
-                    if (event.modifiers & Qt.AltModifier) parts.push("Alt")
-                    if (event.modifiers & Qt.ShiftModifier) parts.push("Shift")
-                    var name = event.key >= Qt.Key_F1 && event.key <= Qt.Key_F35 ? "F" + (event.key - Qt.Key_F1 + 1)
-                        : event.key === Qt.Key_Space ? "Space"
-                        : event.key === Qt.Key_Return || event.key === Qt.Key_Enter ? "Return"
-                        : event.text.toUpperCase()
-                    if (!name)
-                        return
-                    parts.push(name)
-                    sequence = parts.join("+")
-                    listening = false
+                    onActiveFocusChanged: if (!activeFocus) listening = false
+                    Keys.onPressed: event => {
+                        if (!listening)
+                            return
+                        event.accepted = true
+                        if (event.key === Qt.Key_Escape) {
+                            sequence = ""
+                            listening = false
+                            return
+                        }
+                        var modifier = [Qt.Key_Control, Qt.Key_Shift, Qt.Key_Alt, Qt.Key_Meta].indexOf(event.key) >= 0
+                        if (modifier)
+                            return
+                        var parts = []
+                        if (event.modifiers & Qt.ControlModifier) parts.push("Ctrl")
+                        if (event.modifiers & Qt.AltModifier) parts.push("Alt")
+                        if (event.modifiers & Qt.ShiftModifier) parts.push("Shift")
+                        var name = event.key >= Qt.Key_F1 && event.key <= Qt.Key_F35 ? "F" + (event.key - Qt.Key_F1 + 1)
+                            : event.key === Qt.Key_Space ? "Space"
+                            : event.key === Qt.Key_Return || event.key === Qt.Key_Enter ? "Return"
+                            : event.text.toUpperCase()
+                        if (!name)
+                            return
+                        parts.push(name)
+                        sequence = parts.join("+")
+                        listening = false
+                    }
+                }
+                MidiLearnButton {
+                    id: midi
+                    core: dialog.core
+                }
+                QQC2.CheckBox {
+                    id: web
+                    text: qsTr("Web page")
+                    KanteCheckSkin { control: web }
+                }
+                QQC2.CheckBox {
+                    id: allShows
+                    text: qsTr("All shows")
+                    QQC2.ToolTip.visible: hovered
+                    QQC2.ToolTip.text: qsTr("Kept in lmix-core's settings and in every show; a shortcut of the show with the same key or MIDI note wins.")
+                    KanteCheckSkin { control: allShows }
                 }
             }
-            MidiLearnButton {
-                id: midi
-                core: dialog.core
-            }
-            QQC2.CheckBox {
-                id: web
-                text: qsTr("Web page")
-                KanteCheckSkin { control: web }
-            }
-            QQC2.CheckBox {
-                id: allShows
-                text: qsTr("All shows")
-                QQC2.ToolTip.visible: hovered
-                QQC2.ToolTip.text: qsTr("Kept in lmix-core's settings and in every show; a shortcut of the show with the same key or MIDI note wins.")
-                KanteCheckSkin { control: allShows }
-            }
-        }
 
-        ActionRows {
-            id: actions
-            Layout.fillWidth: true
-            inputs: dialog.inputs
-            outputs: dialog.outputs
+            ActionRows {
+                id: actions
+                Layout.fillWidth: true
+                inputs: dialog.inputs
+                outputs: dialog.outputs
+            }
         }
     }
 }
