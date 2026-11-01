@@ -202,10 +202,6 @@ pub fn tiles_grid() -> (usize, usize) {
 /// Outputs buffer a little more than the mixer: they are not on the
 /// switching path, an encoder hiccup must not drop frames.
 const OUTPUT_BUFFER_MS: &str = "500";
-/// Recording files: `<folder>/lmix-<output>_<date>_<time>_00001.mkv`, …
-/// The output's id in the name: two recordings into one folder that start
-/// in the same second (a restore) would otherwise write the same file.
-const RECORDING_PREFIX: &str = "lmix";
 /// Thumbnail tap in every slot flow: input bar pictures.
 pub const SLOT_TAP: &str = "tap";
 /// Subscriber buffer of a live picture: as short as the mixer's, it
@@ -756,11 +752,6 @@ fn pgm_channel(block: &str) -> String {
 
 /// File name prefix of output `id`'s recordings: `lmix-` and the first 8
 /// characters of its id (not its name), e.g. `lmix-3f2a9c1e`.
-fn recording_prefix(id: OutputId) -> String {
-    let id = id.to_string();
-    format!("{RECORDING_PREFIX}-{}", &id[..8])
-}
-
 /// Whether strom's GStreamer has a live MKV muxer (1.26 and later).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum LiveMkv {
@@ -944,10 +935,13 @@ pub fn output_flow(
             };
             let mut properties = vec![
                 ("container", PropertyValue::String(container.nick().into())),
-                ("output_dir", PropertyValue::String(folder.clone())),
+                (
+                    "output_dir",
+                    PropertyValue::String(lmix_types::engine_folder(folder)),
+                ),
                 (
                     "filename_prefix",
-                    PropertyValue::String(recording_prefix(id)),
+                    PropertyValue::String(super::marks::recording_prefix(id)),
                 ),
                 ("num_audio_tracks", PropertyValue::UInt(u64::from(sound))),
             ];
@@ -3235,7 +3229,7 @@ mod tests {
         );
         assert_ne!(prefix(&flow), prefix(&other));
         let id = OutputId::new();
-        let own = recording_prefix(id);
+        let own = crate::engine::marks::recording_prefix(id);
         assert_eq!(own, format!("lmix-{}", &id.to_string()[..8]));
         assert_eq!(own.len(), "lmix-".len() + 8);
     }

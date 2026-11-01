@@ -29,6 +29,11 @@ use std::collections::HashMap;
 
 use lmix_types::OutputId;
 
+/// Recording files: `<folder>/lmix-<output>_<date>_<time>_00001.mkv`, …
+/// The output's id in the name: two recordings into one folder that start
+/// in the same second (a restore) would otherwise write the same file.
+const RECORDING_PREFIX: &str = "lmix";
+
 /// First line of every protocol.
 pub const HEADER: &str = "time,recording,file,file_time,text\n";
 /// Ending of a protocol's file name.
@@ -133,7 +138,7 @@ impl Protocols {
     /// the names from `base` on (`numbered`): the guess was right.
     pub fn named_from(&self, mark: &RecordingMark, base: &str, names: u32) -> bool {
         self.run(mark)
-            .is_some_and(|p| (1..=names).any(|n| p.path == numbered(base, n)))
+            .is_some_and(|p| (1..=names).any(|n| same_path(&p.path, &numbered(base, n))))
     }
 
     /// The name of `mark`'s protocol is no guess any more.
@@ -192,17 +197,40 @@ impl Protocols {
     }
 }
 
+/// File name prefix of output `id`'s recording, as its flow gives it to
+/// the recorder: `lmix-3f2a9c1e`.
+pub fn recording_prefix(id: OutputId) -> String {
+    let id = id.to_string();
+    format!("{RECORDING_PREFIX}-{}", &id[..8])
+}
+
+/// A path below the media directory, one way written: strom reports
+/// `show//x.mkv` for the folder `show/`; `./show/x.mkv` and `/show/x.mkv`
+/// are the same file too.
+pub fn normal_path(path: &str) -> String {
+    let parts: Vec<&str> = path
+        .split('/')
+        .filter(|part| !part.is_empty() && *part != ".")
+        .collect();
+    parts.join("/")
+}
+
+/// Whether two paths below the media directory name one file.
+pub fn same_path(a: &str, b: &str) -> bool {
+    a == b || normal_path(a) == normal_path(b)
+}
+
 /// The protocol's name beside `file`, e.g. `show/lmix-…_143000.marks.csv`.
 pub fn protocol_beside(file: &RecorderFile) -> Option<String> {
-    recording_stem(&file.path).map(|stem| format!("{stem}{SUFFIX}"))
+    let path = normal_path(&file.path);
+    recording_stem(&path).map(|stem| format!("{stem}{SUFFIX}"))
 }
 
 /// A provisional name: `mark`'s folder, named as strom names its files,
 /// after the start as lmix-core saw it.
 pub fn protocol_guess(mark: &RecordingMark, prefix: &str) -> String {
     let started = LocalTime::of(mark.since_ms).compact();
-    let folder = mark.folder.trim_end_matches('/');
-    format!("{folder}/{prefix}_{started}{SUFFIX}")
+    normal_path(&format!("{}/{prefix}_{started}{SUFFIX}", mark.folder))
 }
 
 /// The `n`th name for a protocol (from 1): `x.marks.csv`, `x.marks-2.csv`.
@@ -249,7 +277,7 @@ pub fn found_file(path: &str) -> RecorderFile {
             .is_some_and(|(s, _)| s.ends_with("_00000"))
     });
     RecorderFile {
-        path: path.to_string(),
+        path: normal_path(path),
         opened_ms: first.and_then(stem_start_ms),
     }
 }

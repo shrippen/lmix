@@ -6765,10 +6765,11 @@ je Marke; (c) wäre ein strom-Diff für eine Kann-Anforderung.
   und Spalten nicht zusammen.
 - **Vorläufiger Name**: Hat strom bei der ersten Marke noch keine Datei
   gemeldet (der Live-Recorder meldet sie beim ersten Fragment), heißt das
-  Protokoll nach Präfix (aus dem laufenden Flow) und Startzeit, wie der
-  Kern sie sah. Ist die Datei gemeldet und heißt anders, zieht das
+  Protokoll nach Präfix (`lmix-<erste 8 Zeichen der Ausgangs-Id>`, wie
+  der Kern ihn dem Recorder gibt) und Startzeit, wie der Kern sie sah. Ist die Datei gemeldet und heißt anders, zieht das
   Protokoll mit der nächsten Marke neben sie um, der vorläufige Name wird
-  gelöscht (scheitert das Löschen, versucht es die nächste Marke wieder).
+  gelöscht (scheitert das Löschen, versucht es die nächste Marke wieder;
+  404 heißt: schon weg).
   War der Name richtig geraten (ein Rechner, dieselbe Sekunde: der
   Normalfall), bleibt das Protokoll, wo es ist.
 - **Neustart von lmix-core**: strom meldet die laufende Datei nicht noch
@@ -6791,15 +6792,31 @@ je Marke; (c) wäre ein strom-Diff für eine Kann-Anforderung.
   laufen nacheinander (eine Sperre im Treiber), so bleibt die Reihenfolge.
   Jeder Medien-Aufruf einer Marke wartet höchstens 5 s, damit eine Marke
   in einem Cue die Aktionen danach nicht lange aufhält.
-- Ein absoluter Aufnahmeordner liegt außerhalb des Medienordners; dort
-  lehnt strom den Upload ab und die Marke meldet den Fehler.
+- **Ein Ordner, eine Schreibweise**: strom setzt den Dateinamen roh an
+  den Ordner (`show/` ergibt `show//lmix-….mkv`). Hielte der Kern
+  `show//…` und `show/…` für zwei Dateien, läse er beim Umzug dasselbe
+  Protokoll noch einmal (die erste Marke doppelt) und löschte danach den
+  „alten“ Namen, also das Protokoll selbst. Darum nimmt der Kern den
+  Aufnahmeordner nur in Normalform an (`normal_folder`: keine leeren und
+  `.`-Teile, kein `/` vorn oder hinten; `..` lehnt er ab, `bad_recording`)
+  und gibt strom genau diesen Wert als `output_dir`. Zusätzlich vergleicht
+  er Pfade normalisiert (`marks::normal_path`): gemeldete Datei,
+  Protokoll daneben, vorläufiger Name, Umzug.
+- Der Aufnahmeordner liegt immer im Medienordner von strom; ein `/` vorn
+  meint dessen Wurzel, nicht die des Rechners.
 - Console: Knopf „Zeitmarke“ auf der Seite Ausgänge (mit Notizfeld, Enter
   setzt die Marke; höchstens 200 Zeichen, leert sich erst, wenn der Kern
   die Marke angenommen hat) und in der Ausgangsleiste, sichtbar während
   eine Aufnahme läuft; Vorlage „Zeitmarke in Aufnahmen“ für Kurzbefehle, Cues
   und Auslöser.
 
-**Bricht**: nichts (neue Felder mit Standard, neue Aktion).
+**Bricht**: Aufnahmeordner sind jetzt immer relativ zum Medienordner von
+strom und in Normalform. Ein absoluter Ordner (`/home/…/rec`) wird beim
+Anlegen zu `home/…/rec` im Medienordner, `..` abgelehnt. Alte Shows
+laden weiter; ihr Ordner geht normalisiert an strom. Migriert:
+`demo/run.py` (Ordner `rec` statt eines absoluten Pfads), QML-Fixtures
+(`tst_output_menu`, `tst_outputs_page`). Sonst nichts (neue Felder mit
+Standard, neue Aktion).
 
 **Geprüft**: lmix-types (Grenzen, alte Shows ohne Teilung),
 `flows::tests::a_split_recording_starts_new_files` (beide Recorder),
@@ -6808,6 +6825,10 @@ je Marke; (c) wäre ein strom-Diff für eine Kann-Anforderung.
 (ein Lesen je Lauf, ein Upload je Marke),
 `a_guessed_protocol_moves_beside_the_recording`,
 `a_right_guess_stays_with_each_mark_once`,
+`a_folder_written_two_ways_is_one_folder` (Ordner `show/`, strom meldet
+`show//…`: „start“ einmal, kein DELETE),
+`a_guess_gone_already_is_removed` (DELETE 404),
+`switcher::tests::a_recording_folder_is_kept_in_its_normal_form`,
 `after_a_restart_marks_go_on_in_the_old_protocol`,
 `a_failed_read_overwrites_nothing` (einmal 500),
 `a_foreign_file_is_never_overwritten`,

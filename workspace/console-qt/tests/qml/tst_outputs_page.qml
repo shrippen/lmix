@@ -16,7 +16,7 @@ TestCase {
     property var sent: []
     property var outputs: [
         { id: "o1", number: 1, name: "Stream", spec: { kind: "srt", uri: "srt://:9000" }, status: { state: "stopped" } },
-        { id: "o2", number: 2, name: "Recording", spec: { kind: "record", folder: "/tmp/rec" }, status: { state: "stopped" } }
+        { id: "o2", number: 2, name: "Recording", spec: { kind: "record", folder: "rec" }, status: { state: "stopped" } }
     ]
 
     QtObject {

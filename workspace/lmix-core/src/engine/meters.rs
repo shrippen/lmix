@@ -362,7 +362,7 @@ pub async fn follow(
                         flow_id, filename, ..
                     }) => {
                         let file = super::marks::RecorderFile {
-                            path: filename,
+                            path: super::marks::normal_path(&filename),
                             opened_ms: Some(unix_ms()),
                         };
                         let mut files = recorder_files.lock().expect("recorder files lock");

@@ -5653,6 +5653,9 @@ impl Switcher {
         if let Some(reason) = spec.split_problem() {
             return Err(ActionError::BadRecording { reason });
         }
+        let spec = spec
+            .with_normal_folder()
+            .map_err(|reason| ActionError::BadRecording { reason })?;
         if let Some(bus) = pair_buses(&spec).find(|b| !self.show.buses.iter().any(|s| s.id == *b)) {
             return Err(ActionError::UnknownBus {
                 reference: bus.to_string(),
@@ -6036,7 +6039,7 @@ impl Switcher {
                 };
                 Some(RecordingMark {
                     output: o.id,
-                    folder: folder.clone(),
+                    folder: lmix_types::engine_folder(folder),
                     since_ms: *since_ms,
                     at_ms,
                     text: text.to_string(),
@@ -12346,6 +12349,37 @@ mod tests {
                 keyframe_ms: lmix_types::output::DEFAULT_KEYFRAME_MS,
             })
         );
+    }
+
+    // REC.8: a recording's folder is kept one way written, the way the
+    // engine names its files; outside the media directory it is refused.
+    #[test]
+    fn a_recording_folder_is_kept_in_its_normal_form() {
+        let mut sw = Switcher::new(SLOTS);
+        let add = |folder: &str| Action::AddOutput {
+            spec: OutputSpec::Record {
+                folder: folder.into(),
+                container: Default::default(),
+                video_kbps: 8000,
+                encoding: Default::default(),
+                split_minutes: 0,
+                split_mb: 0,
+            },
+            source: OutputSource::Program,
+            name: None,
+            bus: None,
+        };
+        sw.apply(add("./show//day 1/")).unwrap();
+        let OutputSpec::Record { folder, .. } = &sw.state().outputs[0].spec else {
+            panic!("a recording");
+        };
+        assert_eq!(folder, "show/day 1");
+        for folder in ["../elsewhere", "/", ""] {
+            assert!(
+                matches!(sw.apply(add(folder)), Err(ActionError::BadRecording { .. })),
+                "{folder}"
+            );
+        }
     }
 
     #[test]

@@ -191,6 +191,30 @@ pub const SPLIT_MB_MIN: u32 = 10;
 /// Largest file of a split recording: 1 TiB.
 pub const SPLIT_MB_MAX: u32 = 1024 * 1024;
 
+/// A recording's folder below the engine's media directory, one way
+/// written: `./show//day 1/` → `show/day 1`. Refused: empty, or leaving
+/// the media directory (`..`). A leading `/` counts as the media
+/// directory's root, not the machine's.
+pub fn normal_folder(folder: &str) -> Result<String, String> {
+    let parts: Vec<&str> = folder
+        .split('/')
+        .filter(|part| !part.is_empty() && *part != ".")
+        .collect();
+    if parts.contains(&"..") {
+        return Err(format!("folder {folder}: .. leaves the media directory"));
+    }
+    if parts.is_empty() {
+        return Err("a folder in the media directory, not empty".into());
+    }
+    Ok(parts.join("/"))
+}
+
+/// The folder an engine writes a recording to: its normal form; a folder
+/// of an older show that has none as it was (the engine refuses it).
+pub fn engine_folder(folder: &str) -> String {
+    normal_folder(folder).unwrap_or_else(|_| folder.to_string())
+}
+
 /// Longest text of a recording mark (REC.8).
 pub const MARK_TEXT_MAX: usize = 200;
 
@@ -299,6 +323,15 @@ impl OutputSpec {
             }
         }
         self.encoding().and_then(VideoEncoding::problem)
+    }
+
+    /// The spec with a recording's folder in its normal form
+    /// (`normal_folder`); other outputs as they are.
+    pub fn with_normal_folder(mut self) -> Result<Self, String> {
+        if let Self::Record { folder, .. } = &mut self {
+            *folder = normal_folder(folder)?;
+        }
+        Ok(self)
     }
 
     /// What is wrong with a recording's splitting (REC.4).
@@ -597,6 +630,30 @@ mod tests {
         let json = serde_json::to_value(record(30, 2048)).unwrap();
         assert_eq!(json["split_minutes"], 30);
         assert_eq!(json["split_mb"], 2048);
+    }
+
+    // One folder, one way written: the engine's file names and the
+    // protocol beside them agree (REC.8).
+    #[test]
+    fn a_recording_folder_has_one_form() {
+        assert_eq!(normal_folder("show"), Ok("show".into()));
+        assert_eq!(normal_folder("./show//day 1/"), Ok("show/day 1".into()));
+        assert_eq!(normal_folder("/show/"), Ok("show".into()));
+        assert!(normal_folder("show/../..").is_err());
+        assert!(normal_folder("./").is_err());
+        assert!(normal_folder("").is_err());
+        let spec = OutputSpec::Record {
+            folder: "show/".into(),
+            container: Container::Mkv,
+            video_kbps: DEFAULT_VIDEO_KBPS,
+            encoding: VideoEncoding::default(),
+            split_minutes: 0,
+            split_mb: 0,
+        };
+        let OutputSpec::Record { folder, .. } = spec.with_normal_folder().unwrap() else {
+            panic!("a recording");
+        };
+        assert_eq!(folder, "show");
     }
 
     #[test]
