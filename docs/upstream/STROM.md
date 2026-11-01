@@ -44,6 +44,8 @@ Abgleich mit upstream: `git fetch https://github.com/Eyevinn/strom main` und
 | CUDA-Mischer auf echter Hardware (Alpha nach Fade, Stinger, Thumbnails) | #29 | PR | offen; hängt am CUDA-Mischer |
 | Vorschaubild-Abgriff: Abhängen ohne Zustandssperre (Verklemmung mit dem Appsink-Callback) | 5f32f15, #63 | PR | offen; Test vorhanden, auch upstream `main` betroffen |
 | JSON-Speicher: Schreiben unter einer Sperre (gemeinsame Temp-Datei, verlorene Flows) | 8e7cbff, #62 | PR | offen; Test vorhanden, auch upstream `main` betroffen |
+| Mischer: Multiview-, Vorschau- und Kachel-Queues werfen alte Bilder weg statt Program aufzuhalten | 4ba8ad8 (upstream-fähig), 76513f5 (nur `dev`), #65 | PR | offen; Tests vorhanden, auch upstream `main` betroffen (Multiview); vor dem PR auf upstream `main` rebasen (Konflikt am Ende von `vision_mixer/tests.rs`) |
+| Vorschaubild-Abgriff verwirft sein Bild beim Abhängen (kein altes Bild nach dem Wiederanhängen) | 8c77ec8, #66 | PR | offen; Test vorhanden, auch upstream `main` betroffen |
 
 ## Features
 
