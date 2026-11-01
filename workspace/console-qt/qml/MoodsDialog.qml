@@ -294,6 +294,13 @@ KanteDialog {
             when: nameEdit.limit > 0
             value: nameEdit.limit
         }
+        // Cut on whole characters, not inside an emoji.
+        onTextChanged: {
+            const whole = Texts.whole(text)
+            if (whole !== text) {
+                text = whole
+            }
+        }
         onEditingFinished: {
             const name = text.trim()
             if (name !== "" && name !== kept) {
@@ -345,16 +352,28 @@ KanteDialog {
     property var dropAt: null
     /** Where the pointer of that drag is, in the window. */
     property point dragPoint
-    /** The row of `repeater` under the pointer at `scenePosition`, or -1. */
-    function rowUnder(repeater, scenePosition) {
+    /** The row of `repeater` under the pointer at `scenePosition`, or -1.
+        Past the edge of `view` (the list, scrolled) it is the row in sight
+        at that edge, not one scrolled out of it; a gap between two rows
+        is the upper one's. */
+    function rowUnder(repeater, view, scenePosition) {
+        const inView = view.mapFromItem(null, scenePosition.x, scenePosition.y)
+        const y = Math.min(view.height - 1, Math.max(0, inView.y))
+        const point = view.mapToItem(null, inView.x, y)
+        let found = -1
         for (let i = 0; i < repeater.count; i++) {
             const row = repeater.itemAt(i)
-            const p = row.mapFromItem(null, scenePosition.x, scenePosition.y)
-            if (p.y >= 0 && p.y < row.height) {
+            const p = row.mapFromItem(null, point.x, point.y)
+            if (p.y < 0) {
+                break
+            }
+            found = i
+            if (p.y < row.height) {
                 return i
             }
         }
-        return -1
+        // Below the last row: none.
+        return found === repeater.count - 1 ? -1 : found
     }
     /** The place under the pointer, by id, or "". */
     function placeUnder(scenePosition) {
@@ -402,14 +421,14 @@ KanteDialog {
         flickable: layersView.contentItem
         dragging: dialog.dragList === "layers"
         scenePosition: dialog.dragPoint
-        onScrolled: dialog.dropAt = dialog.rowUnder(layerRows, dialog.dragPoint)
+        onScrolled: dialog.dropAt = dialog.rowUnder(layerRows, layersView, dialog.dragPoint)
     }
     DragScroll {
         objectName: "collectionsScroll"
         flickable: collectionsView.contentItem
         dragging: dialog.dragList === "collections"
         scenePosition: dialog.dragPoint
-        onScrolled: dialog.dropAt = dialog.rowUnder(collectionRows, dialog.dragPoint)
+        onScrolled: dialog.dropAt = dialog.rowUnder(collectionRows, collectionsView, dialog.dragPoint)
     }
 
     /** The layer whose sound or picture the level dialog edits. */
@@ -987,9 +1006,9 @@ KanteDialog {
                                     onMoved: position => {
                                         dialog.dragList = "layers"
                                         dialog.dragPoint = position
-                                        dialog.dropAt = dialog.rowUnder(layerRows, position)
+                                        dialog.dropAt = dialog.rowUnder(layerRows, layersView, position)
                                     }
-                                    onDropped: position => dialog.dropRow("layers", layerRow.index, dialog.rowUnder(layerRows, position))
+                                    onDropped: position => dialog.dropRow("layers", layerRow.index, dialog.rowUnder(layerRows, layersView, position))
                                     onEnded: dialog.dragList = ""
                                 }
                                 NameField {
@@ -1109,9 +1128,9 @@ KanteDialog {
                                     onMoved: position => {
                                         dialog.dragList = "collections"
                                         dialog.dragPoint = position
-                                        dialog.dropAt = dialog.rowUnder(collectionRows, position)
+                                        dialog.dropAt = dialog.rowUnder(collectionRows, collectionsView, position)
                                     }
-                                    onDropped: position => dialog.dropRow("collections", collectionRow.index, dialog.rowUnder(collectionRows, position))
+                                    onDropped: position => dialog.dropRow("collections", collectionRow.index, dialog.rowUnder(collectionRows, collectionsView, position))
                                     onEnded: dialog.dragList = ""
                                 }
                                 NameField {

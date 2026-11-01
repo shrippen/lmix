@@ -22,8 +22,9 @@ Timer {
     property bool dragging: false
     /** Where the pointer is, in the window. */
     property point scenePosition
-    /** How near the edge the pointer scrolls. */
-    readonly property real edge: Kirigami.Units.gridUnit * 2
+    /** How near the edge the pointer scrolls; a third at most in a low
+     *  list, so the zones never overlap and its middle stays still. */
+    readonly property real edge: Math.min(Kirigami.Units.gridUnit * 2, flickable.height / 3)
     /** How far one step scrolls (about 30 rows a second). */
     readonly property real step: Kirigami.Units.gridUnit / 2
 

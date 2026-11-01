@@ -171,6 +171,12 @@ TestCase {
             compare(field.maximumLength, 64, field.objectName)
             field.text = "M".repeat(70)
             compare(field.text.length, 64, field.objectName)
+            // Cut between the halves of an emoji (two UTF-16 units): the
+            // half left would come out as "\uFFFD"; the whole emoji goes.
+            field.text = "M".repeat(63) + "\u{1F600}"
+            compare(field.text, "M".repeat(63), field.objectName)
+            field.text = "M".repeat(62) + "\u{1F600}"
+            compare(field.text, "M".repeat(62) + "\u{1F600}", field.objectName)
         }
     }
 
@@ -617,6 +623,36 @@ TestCase {
         mouseRelease(root, from.x, top)
         compare(show.moods.layers[0].name, "Layer 15")
         compare(d.dragList, "")
+    }
+
+    // With the pointer past the list's edge, the row it would go to is the
+    // last one in sight, not one scrolled out of it: dragged below the
+    // list, the first layer goes to the end.
+    function test_a_drag_past_the_edge_marks_a_row_in_sight() {
+        show = Object.assign({}, show, { moods: manyLayers(16) })
+        const d = dialog()
+        d.tab = 1
+        waitForRendering(d.contentItem)
+        const view = findChild(d.contentItem, "layersView")
+        const flick = view.contentItem
+        const grip = findChild(d.contentItem, "layerGrip:0")
+        const from = grip.mapToItem(null, grip.width / 2, grip.height / 2)
+        // Below the list's bottom edge.
+        const below = view.mapToItem(null, 0, view.height + Kirigami.Units.gridUnit).y
+        const root = test.Window.contentItem
+        mousePress(root, from.x, from.y)
+        for (let step = 1; step <= 10; step++) {
+            mouseMove(root, from.x, from.y + (below - from.y) * step / 10, -1, Qt.LeftButton)
+        }
+        // Before it reaches the end, too: the row marked is in sight.
+        const row = findChild(d.contentItem, "layerRow:" + d.dropAt)
+        verify(row !== null, "a row is marked: " + d.dropAt)
+        const at = row.mapToItem(view, 0, 0).y
+        verify(at + row.height > 0 && at < view.height, "the row marked is in sight: " + at)
+        tryVerify(() => flick.contentY >= flick.contentHeight - flick.height - 1, 5000, "scrolled to the end")
+        tryCompare(d, "dropAt", 15)
+        mouseRelease(root, from.x, below)
+        compare(show.moods.layers[15].name, "Light")
     }
 
     // In a small window the dialog stays inside it; the tabs scroll.

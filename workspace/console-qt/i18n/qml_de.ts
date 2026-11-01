@@ -1411,7 +1411,7 @@
       <translation>Kopfhörer</translation>
     </message>
     <message>
-      <location line="+29" />
+      <location line="+36" />
       <source>Name of the bus</source>
       <translation>Name des Busses</translation>
     </message>
@@ -3639,18 +3639,18 @@
   <context>
     <name>MoodsDialog</name>
     <message>
-      <location filename="../qml/MoodsDialog.qml" line="+565" />
+      <location filename="../qml/MoodsDialog.qml" line="+584" />
       <source>Moods</source>
       <translation>Stimmungen</translation>
     </message>
     <message>
-      <location line="-360" />
-      <location line="+1004" />
+      <location line="-379" />
+      <location line="+1023" />
       <source>Off</source>
       <translation>Aus</translation>
     </message>
     <message>
-      <location line="-1004" />
+      <location line="-1023" />
       <source>Sound</source>
       <translation>Ton</translation>
     </message>
@@ -3661,17 +3661,17 @@
     </message>
     <message>
       <location line="+2" />
-      <location line="+999" />
+      <location line="+1018" />
       <source>Actions</source>
       <translation>Aktionen</translation>
     </message>
     <message>
-      <location line="-998" />
+      <location line="-1017" />
       <source>From the base</source>
       <translation>Aus der Basis</translation>
     </message>
     <message>
-      <location line="+332" />
+      <location line="+351" />
       <source>Actions of the layer</source>
       <translation>Aktionen der Ebene</translation>
     </message>
@@ -3763,17 +3763,17 @@
       <translation>Zuerst Ebenen anlegen (Reiter Ebenen): was eine Stimmung setzt, z. B. Licht, Musik, Atmo.</translation>
     </message>
     <message>
-      <location line="-429" />
+      <location line="-441" />
       <source>Drag to move</source>
       <translation>Zum Verschieben ziehen</translation>
     </message>
     <message>
-      <location line="-205" />
+      <location line="-212" />
       <source>Edit moods</source>
       <translation>Stimmungen bearbeiten</translation>
     </message>
     <message>
-      <location line="+323" />
+      <location line="+342" />
       <source>Layer %1</source>
       <translation>Ebene %1</translation>
     </message>
@@ -4291,12 +4291,12 @@
     </message>
     <message>
       <location line="+31" />
-      <location line="+286" />
+      <location line="+293" />
       <source>Audio page ›</source>
       <translation>Ton-Seite ›</translation>
     </message>
     <message>
-      <location line="-285" />
+      <location line="-292" />
       <source>Open the Audio page</source>
       <translation>Ton-Seite öffnen</translation>
     </message>
@@ -4407,7 +4407,7 @@
       <translation>Input %1 %2</translation>
     </message>
     <message>
-      <location line="+129" />
+      <location line="+136" />
       <source>No bus yet. “+ Bus” below adds one.</source>
       <translation>Noch kein Bus. „+ Bus“ unten legt einen an.</translation>
     </message>
@@ -7398,7 +7398,7 @@
   <context>
     <name>Texts</name>
     <message>
-      <location filename="../qml/Texts.qml" line="+15" />
+      <location filename="../qml/Texts.qml" line="+23" />
       <source>Test pattern</source>
       <translation>Testbild</translation>
     </message>

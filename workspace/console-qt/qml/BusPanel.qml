@@ -157,6 +157,13 @@ Item {
                             Layout.fillWidth: true
                             text: bus.modelData.name
                             maximumLength: panel.limits.name_max
+                            // Cut on whole characters, not inside an emoji.
+                            onTextChanged: {
+                                const whole = Texts.whole(text)
+                                if (whole !== text) {
+                                    text = whole
+                                }
+                            }
                             Accessible.name: qsTr("Name of the bus")
                             onEditingFinished: {
                                 const wanted = text.trim()

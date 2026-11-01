@@ -128,4 +128,38 @@ TestCase {
         const follow = find(menu.contentItem, i => i.text === "Sound follows picture")
         verify(follow instanceof KanteSwitch, "Sound follows picture is a KanteSwitch")
     }
+
+    // A bus name keeps to name_max without cutting an emoji in half.
+    function test_a_bus_name_is_cut_on_whole_characters() {
+        const mixer = createTemporaryObject(mixerComponent, test.Window.contentItem)
+        const menu = menuOf(mixer)
+        mixer.openMenu("b1", mixer)
+        tryCompare(menu, "opened", true)
+        const field = find(menu.contentItem, i => i.maximumLength === 40 && i.placeholderText === "Name")
+        verify(field, "the name field")
+        field.text = "B".repeat(39) + "\u{1F600}"
+        compare(field.text, "B".repeat(39))
+        menu.close()
+    }
+
+    Component {
+        id: busPanelComponent
+        BusPanel {
+            width: 400
+            height: 400
+            core: fakeCore
+            buses: test.show.buses
+            act: action => test.sent.push(action)
+            askRemove: (kind, item) => test.removals.push([kind, item.id])
+        }
+    }
+
+    // The bus list's name field too.
+    function test_a_bus_panel_name_is_cut_on_whole_characters() {
+        const panel = createTemporaryObject(busPanelComponent, test.Window.contentItem)
+        const field = find(panel, i => i.maximumLength === 40 && i.text === "Stream")
+        verify(field, "the name field")
+        field.text = "B".repeat(39) + "\u{1F600}"
+        compare(field.text, "B".repeat(39))
+    }
 }
