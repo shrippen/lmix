@@ -568,6 +568,7 @@ Kirigami.ApplicationWindow {
 
     ShortcutsDialog {
         id: shortcutsDialog
+        objectName: "shortcutsDialog"
         onClosed: root.restoreFocus()
         parent: QQC2.Overlay.overlay
         anchors.centerIn: parent
@@ -735,6 +736,7 @@ Kirigami.ApplicationWindow {
 
     KeysDialog {
         id: keysDialog
+        objectName: "keysDialog"
         onClosed: root.restoreFocus()
         parent: QQC2.Overlay.overlay
         anchors.centerIn: parent

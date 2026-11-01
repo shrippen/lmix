@@ -109,6 +109,7 @@ KanteDialog {
     standardButtons: QQC2.Dialog.Close
     footerStart: [
         KanteButton {
+            objectName: "keysShortcutsButton"
             text: qsTr("Shortcuts…")
             emphasis: KanteButton.Emphasis.Quiet
             onClicked: {
