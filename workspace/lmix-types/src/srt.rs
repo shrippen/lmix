@@ -375,11 +375,7 @@ pub fn redact_url(url: &str) -> String {
         .split('&')
         .map(|pair| {
             let key = pair.split_once('=').map_or(pair, |(k, _)| k);
-            let key_text = decode(key);
-            if SECRET_KEYS
-                .iter()
-                .any(|secret| key_text.eq_ignore_ascii_case(secret))
-            {
+            if secret_key(key) {
                 format!("{key}=…")
             } else {
                 pair.to_string()
@@ -387,6 +383,46 @@ pub fn redact_url(url: &str) -> String {
         })
         .collect();
     format!("{base}?{}", query.join("&"))
+}
+
+/// Whether a query or property key names a secret (`SECRET_KEYS`).
+fn secret_key(key: &str) -> bool {
+    let key_text = decode(key);
+    SECRET_KEYS
+        .iter()
+        .any(|secret| key_text.eq_ignore_ascii_case(secret))
+}
+
+/// `text` (an engine error, a log line) with each URL in it through
+/// [`redact_url`] and each bare secret `key=value` (gst-launch style)
+/// masked. Words end at blanks:
+///
+/// ```text
+/// 400: uri=srt://h:1?passphrase=x refused -> 400: uri=srt://h:1?passphrase=… refused
+/// srtsink passphrase=x latency=120        -> srtsink passphrase=… latency=120
+/// ```
+pub fn redact_text(text: &str) -> String {
+    text.split_inclusive(char::is_whitespace)
+        .map(|word| {
+            let token = word.trim_end_matches(char::is_whitespace);
+            format!("{}{}", redact_word(token), &word[token.len()..])
+        })
+        .collect()
+}
+
+/// One blank-free word of [`redact_text`].
+fn redact_word(word: &str) -> String {
+    if let Some(sep) = word.find("://") {
+        // Walk back over the scheme, so `uri=srt://…` keeps its `uri=`.
+        let start = word[..sep]
+            .rfind(|c: char| !(c.is_ascii_alphanumeric() || "+-.".contains(c)))
+            .map_or(0, |i| i + 1);
+        return format!("{}{}", &word[..start], redact_url(&word[start..]));
+    }
+    match word.split_once('=') {
+        Some((key, _)) if secret_key(key) => format!("{key}=…"),
+        _ => word.to_string(),
+    }
 }
 
 /// Percent-encode all but RFC 3986's unreserved characters.
@@ -654,6 +690,27 @@ mod tests {
             ("no secret", "no secret"),
         ] {
             assert_eq!(redact_url(url), shown, "{url}");
+        }
+    }
+
+    #[test]
+    fn redact_text_masks_urls_and_pairs() {
+        for (text, shown) in [
+            (
+                "400 Bad Request: {\"error\":\"uri=srt://h:1?passphrase=abcdefghij&latency=120 refused\"}",
+                "400 Bad Request: {\"error\":\"uri=srt://h:1?passphrase=…&latency=120 refused\"}",
+            ),
+            (
+                "srtsink passphrase=abcdefghij latency=120",
+                "srtsink passphrase=… latency=120",
+            ),
+            (
+                "rtsp://user:pw@cam/stream\nnext line",
+                "rtsp://…@cam/stream\nnext line",
+            ),
+            ("no secret  here", "no secret  here"),
+        ] {
+            assert_eq!(redact_text(text), shown, "{text}");
         }
     }
 
