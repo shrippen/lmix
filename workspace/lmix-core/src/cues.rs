@@ -50,7 +50,12 @@ pub enum Out {
     StopPlayback { fade_ms: u32 },
     /// Actions of the moods (MOOD.9: the panic mood), each on its own: one
     /// failing does not keep the others back.
-    Mood { actions: Vec<Action> },
+    Mood {
+        actions: Vec<Action>,
+        /// The panic mood's, after a panic or hard stop; not the fade
+        /// outs of layers an edit removed.
+        panic: bool,
+    },
     /// Cue `cue` of `list` fires and takes mood layer `layer` (MOOD.5);
     /// before its own actions, so the mood fades out there first.
     TakeLayer {

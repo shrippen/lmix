@@ -68,37 +68,53 @@ Item {
         }
     }
 
-    /** Modal dialogs dim the window now: each has its dimmed ground in the
-     *  overlay, an item over the whole of it (Qt sizes every ground to the
-     *  overlay). Other items there are smaller: the popups' own, and in a
-     *  Kirigami window its passive notifications. */
-    readonly property int dimmed: {
+    /** The dimmed grounds of the modal dialogs open now, in the overlay's
+     *  order: each an item over the whole of it (Qt sizes every ground to
+     *  the overlay). Other items there are smaller: the popups' own, and
+     *  in a Kirigami window its passive notifications. */
+    readonly property var grounds: {
         const overlay = QQC2.Overlay.overlay
-        let n = 0
+        const found = []
         // An overlay not laid out yet (size 0) has no ground to look for.
         for (const item of overlay && overlay.width > 0 && overlay.height > 0 ? overlay.children : []) {
-            if (item.visible && item.width >= overlay.width && item.height >= overlay.height
+            // Null for a moment while a window is torn down.
+            if (item && item.visible && item.width >= overlay.width && item.height >= overlay.height
                     && !String(item).startsWith("QQuickPopupItem")) {
-                n++
+                found.push(item)
             }
         }
-        return n
+        return found
     }
+    /** How many modal dialogs dim the window now. */
+    readonly property int dimmed: grounds.length
     /** The toasts are raised above the dialogs. */
     readonly property bool raised: dimmed > 0
+    // The grounds the layer was last opened or closed for.
+    property var shownGrounds: []
+
     // Opened again for each dialog, after it has opened: of popups at the
     // same height the one opened last is on top, so a dialog's own lists
-    // and menus opened later still cover the toasts.
-    onDimmedChanged: Qt.callLater(() => {
+    // and menus opened later still cover the toasts. Only once the event
+    // loop settled, and only for other grounds: while the window grows, Qt
+    // resizes the overlay before the grounds, so the same ground drops out
+    // and comes back within each step; a dialog closed and another opened
+    // at once (Keys → Shortcuts) is another ground and opens the layer anew.
+    function settle() {
         // Gone with its window meanwhile.
         if (!layer) {
             return
         }
+        const now = grounds
+        if (now.length === shownGrounds.length && now.every((g, i) => g === shownGrounds[i])) {
+            return
+        }
+        shownGrounds = now
         layer.close()
-        if (toasts.raised) {
+        if (raised) {
             layer.open()
         }
-    })
+    }
+    onGroundsChanged: Qt.callLater(settle)
 
     // Only as large as the toasts: it takes no clicks beside them and never
     // the keyboard focus.

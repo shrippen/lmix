@@ -3982,7 +3982,10 @@ impl Switcher {
     fn panic_mood(&mut self, out: &mut Vec<Out>) {
         let actions = self.moods.panic(&self.show.moods);
         if !actions.is_empty() {
-            out.push(Out::Mood { actions });
+            out.push(Out::Mood {
+                actions,
+                panic: true,
+            });
         }
     }
 
@@ -4055,6 +4058,11 @@ impl Switcher {
             .take(&self.show.moods, layer, list, cue, by_panic)
     }
 
+    /// Whether mood layer `layer` still runs the panic mood (MOOD.9).
+    pub fn mood_is_panic(&self, layer: lmix_types::LayerId) -> bool {
+        self.moods.is_panic(layer)
+    }
+
     /// Set a mood (MOOD.4): the actions that change its layers.
     pub fn set_mood(
         &mut self,
@@ -4082,7 +4090,10 @@ impl Switcher {
         let before = std::mem::replace(&mut self.show.moods, moods);
         let actions = self.moods.trim(&self.show.moods);
         if !actions.is_empty() {
-            self.outs.push(Out::Mood { actions });
+            self.outs.push(Out::Mood {
+                actions,
+                panic: false,
+            });
         }
         before
     }
@@ -10946,7 +10957,10 @@ mod tests {
         };
         let t = tokio::time::Instant::now();
         let out = sw.cue_panic(t, Some(0)).unwrap();
-        assert!(matches!(out.last(), Some(Out::Mood { .. })), "it runs last");
+        assert!(
+            matches!(out.last(), Some(Out::Mood { panic: true, .. })),
+            "it runs last"
+        );
         let mut takes = take(&mut sw, out);
         for after in [150, 250, 350] {
             let out = sw.cue_tick(t + std::time::Duration::from_millis(after));
@@ -11633,7 +11647,7 @@ mod tests {
         out.iter()
             .flat_map(|o| match o {
                 Out::Actions { actions, .. } => actions.clone(),
-                Out::Mood { actions } => actions.clone(),
+                Out::Mood { actions, .. } => actions.clone(),
                 Out::Event { .. }
                 | Out::Panic { .. }
                 | Out::StopPlayback { .. }

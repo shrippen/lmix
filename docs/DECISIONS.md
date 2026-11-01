@@ -6805,6 +6805,75 @@ Klick und Strg+Z, Escape im Namen, Mitglieder beim Zusammenstellen.
 Die Sichtprüfung lief mit der ersten Fassung der Toast-Ebene (immer offen);
 das Heben nur bei abgedunkeltem Fenster prüfen die Tests.
 
+## 2026-11-01 — Stimmungen: Nacharbeiten aus den Reviews (MOOD Stufe 7c)
+
+**Anlass**: Die Reviews zu Stufe 7a (#212) und 7b (#213) ließen Hinweise
+offen: Die Panik-Stimmung lief nach einem späten Notfall-Cue erneut, auch
+wenn die Ebene inzwischen einer anderen Stimmung oder einem GO gehörte; ein
+Notfall-Cue ohne Aktionen ließ sie ebenfalls ein zweites Mal laufen. Beim
+Vergrößern des Fensters mit offenem Dialog sprangen die Toasts zwischen
+Fensterinhalt und eigener Ebene hin und her. Dazu ein älterer Punkt: Beim
+Aufnehmen einer Taste im Kurzbefehl-Dialog nahm der Knopf Tab und
+Umschalt+Tab als Taste auf.
+
+**Entscheidung**:
+- **Panik-Stimmung nur, wo sie noch gilt** (MOOD.9): Der Dienst merkt sich
+  zur Wiederholung auch die Ebene. Bevor die Aktionen der Panik-Stimmung
+  nach denen des Cues noch einmal laufen, prüft er unter der Sperre des
+  Switchers, ob die Ebene noch die Herkunft „Panik“ hat
+  (`MoodRunner::is_panic`); hat inzwischen eine Stimmung oder ein GO sie
+  genommen (etwa während einer langsamen HTTP-Aktion des Cues), entfällt die
+  Wiederholung, und die neue Stimmung bleibt. Zwischen Prüfung und Lauf
+  bleibt ein Fenster von wenigen Schritten ohne Warten auf Geräte; es
+  zu schließen hieße, die Sperre über die Aktionen zu halten, die auf
+  Geräte warten. Ein Cue mit leerer Aktionsliste hat nichts geändert: Die
+  Panik-Stimmung läuft dann kein zweites Mal.
+- **Zweimal laufen** ist sonst gewollt (letzter Befehl gewinnt auf
+  demselben Ziel). Darum gehören in die Panik-Stimmung nur Aktionen, die
+  einen Zustand setzen (Saallicht an), keine umschaltenden (Toggle über HTTP
+  oder OSC); das steht jetzt im Umsetzungsvermerk zu MOOD.9. Verworfen:
+  die Panik-Stimmung erst nach dem letzten Notfall-Cue einmal laufen zu
+  lassen (die sofortigen Ziele wären bis zum Ende der Wartezeiten ohne
+  Saallicht).
+- **Nur das `Out::Mood` der Panik zählt**: `Out::Mood` trägt jetzt, ob es die
+  Panik-Stimmung ist (`panic`) oder das Ausblenden entfernter Ebenen aus
+  `set_moods`. Ob die Panik-Stimmung im selben Batch ohnehin zuletzt läuft,
+  prüft der Dienst nur an ersterem.
+- **Toasts beim Vergrößern** (`MessageToasts`): Qt meldet die neue Größe des
+  Overlays, bevor es die abgedunkelten Gründe nachzieht; `dimmed` fällt
+  darum je Schritt kurz auf 0. Die Ebene merkt sich, für welche Gründe sie
+  zuletzt geöffnet oder geschlossen wurde (`shownGrounds`, die Elemente in
+  der Reihenfolge des Overlays), und handelt im verzögerten Aufruf nur, wenn
+  danach andere Gründe da sind. Beim Vergrößern kommt derselbe Grund zurück:
+  Hover, die Haltezeit des Toasts und die Reihenfolge über einem offenen
+  Menü des Dialogs bleiben erhalten. Ein zweiter Dialog über dem ersten und
+  ein Dialog, der im selben Durchlauf den Platz eines anderen nimmt
+  („Kurzbefehle…“ im Dialog „Tasten“), bringen einen neuen Grund und öffnen
+  die Ebene neu. Verworfen: nur die Zahl der Gründe zu merken (Zwischenstand
+  der Review; beim Tausch blieb sie 1, die Toasts lagen unter dem Grund des
+  neuen Dialogs). Beim Abbau eines Fensters kann das Overlay kurz `null`
+  unter seinen Kindern haben, das überspringt die Zählung jetzt.
+- **Tab beim Aufnehmen einer Taste**: Tab und Umschalt+Tab bewegen den
+  Fokus wie überall, das Aufnehmen endet damit. Als Taste eines
+  Kurzbefehls taugen sie nicht (sie sind die Tastaturbedienung des
+  Fensters); einen Grund, sie aufzunehmen, gab es nicht.
+
+**Bricht** (noch kein Release): nichts an Dateien oder API; `Out::Mood` ist
+intern.
+
+**Geprüft**: `service::tests::the_panic_mood_runs_again_only_on_a_layer_still_the_panics`
+(leere Aktionsliste, Ebene noch „Panik“, Stimmung während der Aktionen
+gesetzt; mit pausierter Zeit), schlägt ohne die Prüfung der Ebene bzw. ohne
+die der leeren Liste fehl; `tst_app_shell.qml`
+`test_the_toasts_stay_raised_while_the_window_grows` (fünf Schritte
+Vergrößern bei offenem Dialog: die Spalte zieht nicht um, die Ebene geht nicht
+zu; ohne die Änderung 40 Umzüge) und
+`test_the_toasts_rise_over_a_dialog_that_takes_anothers_place` („Tasten“ →
+„Kurzbefehle…“: die Ebene liegt über dem Dialog „Kurzbefehle“; mit nur der
+Zahl darunter); `tst_action_rows.qml`
+`test_tab_moves_on_while_a_key_is_recorded`. Alle Tests in `lmix-core`,
+`lmix-types` und alle QML-Tests.
+
 ## 2026-11-01 — Aufnahme: Teilen nach Zeit und Zeitmarken (REC.4, REC.8)
 
 **Anlass**: REC.4 (neue Datei alle n Minuten, nahtlos) und REC.8
