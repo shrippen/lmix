@@ -7419,3 +7419,63 @@ GStreamer-Streaming-Threads einem Flow zu: x264 rechnet in eigenen Threads
 Ausgang wäre damit um mehr als die Hälfte zu niedrig; bleibt offen, bis strom
 sie misst. Verlässlich wäre nur die Auslastung des NVENC-Encoders der GPU
 (`encoder_utilization`, für die ganze Maschine).
+
+## 2026-11-01 — Hilfslinien über den Monitoren (OUT.12)
+
+**Kontext**: OUT.12 verlangt Schutzbereiche (EBU/SMPTE, 80/90 %), ein Raster
+und Ausschnitte 4:3, 1:1, 9:16 über der Bildanzeige (vMix: Safe Areas im
+Bild der Oberfläche, nicht im Ausgang). Wer für einen Hochkant-Stream
+(P3) oder eine 4:3-Leinwand mitschneidet oder Titel und Layout-Boxen
+setzt, sieht bisher nicht, was dort abgeschnitten wird.
+
+**Optionen**:
+1. Im Mischer der Engine einzeichnen (ein Overlay im Vorschau-Ausgang):
+   bräuchte einen eigenen Ausgang ohne Linien für alles, was die Vorschau
+   weitergibt (Multiview, Vorschau-Ausgang, OUT.2), und eine Änderung an
+   strom. Verworfen.
+2. Als Einstellung der Show im Kern (Aktion, Zustand, API): Die Linien
+   sind eine Sehhilfe des Arbeitsplatzes wie Kachelgröße und Ansicht; zwei
+   Arbeitsplätze an derselben Show wollen verschiedene sehen. Verworfen.
+3. **In der Console über dem Monitorbild**, als Einstellung der Ansicht
+   (`[view]` in `lmix.conf`, wie Kachelgröße und Multiview-Schalter). Kein
+   Ausgang, keine Aufnahme und kein Stream sieht sie, ohne dass es dafür
+   eine eigene Vorkehrung bräuchte.
+
+**Entscheidung**: Option 3. `SafeAreaGuides` liegt über dem `LiveView`
+der Monitore Vorschau und Programm der Mix-Seite und passt sich ins Bild
+im Programmformat ein (wie das Video, mittig). Auswahl im Menü „Ansicht“
+in einer dritten Spalte „Hilfslinien“ (`GuidesPicker`); ist das Fenster
+dafür zu schmal (eine Seite im eigenen Fenster ab 540 px), steht sie unter
+den beiden anderen:
+- **Rahmen**: keiner, 93/90 % (bildsicher 93 % durchgezogen, titelsicher
+  90 % gestrichelt; EBU R 95, SMPTE ST 2046-1 nennen dieselben Werte für
+  16:9), 90 % oder 80 %. Ein Rahmen zur Zeit: zwei durchgezogene Rahmen
+  nebeneinander sind nicht zu unterscheiden.
+- **Ausschnitt**: keiner, 4:3, 1:1, 9:16, mittig und so groß wie möglich;
+  der Rest ist abgedunkelt (`scrimColor`, der Schleier von Kante). Ein
+  Ausschnitt im Seitenverhältnis des Programms (9:16 auf einem
+  Hochkant-Format) zeichnet nichts.
+- **Rahmen und Drittel im Ausschnitt**: Ist ein Ausschnitt gewählt, liegen
+  Schutzrahmen und Drittel in ihm, nicht im ganzen Bild. Der Ausschnitt ist
+  das Bild, das ein Hochkant-Stream sendet; eine Bauchbinde dafür muss in
+  dessen titelsicherem Rahmen bleiben (Hinweis aus dem Review).
+- **Drittel**: gestrichelte Linien bei einem und zwei Dritteln.
+- **Legende**: Jeder Rahmen trägt seinen Anteil („93 %“, „90 %“) oben
+  links, sobald das Bild mindestens 8 Rastereinheiten breit ist.
+- **Wo**: Vorschau (Standard), Programm oder beide.
+
+Linien in `stageTextColor`, der Kante-Farbe für Marken auf dem Bühnengrund
+(kein eigenes Token), mit einem Schatten in `stageColor` einen Pixel
+versetzt, damit sie auch auf hellem Bild sichtbar bleiben; 1 Gerätepixel
+breit, auf das Pixelraster des Fensters gelegt (auch bei gebrochener
+Skalierung; die Monitore stehen auf ganzen Pixeln). Das Pixelverhältnis
+kommt vom Fenster, vor Qt 6.11 (dort fehlt es in QML) vom Bildschirm. Die Elemente stehen fest, eine
+Größenänderung verschiebt nur ihre Punkte. Der kleine Programm-Monitor
+in der Leiste anderer Seiten und die Input-Kacheln bekommen keine Linien:
+zu klein, um daran etwas auszurichten.
+
+**Personas**: P3 (Streamer, Hochkant) sieht den 9:16-Ausschnitt über dem
+16:9-Programm, P7 (Bühne) den 4:3-Ausschnitt einer Leinwand, P1/P2 die
+titelsicheren Ränder beim Setzen von Bauchbinden. Offen: Hilfslinien im
+Layout-Editor (er fängt schon am 5-%-Rand) und ein eigener Rahmen in
+Prozent; Scopes (OUT.13) sind ein eigenes Thema.

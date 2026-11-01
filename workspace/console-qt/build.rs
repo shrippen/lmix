@@ -172,6 +172,8 @@ fn main() {
                 "qml/PtzDialog.qml",
                 "qml/RenameInputDialog.qml",
                 "qml/TileSizePicker.qml",
+                "qml/GuidesPicker.qml",
+                "qml/SafeAreaGuides.qml",
                 "qml/EffectMenu.qml",
                 "qml/MoreActionsMenu.qml",
                 "qml/CueColourButton.qml",
