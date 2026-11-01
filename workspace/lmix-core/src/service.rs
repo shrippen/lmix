@@ -805,6 +805,10 @@ impl Service {
     }
 
     async fn run_cue_outs_held(self: &Arc<Self>, out: Vec<crate::cues::Out>, since: u64) {
+        // Cues a panic started that a layer of the panic mood kept out:
+        // their actions do not run, the panic mood wins (MOOD.9). Rare:
+        // empty, it allocates nothing.
+        let mut kept_out: Vec<(lmix_types::InputId, lmix_types::CueId)> = Vec::new();
         for o in out {
             if self.panicked_since(since)
                 && matches!(
@@ -860,11 +864,17 @@ impl Service {
                         if self.panicked_since(since) {
                             continue;
                         }
-                        let actions = sw.mood_take(layer, list, cue, panic);
+                        let Some(actions) = sw.mood_take(layer, list, cue, panic) else {
+                            kept_out.push((list, cue));
+                            continue;
+                        };
                         self.publish(&sw);
                         actions
                     };
                     self.run_mood_actions(actions, since).await;
+                }
+                crate::cues::Out::Actions { list, cue, .. } if kept_out.contains(&(list, cue)) => {
+                    tracing::info!(%cue, "cue of the panic left out: the panic mood has its layer");
                 }
                 crate::cues::Out::Actions { list, cue, actions } => {
                     for action in actions {
@@ -4162,6 +4172,49 @@ mod tests {
             state.mood.layers[0].origin,
             LayerOrigin::Cue { list, cue: cue_id }
         );
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn a_late_emergency_cue_on_a_panic_layer_does_not_win() {
+        use lmix_types::{Cue, LayerOrigin};
+        let (service, _, moods) = tavern_service().await;
+        tokio::spawn(service.clone().watch_cues());
+        let licht = moods.layers[0].id;
+        // After its wait it would darken what the panic mood lights.
+        let dark = Cue {
+            layer: Some(licht),
+            pre_wait_ms: 100,
+            ..Cue::actions(
+                "Dunkel",
+                vec![Action::SetFadeToBlack {
+                    on: true,
+                    duration_ms: 0,
+                }],
+            )
+        };
+        service
+            .handle(Action::AddCueList {
+                name: "Notfall".into(),
+                cues: vec![dark],
+                source: None,
+            })
+            .await
+            .unwrap();
+        service
+            .handle(Action::SetEmergencyList {
+                list: Some(InputRef::Text("Notfall".into())),
+            })
+            .await
+            .unwrap();
+        service
+            .handle(Action::CuePanic { ms: Some(0) })
+            .await
+            .unwrap();
+        tokio::time::sleep(std::time::Duration::from_millis(300)).await;
+        let state = service.state().await;
+        assert!(state.running_cues.is_empty(), "the cue fired");
+        assert!(!state.fade_to_black, "the panic mood's light stays");
+        assert_eq!(state.mood.layers[0].origin, LayerOrigin::Panic);
     }
 
     #[tokio::test]

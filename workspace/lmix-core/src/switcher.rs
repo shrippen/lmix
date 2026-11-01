@@ -4036,14 +4036,16 @@ impl Switcher {
     }
 
     /// Cue `cue` of `list` takes mood layer `layer` (MOOD.5): the actions
-    /// that fade the mood out there. `by_panic`: a run a panic started.
+    /// that fade the mood out there. `by_panic`: a run a panic started;
+    /// `None` when that keeps it from a layer of the panic mood (its
+    /// actions do not run either, MOOD.9).
     pub fn mood_take(
         &mut self,
         layer: lmix_types::LayerId,
         list: lmix_types::InputId,
         cue: lmix_types::CueId,
         by_panic: bool,
-    ) -> Vec<Action> {
+    ) -> Option<Vec<Action>> {
         self.moods
             .take(&self.show.moods, layer, list, cue, by_panic)
     }
@@ -10875,8 +10877,9 @@ mod tests {
                     panic,
                 } = o
                 {
-                    sw.mood_take(layer, list, cue, panic);
-                    takes += 1;
+                    if sw.mood_take(layer, list, cue, panic).is_some() {
+                        takes += 1;
+                    }
                 }
             }
             takes
@@ -10897,7 +10900,7 @@ mod tests {
             let out = sw.cue_tick(t + std::time::Duration::from_millis(after));
             takes += take(&mut sw, out);
         }
-        assert_eq!(takes, 4, "every cue on a layer fired");
+        assert_eq!(takes, 1, "only the music is taken");
         assert_eq!(origin(&sw, licht), Some(LayerOrigin::Panic));
         assert!(matches!(origin(&sw, musik), Some(LayerOrigin::Cue { .. })));
         // A GO after the panic takes the light.
