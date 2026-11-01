@@ -478,6 +478,7 @@ pub fn read_bytes(bytes: &[u8], name: &str) -> Result<Loaded, ShowFileError> {
     let mut file: ShowFile =
         serde_json::from_value(value).map_err(|e| format_err(e.to_string()))?;
     normal_recording_folders(&mut file.show);
+    send_delays_in_range(&mut file.show);
     Ok(Loaded {
         show: file.show,
         older: (version < FILE_VERSION).then_some(version),
@@ -519,6 +520,26 @@ fn normal_recording_folders(show: &mut Show) {
         if normal != *folder {
             tracing::info!(from = %folder, to = %normal, "recording folder in its normal form");
             *folder = normal;
+        }
+    }
+}
+
+/// Send delays of at most `MAX_SEND_DELAY_S` (STR.5): a show edited by
+/// hand may hold more, and the engine, the countdown and a restarted core
+/// should all see the delay the stream really has.
+fn send_delays_in_range(show: &mut Show) {
+    for output in &mut show.outputs {
+        let (OutputSpec::Srt { delay_s, .. } | OutputSpec::Rtmp { delay_s, .. }) = &mut output.spec
+        else {
+            continue;
+        };
+        if *delay_s > lmix_types::MAX_SEND_DELAY_S {
+            tracing::info!(
+                from = *delay_s,
+                to = lmix_types::MAX_SEND_DELAY_S,
+                "send delay at its limit"
+            );
+            *delay_s = lmix_types::MAX_SEND_DELAY_S;
         }
     }
 }
@@ -1195,6 +1216,23 @@ mod tests {
             loaded,
             ["show", "home/me/Videos", "a/b", "x", RESCUED_FOLDER, "show"]
         );
+    }
+
+    #[test]
+    fn send_delays_load_at_most_their_limit() {
+        let mut value = serde_json::to_value(sample()).unwrap();
+        let srt = |delay_s: u32| {
+            serde_json::json!({ "id": OutputId::new(), "name": "",
+                "spec": { "kind": "srt", "uri": "srt://host:9000", "delay_s": delay_s },
+                "source": { "from": "program" } })
+        };
+        value["outputs"] = [3600, 60, 7].iter().map(|d| srt(*d)).collect();
+        let file =
+            serde_json::json!({ "format": FILE_FORMAT, "version": FILE_VERSION, "show": value });
+        let show = from_bytes(&serde_json::to_vec(&file).unwrap(), "edited").unwrap();
+
+        let loaded: Vec<u32> = show.outputs.iter().map(|o| o.spec.send_delay_s()).collect();
+        assert_eq!(loaded, [lmix_types::MAX_SEND_DELAY_S, 60, 7]);
     }
 
     #[test]

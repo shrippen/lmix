@@ -838,7 +838,9 @@ pub fn output_flow(
     // Not a delayed stream (STR.5): strom gives the drain 5 s, the syncing
     // sink would play the waiting seconds out in real time and be cut off
     // in the middle, and the stop would hang meanwhile. It ends at once;
-    // what still waits is dropped (SRT and RTMP need no trailer).
+    // what still waits is dropped. SRT closes cleanly; RTMP sends its
+    // FCUnpublish/deleteStream only on EOS, so the platform sees the
+    // connection drop rather than the stream end.
     flow.properties.eos_on_stop = Some(spec.send_delay_s() == 0);
 
     // Program, the multiview, the preview, or one slot as it arrives (ISO,
