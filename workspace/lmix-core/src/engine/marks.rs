@@ -51,9 +51,6 @@ pub struct RecordingMark {
     pub output: OutputId,
     /// Its folder below the media directory (the spec's).
     pub folder: String,
-    /// The start of its file names, filled in (REC.5); empty: the
-    /// default `recording_prefix`.
-    pub file_name: String,
     /// Unix ms when the recording started, as lmix-core knows it (after a
     /// restart of lmix-core: when it found it running).
     pub since_ms: u64,
@@ -450,7 +447,6 @@ mod tests {
         RecordingMark {
             output: OutputId(uuid::Uuid::nil()),
             folder: "show/".into(),
-            file_name: String::new(),
             since_ms: START_MS,
             at_ms: START_MS + at_s * 1000,
             text: text.into(),

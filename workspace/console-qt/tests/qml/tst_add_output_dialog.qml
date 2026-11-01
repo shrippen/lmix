@@ -36,10 +36,11 @@ TestCase {
             return "[]"
         }
         function refreshLists() {}
-        // The bridge fills the pattern in as lmix-core does; here plainly.
+        // The bridge fills the pattern in as lmix-core does
+        // (lmix_types::file_name, its rules tested in forms.rs); here only
+        // the placeholders, enough to check the wiring.
         function recordFileName(pattern, output, source) {
-            const name = pattern.replace("{output}", output).replace("{source}", source).trim()
-            return (name || "lmix-…") + "_20261101_143000_00000"
+            return pattern.replace("{output}", output).replace("{source}", source).trim()
         }
         function addOutput(form) {
             test.added.push(JSON.parse(form))
@@ -240,6 +241,14 @@ TestCase {
         compare(example.text, "First file: lmix-…_20261101_143000_00000.mkv")
         field.text = "{output}"
         compare(example.text, "First file: Record recordings_20261101_143000_00000.mkv")
+        // The same name into the same folder: the start of the id follows.
+        field.text = "{output} {source}"
+        findChild(dialog.contentItem, "name").text = "Hall"
+        findChild(dialog.contentItem, "target").text = "show/"
+        compare(example.text, "First file: Hall program_20261101_143000_00000.mkv")
+        test.outputs = [Object.assign(output("stopped"), {
+            name: "Hall", spec: { kind: "record", folder: "show", file_name: "{output} {source}" }, source: { from: "program" } })]
+        compare(example.text, "First file: Hall program-…_20261101_143000_00000.mkv")
 
         outputs = [output("stopped")]
         dialog.reject()

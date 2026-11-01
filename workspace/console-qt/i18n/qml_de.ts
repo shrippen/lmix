@@ -588,7 +588,7 @@
       <translation>Karte %1 (nicht gefunden)</translation>
     </message>
     <message>
-      <location line="+89" />
+      <location line="+116" />
       <source>folder in the engine's media directory, empty: %1</source>
       <translation>Ordner im Medienverzeichnis der Engine, leer: %1</translation>
     </message>
@@ -629,7 +629,7 @@
       <translation>Ausgang</translation>
     </message>
     <message>
-      <location line="+20" />
+      <location line="+21" />
       <location line="+9" />
       <source>File name</source>
       <translation>Dateiname</translation>
@@ -790,7 +790,7 @@
       <translation>Name</translation>
     </message>
     <message>
-      <location line="+4" />
+      <location line="+5" />
       <source>optional</source>
       <translation>optional</translation>
     </message>

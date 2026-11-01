@@ -6237,7 +6237,6 @@ impl Switcher {
                 Some(RecordingMark {
                     output: o.id,
                     folder: folder.clone(),
-                    file_name: self.recording_file_name(o),
                     since_ms: *since_ms,
                     at_ms,
                     text: text.to_string(),
@@ -13137,14 +13136,6 @@ mod tests {
             panic!("a recording");
         };
         assert_eq!(file_name, "{output} {source}");
-
-        // The marks look for the same names.
-        for (n, output) in sw.state().outputs.iter().enumerate() {
-            sw.set_output_status(output.id, OutputStatus::Running { since_ms: n as u64 });
-        }
-        let marks = sw.recording_marks(10, None).unwrap();
-        let names: Vec<&str> = marks.iter().map(|m| m.file_name.as_str()).collect();
-        assert_eq!(names, ["Hall B", "Talk_ program", ""]);
     }
 
     // Started together, two recordings named alike in one folder would

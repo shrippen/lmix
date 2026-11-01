@@ -7219,9 +7219,13 @@ als 100 Zeichen lehnt `add_output`/`update_output` mit `bad_recording` ab.
   Aufnahme startet (`recording_file_name`), und gibt den fertigen Präfix
   im Start-Befehl an die Engine; die Show behält das Muster. Ein Umbenennen
   im Lauf ändert die laufende Datei nicht, erst die nächste Aufnahme.
-- **Sichere Zeichen**: Buchstaben (auch Umlaute), Ziffern, Leerzeichen, `-`,
-  `_`, `.` bleiben, alles andere wird `_` (aus „Kamera Süd/1“ wird
-  `Kamera Süd_1`). strom setzt den Präfix in einen Pfad und in eine
+  Eingesetzt wird in einem Durchgang: Ein Ausgang namens „Saal {source}“
+  wird nicht noch einmal ersetzt.
+- **Sichere Zeichen**: Erst nach NFC zusammengesetzt (ein „ü“ als `u` und
+  U+0308, wie Namen von macOS kommen, bleibt ein Buchstabe; Abhängigkeit
+  `unicode-normalization`, MIT oder Apache-2.0), dann bleiben Buchstaben
+  (auch Umlaute), Ziffern, Leerzeichen, `-`, `_`, `.`, alles andere wird `_`
+  (aus „Kamera Süd/1“ wird `Kamera Süd_1`). strom setzt den Präfix in einen Pfad und in eine
   Vorlage mit `%05d`; ein `%` oder `/` aus einem Input-Namen bräche sie.
   Leerzeichen und Punkte an den Enden fallen weg, eingesetzt höchstens
   100 Zeichen. Bleibt nichts, gilt `lmix-<Id>`.
@@ -7229,20 +7233,28 @@ als 100 Zeichen lehnt `add_output`/`update_output` mit `bad_recording` ab.
   herauskommt, schrieben bei gemeinsamem Start (REC.6, `start_outputs`) in
   dieselbe Sekunde dieselbe Datei. Dann bekommt jede `-<Anfang der Id>`
   angehängt (`Talk-6b343775_…`); geprüft wird mit den Namen beim Start.
-- **Zeitmarken (REC.8)**: Die Marke trägt den eingesetzten Präfix
-  (`RecordingMark::file_name`); vorläufiger Protokollname und die Suche nach
-  der laufenden Datei nach einem Neustart von lmix-core nutzen ihn statt
-  `lmix-<Id>`. Wurde der Ausgang oder sein Input im Lauf umbenannt und
-  lmix-core danach neu gestartet, sucht die Marke unter dem neuen Namen und
-  findet die Datei nicht; das Protokoll beginnt dann unter vorläufigem Namen
-  (Grenzfall, hingenommen).
+- **Zeitmarken (REC.8)**: Sie nehmen den Präfix, mit dem die Aufnahme
+  gestartet wurde, nie einen aus der Show von jetzt: Die Engine merkt ihn
+  sich beim Start; eine Aufnahme, die lmix-core nach einem Neustart laufend
+  vorfindet, liest ihn aus dem laufenden Flow (`GET /api/flows/{id}`,
+  `filename_prefix` des Recorders) und behält ihn. Damit nutzen vorläufiger
+  Protokollname und die Suche nach der laufenden Datei denselben Namen wie
+  strom. Aus der Show neu berechnet könnte er kippen (Input umbenannt, ein
+  zweiter gleichnamiger Ausgang im Ordner entfernt, das Suffix fällt weg),
+  und die Suche nach einem Neustart fände eine ältere Datei eines früheren
+  Laufs und schriebe in deren Protokoll. Gibt strom den Flow nicht her,
+  gilt `lmix-<Id>` (eindeutig, schlimmstenfalls ein vorläufiges Protokoll).
+- **Show laden**: Ein von Hand eingetragenes Muster, das `add_output`
+  ablehnte (`{date}`, ein Ordner, zu lang), fällt beim Laden weg (Log), die
+  Aufnahme heißt dann `lmix-<Id>`.
 - **Standardordner**: Ein leerer Ordner wird beim Anlegen oder Ändern
   `recordings` (`DEFAULT_RECORD_FOLDER`); `/` und `./` bleiben abgelehnt
   (das Medienverzeichnis selbst ist kein Ordner der Aufnahme).
 - **Console**: Im Dialog „Ausgang“ bei Aufnahmen das Feld „Dateiname“ mit
   Hilfe-Knopf und darunter „Erste Datei: Saal program_20261101_143000_00000.mkv“
   (eingesetzt über die Bridge mit derselben Funktion wie im Kern, Datum als
-  Beispiel). Das Ordnerfeld darf leer bleiben, der Platzhalter nennt den
+  Beispiel; mit `-<Anfang der Id>`, wenn eine andere Aufnahme in den
+  Ordner gleich heißt). Das Ordnerfeld darf leer bleiben, der Platzhalter nennt den
   Standardordner.
 
 **Personas**: P2 (Konferenz) und P6 (Hochschule) finden Aufnahmen am Namen
@@ -7261,7 +7273,12 @@ Sekunde), `show/lmix-2b58ff40_…` (ohne Muster); jedes Protokoll
 `bad_recording` abgelehnt. lmix-core während einer Aufnahme „Vortrag
 {output}“ beendet und neu gestartet: die nächste Marke fand
 `Vortrag Saal_…_00000.mkv` im Ordner und schrieb daneben, Zeit ab dem
-Zeitstempel im Namen.
+Zeitstempel im Namen. Fall aus dem Review: zwei Aufnahmen „Talk“ (MKV,
+MP4) in `show` gemeinsam gestartet (`Talk-9bed0bb1_…`, `Talk-035c77f1_…`),
+die MP4 gestoppt und entfernt, lmix-core neu gestartet, im Ordner eine
+ältere `Talk_20261025_100000_00000.mkv` mit Protokoll: Die Marke landete in
+`Talk-9bed0bb1_….marks.csv` neben der laufenden Datei (0:00:10), das alte
+Protokoll blieb unverändert.
 
 **Geprüft und zurückgestellt: STR.7 „Puffer, Encoder-Last“** (vor REC.5
 untersucht, an strom a0ac38f9 mit SRT-Ausgang und ffmpeg als Empfänger):

@@ -405,17 +405,11 @@ fn with_file_name(mut spec: OutputSpec, pattern: &str) -> OutputSpec {
     spec
 }
 
-/// An example of a recording's file names (REC.5): `pattern` filled in
-/// as lmix-core does, then the date, time and number the engine adds;
-/// `lmix-…` without a pattern. `source` is what the form shows.
+/// The start of a recording's file names from `pattern` as lmix-core
+/// fills it in (REC.5), for the form's example; empty when none is left
+/// (lmix-core then names it `lmix-<id>`). `source` is what the form shows.
 pub fn record_file_name(pattern: &str, output: &str, source: &str) -> String {
-    let name = lmix_types::file_name(pattern, output, source);
-    let name = if name.is_empty() {
-        "lmix-…".into()
-    } else {
-        name
-    };
-    format!("{name}_20261101_143000_00000")
+    lmix_types::file_name(pattern, output, source)
 }
 
 /// `spec` sending `seconds` late if it is a stream (STR.5); other
@@ -962,12 +956,9 @@ mod tests {
         ));
         assert_eq!(
             record_file_name("{output} {source}", "Hall", "Kamera 1"),
-            "Hall Kamera 1_20261101_143000_00000"
+            "Hall Kamera 1"
         );
-        assert_eq!(
-            record_file_name("", "Hall", "x"),
-            "lmix-…_20261101_143000_00000"
-        );
+        assert_eq!(record_file_name("", "Hall", "x"), "");
         let limits: serde_json::Value =
             serde_json::from_str(&values("record_limits").unwrap()).unwrap();
         assert_eq!(limits["default_folder"], lmix_types::DEFAULT_RECORD_FOLDER);

@@ -248,11 +248,28 @@ pub fn file_name_problem(pattern: &str) -> Option<String> {
 /// time and number: `Talk_20261101_143000_00000.mkv`. Empty when nothing
 /// is left: the caller's default name then.
 pub fn file_name(pattern: &str, output: &str, source: &str) -> String {
-    let filled = pattern
-        .replace(FILE_NAME_OUTPUT, output)
-        .replace(FILE_NAME_SOURCE, source);
+    use unicode_normalization::UnicodeNormalization;
+    // One pass: a name holding `{source}` itself stays as it is.
+    let mut filled = String::new();
+    let mut rest = pattern;
+    while let Some(at) = rest.find('{') {
+        filled.push_str(&rest[..at]);
+        rest = &rest[at..];
+        if let Some(after) = rest.strip_prefix(FILE_NAME_OUTPUT) {
+            filled.push_str(output);
+            rest = after;
+        } else if let Some(after) = rest.strip_prefix(FILE_NAME_SOURCE) {
+            filled.push_str(source);
+            rest = after;
+        } else {
+            filled.push('{');
+            rest = &rest[1..];
+        }
+    }
+    filled.push_str(rest);
+    // Composed: `u` + U+0308 (names from macOS) is one letter `ü`.
     let safe: String = filled
-        .chars()
+        .nfc()
         .map(|c| match c {
             c if c.is_alphanumeric() => c,
             ' ' | '-' | '_' | '.' => c,
@@ -803,6 +820,10 @@ mod tests {
         assert_eq!(file_name("100%_{source}", "x", "a/b:c"), "100__a_b_c");
         assert_eq!(file_name(" ..{output}. ", "", ""), "");
         assert_eq!(file_name("Grüße", "", ""), "Grüße");
+        assert_eq!(file_name("Gru\u{308}ße", "", ""), "Grüße");
+        // Filled in once: a name holding a placeholder stays as it is.
+        assert_eq!(file_name("{output}", "Saal {source}", "B"), "Saal _source_");
+        assert_eq!(file_name("{x}{output}", "A", "B"), "_x_A");
         let long = file_name("{source}", "", &"n".repeat(300));
         assert_eq!(long.chars().count(), FILE_NAME_MAX);
     }

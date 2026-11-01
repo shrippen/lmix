@@ -102,21 +102,48 @@ KanteDialog {
     /** Channel pairs of the chosen channels: 1, 4 or 8. */
     readonly property int cardPairs: cardChannels[cardChannelsBox.currentIndex] ? Number(cardChannels[cardChannelsBox.currentIndex].value) / 2 : 1
     readonly property bool encodes: kind === "srt" || kind === "rtmp" || kind === "record"
-    /** What the source choice records, as lmix-core names it in file
-     *  names (REC.5): an input's name, else program, preview, multiview. */
+    /** What `source` (an output's) records, as lmix-core names it in
+     *  file names (REC.5): an input's name, else program, preview,
+     *  multiview. */
+    function recordedSourceOf(source) {
+        if (!source || source.from !== "input")
+            return source && source.from ? source.from : "program"
+        const input = inputs.find(i => i.id === source.input)
+        return input ? input.name : "input"
+    }
+    /** What the source choice records, named so. */
     readonly property string recordedSource: sourceBox.currentIndex <= 0 ? "program"
         : sourceBox.currentIndex === 1 ? "preview"
         : sourceBox.currentIndex === 2 ? "multiview"
         : dialog.inputs[sourceBox.currentIndex - 3] ? dialog.inputs[sourceBox.currentIndex - 3].name
         : "input"
-    /** The recording's first file as the engine will name it (REC.5). */
-    readonly property string fileExample: kind !== "record" ? ""
-        : core.recordFileName(fileNameField.text, nameField.text.trim() || defaultRecordName(), recordedSource)
-          + "." + (containers[containerBox.currentIndex] ? containers[containerBox.currentIndex].value : "mkv")
+    /** A folder one way written, as lmix-core keeps it (`normal_folder`);
+     *  blank: the default one. */
+    function normalFolder(folder) {
+        const parts = (folder || "").split("/").filter(p => p !== "" && p !== ".")
+        return parts.length > 0 ? parts.join("/") : (recordLimits.default_folder || "")
+    }
+    /** The recording's first file as the engine will name it (REC.5): the
+     *  pattern filled in, the start of the id when another recording into
+     *  the folder comes out the same (`recording_file_name`), then an
+     *  example date, time and number. */
+    readonly property string fileExample: {
+        if (kind !== "record")
+            return ""
+        const idStart = editing ? editId.slice(0, 8) : "…"
+        const folder = normalFolder(textField.text)
+        const own = core.recordFileName(fileNameField.text, nameField.text.trim() || defaultRecordName(), recordedSource)
+        const clash = own !== "" && outputs.some(o => o.id !== editId && o.spec.kind === "record"
+            && normalFolder(o.spec.folder) === folder
+            && core.recordFileName(o.spec.file_name || "", o.name, recordedSourceOf(o.source)) === own)
+        const name = own === "" ? "lmix-" + idStart : clash ? own + "-" + idStart : own
+        const ext = containers[containerBox.currentIndex] ? containers[containerBox.currentIndex].value : "mkv"
+        return name + "_20261101_143000_00000." + ext
+    }
     /** The name lmix-core gives a recording left without one
      *  (`OutputSpec::default_name`, `checked_output`). */
     function defaultRecordName() {
-        const name = "Record " + (textField.text.trim() || recordLimits.default_folder || "")
+        const name = "Record " + normalFolder(textField.text)
         return sourceBox.currentIndex <= 0 ? name
             : sourceBox.currentIndex === 1 ? name + " (Preview)"
             : sourceBox.currentIndex === 2 ? name + " (Multiview)"
@@ -345,6 +372,7 @@ KanteDialog {
             }
             KanteTextField {
                 id: textField
+                objectName: "target"
                 visible: dialog.needsText
                 Layout.fillWidth: true
                 placeholderText: dialog.hints[dialog.kind] || ""
@@ -572,6 +600,7 @@ KanteDialog {
             KanteSectionLabel { text: qsTr("Name") }
             KanteTextField {
                 id: nameField
+                objectName: "name"
                 Layout.fillWidth: true
                 placeholderText: qsTr("optional")
             }
