@@ -8498,3 +8498,25 @@ als Eyevinn #1203 eingereicht). Folgt auf „Mischer hinter der Uhr“ (1.11.).
   program“ in 4 von 4 Läufen grün. Ganzer VM-Test auf allen Kernen grün (51, mit RTMP und
   Aufnahmen). Auf `taskset -c 0-3` scheitert „delayed RTMP output sent data in its countdown“
   unter Fremdlast, ohne die Änderung ebenso (1 von 2); nicht Teil dieser Änderung (todo).
+
+## 2026-11-01 — strom: Decoder nach Caps, udmabuf-Starttest, Mediaplayer hält das letzte Bild
+
+Branch `strom-dev-pin`, Submodul auf `dev` 7c14dcf (strom #74, #75, #76). Upstream-Stand in
+`docs/upstream/STROM.md`.
+
+- **EFP/SRT-Eingang (strom #74, Eyevinn #1205):** der H.264-Decoder wird erst gewählt, wenn
+  `h264parse` die Caps kennt: der höchstrangige, der sie ganz annimmt (4:2:2 10 Bit nicht mehr an
+  NVDEC, „not-linked“). Ein Kandidat wird ohne Elternteil auf READY gebracht; kann er sein Gerät
+  nicht öffnen, kommt der nächste, ohne dass sein Fehler den Flow erreicht. Passt keiner,
+  `CodecNotFound` vom Parser.
+- **GL-Upload auf NVIDIA (strom #76; Eyevinn erst Issue, Entwurf wartet auf Freigabe):** statt
+  der Herstellerprüfung schickt strom beim Start einmal ein weißes Bild durch
+  `glupload ! gldownload`; kommt es nicht weiß zurück, verwerfen die Zuführungen zu `glupload`
+  (Eingang, Underlay, Stinger, Compositor-Block, Vorschau) die ALLOCATION-Anfrage für Video im
+  Systemspeicher, damit kein udmabuf-Import entsteht (Nullbilder).
+- **Mediaplayer (strom #75; Eyevinn erst Issue, Entwurf wartet auf Freigabe):** wiederholt in
+  der Pause und am Playlist-Ende das letzte Bild, nur Rohvideo (kein kodiertes Bild im
+  Passthrough), vergisst es bei Wiedergabe, Dateiwechsel und Ende; das Halten am Playlist-Ende
+  läuft unter der Steuersperre, ein Seek danach beendet es.
+- **Offen (Review-Hinweis, nicht blockierend):** `shutdown()` gibt das Halten vor der
+  Steuersperre frei; ein gleichzeitiges `pause()` kann es kurz neu starten.
