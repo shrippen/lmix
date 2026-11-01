@@ -6638,8 +6638,14 @@ Umbenennung, die Spalte der Ebenen-Blende hatte keinen Kopf.
   nach einem Entfernen auch über einem modalen Dialog, und der Klick auf
   „Rückgängig“ wirkt sofort (Regel 1 in `DESIGN-DIALOGE.md`), für jeden
   Dialog, der `askRemove`/`askRemoveWith` nutzt (auch den Bus-Dialog).
-  Ob ein Dialog abdunkelt, zeigt sein Grund im Overlay (die einzigen
-  Elemente dort außer den Popups selbst). Erwogen: die Ebene immer offen
+  Ob ein Dialog abdunkelt, zeigt sein Grund im Overlay: ein Element, das das
+  ganze Overlay bedeckt und kein Popup ist (Qt bringt jeden Grund auf die
+  Größe des Overlays). Andere Elemente dort sind kleiner, etwa die passiven
+  Meldungen eines Kirigami-Fensters (das Hauptfenster). Die Spalte zieht
+  erst um, wenn das Popup offen ist, damit die Toasts nicht kurz verschwinden.
+  Solange ein modaler Dialog offen ist, haben die gehobenen Toasts keinen
+  Fokus und sind nicht per Tab erreichbar: Ein Fehler-Toast schließt sich
+  dann nur mit der Maus, „Rückgängig“ geht auch mit Strg+Z. Erwogen: die Ebene immer offen
   und ganz oben (verdeckte Menüs und Tooltips unten rechts, Toasts nicht
   mehr per Tab erreichbar), den Toast in jeden Dialog legen (jeder Dialog
   hätte es selbst tun müssen), ein Zähler in `KanteDialog` (deckt nicht
@@ -6697,7 +6703,9 @@ Einzahl und Mehrzahl, Zahlenformat, Kopf springt nicht, Mitglieder und
 Köpfe, ganzer Name im Tooltip), `tst_removals.qml` (Rückgängig per Klick
 und Strg+Z über einem modalen Dialog, Toasts nur dann gehoben, ein eigenes
 Rückgängig im Dialog behält Strg+Z), `tst_message_toasts.qml` (ein Menü
-liegt über den Toasts, Tab erreicht „Schließen“); alle QML-Tests (274). Sichtprüfung
+liegt über den Toasts, Tab erreicht „Schließen“), `tst_app_shell.qml`
+(im Hauptfenster liegen die Toasts ohne Dialog im Inhalt, mit Dialog
+gehoben); alle QML-Tests (275). Sichtprüfung
 mit der Demo auf Xvfb (deutsch, dunkel): Dialog in Größe L, Datei lesbar,
 Ebenen scrollen, „+ Ebene“ erreichbar, Toast über dem Dialog, Rückgängig per
 Klick und Strg+Z, Escape im Namen, Mitglieder beim Zusammenstellen.
