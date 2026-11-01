@@ -102,6 +102,53 @@ KanteDialog {
     /** Channel pairs of the chosen channels: 1, 4 or 8. */
     readonly property int cardPairs: cardChannels[cardChannelsBox.currentIndex] ? Number(cardChannels[cardChannelsBox.currentIndex].value) / 2 : 1
     readonly property bool encodes: kind === "srt" || kind === "rtmp" || kind === "record"
+    /** What `source` (an output's) records, as lmix-core names it in
+     *  file names (REC.5): an input's name, else program, preview,
+     *  multiview. */
+    function recordedSourceOf(source) {
+        if (!source || source.from !== "input")
+            return source && source.from ? source.from : "program"
+        const input = inputs.find(i => i.id === source.input)
+        return input ? input.name : "input"
+    }
+    /** What the source choice records, named so. */
+    readonly property string recordedSource: sourceBox.currentIndex <= 0 ? "program"
+        : sourceBox.currentIndex === 1 ? "preview"
+        : sourceBox.currentIndex === 2 ? "multiview"
+        : dialog.inputs[sourceBox.currentIndex - 3] ? dialog.inputs[sourceBox.currentIndex - 3].name
+        : "input"
+    /** A folder one way written, as lmix-core keeps it (`normal_folder`);
+     *  blank: the default one. */
+    function normalFolder(folder) {
+        const parts = (folder || "").split("/").filter(p => p !== "" && p !== ".")
+        return parts.length > 0 ? parts.join("/") : (recordLimits.default_folder || "")
+    }
+    /** The recording's first file as the engine will name it (REC.5): the
+     *  pattern filled in, the start of the id when another recording into
+     *  the folder comes out the same (`recording_file_name`), then an
+     *  example date, time and number. */
+    readonly property string fileExample: {
+        if (kind !== "record")
+            return ""
+        const idStart = editing ? editId.slice(0, 8) : "…"
+        const folder = normalFolder(textField.text)
+        const own = core.recordFileName(fileNameField.text, nameField.text.trim() || defaultRecordName(), recordedSource)
+        const clash = own !== "" && outputs.some(o => o.id !== editId && o.spec.kind === "record"
+            && normalFolder(o.spec.folder) === folder
+            && core.recordFileName(o.spec.file_name || "", o.name, recordedSourceOf(o.source)) === own)
+        const name = own === "" ? "lmix-" + idStart : clash ? own + "-" + idStart : own
+        const ext = containers[containerBox.currentIndex] ? containers[containerBox.currentIndex].value : "mkv"
+        return name + "_20261101_143000_00000." + ext
+    }
+    /** The name lmix-core gives a recording left without one
+     *  (`OutputSpec::default_name`, `checked_output`). */
+    function defaultRecordName() {
+        const name = "Record " + normalFolder(textField.text)
+        return sourceBox.currentIndex <= 0 ? name
+            : sourceBox.currentIndex === 1 ? name + " (Preview)"
+            : sourceBox.currentIndex === 2 ? name + " (Multiview)"
+            : name + " (" + recordedSource + ")"
+    }
     /** A recording's split ranges (REC.4). */
     readonly property var recordLimits: JSON.parse(core.choices("record_limits"))
     /** Streams can go out late (STR.5). */
@@ -112,7 +159,7 @@ KanteDialog {
     readonly property var hints: ({
         srt: "srt://host:9000",
         rtmp: "rtmp://a.rtmp.youtube.com/live2",
-        record: qsTr("folder in the engine's media directory"),
+        record: qsTr("folder in the engine's media directory, empty: %1").arg(recordLimits.default_folder || ""),
         ndi: qsTr("NDI name, e.g. lmix PGM"),
         drm: qsTr("DRM connector id")
     })
@@ -157,6 +204,7 @@ KanteDialog {
         sendDelay.value = 0
         cardModeBox.currentIndex = Math.max(0, cardModes.findIndex(m => m.value === defaultCardMode))
         textField.text = ""
+        fileNameField.text = ""
         nameField.text = ""
         soundBox.currentIndex = 0
         pairChoices = []
@@ -205,6 +253,7 @@ KanteDialog {
         containerBox.currentIndex = Math.max(0, containers.findIndex(c => c.value === (spec.container || "mkv")))
         splitMinutes.value = spec.split_minutes || 0
         splitMb.value = spec.split_mb || 0
+        fileNameField.text = spec.file_name || ""
         const source = output.source || { from: "program" }
         const at = source.from === "input" ? inputs.findIndex(i => i.id === source.input) : -1
         // Before the index: the choices change with it.
@@ -249,7 +298,8 @@ KanteDialog {
             split_minutes: dialog.kind === "record" ? splitMinutes.value : 0,
             // Below the smallest size: the smallest (0 stays off).
             split_mb: dialog.kind === "record" && splitMb.value > 0 ? Math.max(splitMb.value, dialog.recordLimits.split_mb_min) : 0,
-            delay_s: dialog.streams ? sendDelay.value : 0
+            delay_s: dialog.streams ? sendDelay.value : 0,
+            file_name: dialog.kind === "record" ? fileNameField.text : ""
         })
     }
     /** Bus id of the sound choice; empty: the source's own. */
@@ -282,7 +332,9 @@ KanteDialog {
     }
 
     acceptEnabled: !dialog.locked
-        && (dialog.isCard ? dialog.cardChoices.length > 0 : (!dialog.needsText || textField.text.trim().length > 0))
+        && (dialog.isCard ? dialog.cardChoices.length > 0
+            // A recording given no folder goes to the default one (REC.5).
+            : (!dialog.needsText || dialog.kind === "record" || textField.text.trim().length > 0))
 
     // KanteDialog has a child of its own (KanteScope), so the popup does not
     // size itself to this one.
@@ -312,6 +364,7 @@ KanteDialog {
             KanteSectionLabel { text: qsTr("Output") }
             QQC2.ComboBox {
                 id: kindBox
+                objectName: "kindBox"
                 Layout.fillWidth: true
                 model: dialog.kinds
                 textRole: "label"
@@ -319,9 +372,38 @@ KanteDialog {
             }
             KanteTextField {
                 id: textField
+                objectName: "target"
                 visible: dialog.needsText
                 Layout.fillWidth: true
                 placeholderText: dialog.hints[dialog.kind] || ""
+            }
+            // REC.5: the start of the file names; the engine adds date,
+            // time and number.
+            RowLayout {
+                visible: dialog.kind === "record"
+                Layout.fillWidth: true
+                KanteSectionLabel { text: qsTr("File name") }
+                KanteTextField {
+                    id: fileNameField
+                    objectName: "fileName"
+                    Layout.fillWidth: true
+                    placeholderText: qsTr("e.g. {output} {source}")
+                    maximumLength: dialog.recordLimits.file_name_max || 100
+                }
+                KanteInfoTip {
+                    term: qsTr("File name")
+                    accessibleName: qsTr("Help on the file name")
+                    info: qsTr("{output} becomes the output's name, {source} what it records (an input's name, or program, preview, multiview). The engine adds date, time and a number to each file. Empty: lmix- and the start of the output's id.")
+                }
+            }
+            QQC2.Label {
+                objectName: "fileExample"
+                visible: dialog.kind === "record"
+                Layout.fillWidth: true
+                elide: Text.ElideMiddle
+                text: qsTr("First file: %1").arg(dialog.fileExample)
+                color: KanteStyle.mutedTextColor
+                font.pointSize: Kirigami.Theme.smallFont.pointSize
             }
             // OUT.4: a connector of a card and the mode it plays.
             RowLayout {
@@ -518,6 +600,7 @@ KanteDialog {
             KanteSectionLabel { text: qsTr("Name") }
             KanteTextField {
                 id: nameField
+                objectName: "name"
                 Layout.fillWidth: true
                 placeholderText: qsTr("optional")
             }

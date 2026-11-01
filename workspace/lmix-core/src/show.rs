@@ -480,6 +480,7 @@ pub fn read_bytes(bytes: &[u8], name: &str) -> Result<Loaded, ShowFileError> {
     normal_recording_folders(&mut file.show);
     send_delays_in_range(&mut file.show);
     names_without_secrets(&mut file.show);
+    recording_file_names_checked(&mut file.show);
     Ok(Loaded {
         show: file.show,
         older: (version < FILE_VERSION).then_some(version),
@@ -630,9 +631,27 @@ fn names_without_secrets(show: &mut Show) {
     }
 }
 
+/// File name patterns as `add_output` takes them (REC.5): a show edited
+/// by hand may hold one it refuses (`{date}`, a folder, too long); that
+/// one goes, the recording is named `lmix-<id>` as without.
+fn recording_file_names_checked(show: &mut Show) {
+    for output in &mut show.outputs {
+        let OutputSpec::Record { file_name, .. } = &mut output.spec else {
+            continue;
+        };
+        let trimmed = file_name.trim();
+        if let Some(problem) = lmix_types::output::file_name_problem(trimmed) {
+            tracing::info!(%problem, "recording file name dropped");
+            file_name.clear();
+        } else if trimmed != file_name {
+            *file_name = trimmed.to_string();
+        }
+    }
+}
+
 /// Folder of a loaded recording whose folder held nothing in the media
 /// directory (empty, or only `..`).
-const RESCUED_FOLDER: &str = "recordings";
+const RESCUED_FOLDER: &str = lmix_types::DEFAULT_RECORD_FOLDER;
 
 /// Version 1 to 2: a cue's `label` is its `name`; the rest of a cue of
 /// then (`actions`) is an actions cue now (CUE.21).
@@ -1302,6 +1321,32 @@ mod tests {
             loaded,
             ["show", "home/me/Videos", "a/b", "x", RESCUED_FOLDER, "show"]
         );
+    }
+
+    #[test]
+    fn wrong_recording_file_names_load_without() {
+        let mut value = serde_json::to_value(sample()).unwrap();
+        let record = |file_name: &str| {
+            serde_json::json!({ "id": OutputId::new(), "name": "",
+                "spec": { "kind": "record", "folder": "show", "file_name": file_name },
+                "source": { "from": "program" } })
+        };
+        let long = "x".repeat(lmix_types::FILE_NAME_MAX + 1);
+        let names = ["{date}", "a/b", long.as_str(), " Talk {output} "];
+        value["outputs"] = names.iter().map(|f| record(f)).collect();
+        let file =
+            serde_json::json!({ "format": FILE_FORMAT, "version": FILE_VERSION, "show": value });
+        let show = from_bytes(&serde_json::to_vec(&file).unwrap(), "edited").unwrap();
+
+        let loaded: Vec<&str> = show
+            .outputs
+            .iter()
+            .map(|o| match &o.spec {
+                OutputSpec::Record { file_name, .. } => file_name.as_str(),
+                other => panic!("{other:?}"),
+            })
+            .collect();
+        assert_eq!(loaded, ["", "", "", "Talk {output}"]);
     }
 
     #[test]

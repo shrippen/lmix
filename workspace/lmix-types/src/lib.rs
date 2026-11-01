@@ -64,7 +64,7 @@ pub use mood::{
     LayerContent, LayerId, LayerNow, LayerOrigin, MoodCollection, MoodFade, MoodGroup, MoodId,
     MoodLayer, MoodNow, MoodVariant, Moods,
 };
-pub use output::normal_folder;
+pub use output::{file_name, normal_folder, DEFAULT_RECORD_FOLDER, FILE_NAME_MAX};
 pub use output::{
     Container, DisplayMode, Framerate, MasterFormat, MultiviewLayout, MultiviewMeters, Output,
     OutputGroup, OutputId, OutputRef, OutputSource, OutputSpec, OutputStats, OutputStatus,

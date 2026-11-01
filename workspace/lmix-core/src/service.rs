@@ -5463,6 +5463,7 @@ mod tests {
             encoding: Default::default(),
             split_minutes,
             split_mb: 0,
+            file_name: String::new(),
         };
         let refused = service
             .handle(Action::AddOutput {

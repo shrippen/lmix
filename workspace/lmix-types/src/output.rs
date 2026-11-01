@@ -209,6 +209,77 @@ pub fn normal_folder(folder: &str) -> Result<String, String> {
     Ok(parts.join("/"))
 }
 
+/// Folder of a recording given none (REC.5), below the engine's media
+/// directory.
+pub const DEFAULT_RECORD_FOLDER: &str = "recordings";
+/// Longest file name pattern of a recording (REC.5), and longest name it
+/// gives once filled in.
+pub const FILE_NAME_MAX: usize = 100;
+/// Placeholder in a recording's file name: the output's name (REC.5).
+pub const FILE_NAME_OUTPUT: &str = "{output}";
+/// Placeholder in a recording's file name: what it records, an input's
+/// name or `program`, `preview`, `multiview` (REC.5).
+pub const FILE_NAME_SOURCE: &str = "{source}";
+
+/// What is wrong with a recording's file name pattern (REC.5): too long,
+/// a folder in it, a placeholder other than `{output}` and `{source}`.
+pub fn file_name_problem(pattern: &str) -> Option<String> {
+    if pattern.chars().count() > FILE_NAME_MAX {
+        return Some(format!(
+            "a file name has at most {FILE_NAME_MAX} characters"
+        ));
+    }
+    if pattern.contains(['/', '\\']) {
+        return Some(format!("file name {pattern}: no folder, set it apart"));
+    }
+    let rest = pattern
+        .replace(FILE_NAME_OUTPUT, "")
+        .replace(FILE_NAME_SOURCE, "");
+    rest.contains(['{', '}']).then(|| {
+        format!("file name {pattern}: placeholders are {FILE_NAME_OUTPUT} and {FILE_NAME_SOURCE}")
+    })
+}
+
+/// The start of a recording's file names from `pattern` (REC.5): the
+/// placeholders filled in, every character but letters, digits, space,
+/// `-`, `_` and `.` made `_` (the engine puts the name into a path and a
+/// format template, where `%` has a meaning), spaces and dots trimmed at
+/// the ends, at most `FILE_NAME_MAX` characters. The engine appends date,
+/// time and number: `Talk_20261101_143000_00000.mkv`. Empty when nothing
+/// is left: the caller's default name then.
+pub fn file_name(pattern: &str, output: &str, source: &str) -> String {
+    use unicode_normalization::UnicodeNormalization;
+    // One pass: a name holding `{source}` itself stays as it is.
+    let mut filled = String::new();
+    let mut rest = pattern;
+    while let Some(at) = rest.find('{') {
+        filled.push_str(&rest[..at]);
+        rest = &rest[at..];
+        if let Some(after) = rest.strip_prefix(FILE_NAME_OUTPUT) {
+            filled.push_str(output);
+            rest = after;
+        } else if let Some(after) = rest.strip_prefix(FILE_NAME_SOURCE) {
+            filled.push_str(source);
+            rest = after;
+        } else {
+            filled.push('{');
+            rest = &rest[1..];
+        }
+    }
+    filled.push_str(rest);
+    // Composed: `u` + U+0308 (names from macOS) is one letter `ü`.
+    let safe: String = filled
+        .nfc()
+        .map(|c| match c {
+            c if c.is_alphanumeric() => c,
+            ' ' | '-' | '_' | '.' => c,
+            _ => '_',
+        })
+        .take(FILE_NAME_MAX)
+        .collect();
+    safe.trim_matches([' ', '.']).to_string()
+}
+
 /// Longest text of a recording mark (REC.8).
 pub const MARK_TEXT_MAX: usize = 200;
 /// Longest send delay of a stream (STR.5). The delayed stream waits in
@@ -249,6 +320,11 @@ pub enum OutputSpec {
         /// A new file once one holds so many MB (REC.4); 0: no limit.
         #[serde(default, skip_serializing_if = "is_zero")]
         split_mb: u32,
+        /// Start of the file names, with placeholders `{output}` and
+        /// `{source}` (REC.5); the engine appends date, time and number.
+        /// Empty: `lmix-` and the start of the output id.
+        #[serde(default, skip_serializing_if = "String::is_empty")]
+        file_name: String,
     },
     /// FLV over RTMP or RTMPS to a platform (STR.2): H.264 + AAC.
     /// `url` is the server, e.g. `rtmp://a.rtmp.youtube.com/live2`; the
@@ -367,10 +443,22 @@ impl OutputSpec {
     }
 
     /// The spec with a recording's folder in its normal form
-    /// (`normal_folder`); other outputs as they are.
+    /// (`normal_folder`; blank: `DEFAULT_RECORD_FOLDER`, REC.5) and its
+    /// file name pattern trimmed; other outputs as they are.
     pub fn with_normal_folder(mut self) -> Result<Self, String> {
-        if let Self::Record { folder, .. } = &mut self {
-            *folder = normal_folder(folder)?;
+        if let Self::Record {
+            folder, file_name, ..
+        } = &mut self
+        {
+            *folder = if folder.trim().is_empty() {
+                DEFAULT_RECORD_FOLDER.to_string()
+            } else {
+                normal_folder(folder)?
+            };
+            *file_name = file_name.trim().to_string();
+            if let Some(problem) = file_name_problem(file_name) {
+                return Err(problem);
+            }
         }
         Ok(self)
     }
@@ -684,6 +772,7 @@ mod tests {
             encoding: VideoEncoding::default(),
             split_minutes,
             split_mb,
+            file_name: String::new(),
         }
     }
 
@@ -718,11 +807,75 @@ mod tests {
             encoding: VideoEncoding::default(),
             split_minutes: 0,
             split_mb: 0,
+            file_name: String::new(),
         };
         let OutputSpec::Record { folder, .. } = spec.with_normal_folder().unwrap() else {
             panic!("a recording");
         };
         assert_eq!(folder, "show");
+    }
+
+    // REC.5: a recording given no folder goes to the default one; the
+    // pattern is kept trimmed, a wrong one refused.
+    #[test]
+    fn a_recording_without_folder_goes_to_the_default() {
+        let with = |folder: &str, file_name: &str| match record(0, 0) {
+            OutputSpec::Record { .. } => OutputSpec::Record {
+                folder: folder.into(),
+                container: Container::Mkv,
+                video_kbps: DEFAULT_VIDEO_KBPS,
+                encoding: VideoEncoding::default(),
+                split_minutes: 0,
+                split_mb: 0,
+                file_name: file_name.into(),
+            },
+            other => other,
+        };
+        let Ok(OutputSpec::Record {
+            folder, file_name, ..
+        }) = with("  ", " {output} ").with_normal_folder()
+        else {
+            panic!("a recording");
+        };
+        assert_eq!(folder, DEFAULT_RECORD_FOLDER);
+        assert_eq!(file_name, "{output}");
+        assert!(with("show", "{date}").with_normal_folder().is_err());
+        assert!(with("show", "a/b").with_normal_folder().is_err());
+        // Old shows have no pattern and write none.
+        let json = serde_json::to_string(&record(0, 0)).unwrap();
+        assert!(!json.contains("file_name"), "{json}");
+    }
+
+    #[test]
+    fn a_file_name_pattern_has_known_placeholders() {
+        assert_eq!(file_name_problem(""), None);
+        assert_eq!(file_name_problem("Talk {output} {source}"), None);
+        assert!(file_name_problem("{datum}").is_some());
+        assert!(file_name_problem("{output").is_some());
+        assert!(file_name_problem("day/one").is_some());
+        assert!(file_name_problem(r"day\one").is_some());
+        assert!(file_name_problem(&"x".repeat(FILE_NAME_MAX + 1)).is_some());
+        assert_eq!(file_name_problem(&"ä".repeat(FILE_NAME_MAX)), None);
+    }
+
+    // The engine puts the name into a path and a printf-like template
+    // (`%05d`): only plain characters reach it.
+    #[test]
+    fn a_file_name_is_filled_in_and_safe() {
+        assert_eq!(
+            file_name("{output} – {source}", "Hall", "Kamera 1"),
+            "Hall _ Kamera 1"
+        );
+        assert_eq!(file_name("Vortrag", "x", "y"), "Vortrag");
+        assert_eq!(file_name("100%_{source}", "x", "a/b:c"), "100__a_b_c");
+        assert_eq!(file_name(" ..{output}. ", "", ""), "");
+        assert_eq!(file_name("Grüße", "", ""), "Grüße");
+        assert_eq!(file_name("Gru\u{308}ße", "", ""), "Grüße");
+        // Filled in once: a name holding a placeholder stays as it is.
+        assert_eq!(file_name("{output}", "Saal {source}", "B"), "Saal _source_");
+        assert_eq!(file_name("{x}{output}", "A", "B"), "_x_A");
+        let long = file_name("{source}", "", &"n".repeat(300));
+        assert_eq!(long.chars().count(), FILE_NAME_MAX);
     }
 
     #[test]
