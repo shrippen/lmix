@@ -8379,10 +8379,27 @@ mit eingefrorenem Inhalt schickt, bleibt frisch; das kann strom nicht sehen. Que
 mit 504; in lmix gibt es keine. Kosten: ein Vergleich je Abfrage, kein Timer. Schlimmster Fall für
 `/api/pictures`: ein etwa 3 s altes Bild, statt unbegrenzt.
 
-Preis: jede 504 schreibt in strom eine ERROR-Zeile (`TraceLayer` meldet jede 5xx), bei einer
-stehenden, abgefragten Quelle also eine je Abfrage. Nicht geändert: eine leisere Meldung nur für
-504 träfe auch echte Zeitüberschreitungen (Medien-Download), upstream hat dafür kein Vorbild.
-`test-m2b-vm.sh` filtert `/thumbnail`-Zeilen schon heraus.
+Preis: jede 504 schrieb in strom eine ERROR-Zeile (`TraceLayer` meldet jede 5xx), bei einer
+stehenden, abgefragten Quelle also eine je Abfrage (etwa 2400 Zeilen je Stunde, toter Eingang und
+offene Seite). Das galt schon vorher für einen Abgriff, der nie ein Bild hatte (SRT ohne Sender,
+WHIP ohne Publisher); #68 bringt „Quelle hatte Bilder und hört auf“ dazu.
+
+**Nachtrag 2026-11-01 (Branch `strom-thumb-log`, strom #71 `thumbnail-504-quiet`):** Die 504 des
+Vorschaubilds meldet strom jetzt auf DEBUG. Der `TraceLayer` bekommt einen eigenen
+`MakeClassifier`: `make_classifier(&req)` sieht den Pfad; auf `/api/flows/…/thumbnail` (die einzige
+Vorschaubild-Route) zählt 504 als Erfolg und geht an `on_response` (DEBUG). Alle anderen Routen und
+Status bleiben bei `ServerErrorsAsFailures`; die 504 des Medien-Downloads bleibt ERROR. Keine
+API-Änderung, keine Allokation je Anfrage (ein `bool` im Klassifizierer). Submodul auf
+`lmix-thumb-log` (`dev` + Fix) bis zum Merge von strom #71.
+
+Verworfen: jede 504 leiser (träfe echte Zeitüberschreitungen wie den Medien-Download); 204 oder 503
+statt 504 (ändert die dokumentierte API, und 503 ist weiter 5xx, also weiter ERROR); `on_failure`
+anpassen (sieht die Anfrage nicht, kann die Routen nicht unterscheiden). `test-m2b-vm.sh` filtert
+`/thumbnail`-Zeilen weiter heraus; nötig ist das für 504 nicht mehr, andere Fehler des Abgriffs
+(500) blieben aber im Rauschen der Abfragen, darum unverändert.
+
+Beleg: strom-Test `tests::thumbnail_timeout_is_not_a_failure` (`lib.rs`; mit dem alten
+Klassifizierer rot: „assertion failed: !is_failure(thumbnail, StatusCode::GATEWAY_TIMEOUT)“).
 
 **Verworfen:**
 - `cache_ttl` mit seinen 500 ms nutzen: kürzer als der Abgriff-Takt (1 s), jedes zweite Abfragen
