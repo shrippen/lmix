@@ -615,6 +615,35 @@ pub struct OutputStats {
     /// Link health, SRT only.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub srt: Option<SrtLink>,
+    /// How the machine keeps up with it (STR.7); `None` while unknown.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub load: Option<OutputLoad>,
+}
+
+/// How the engine keeps up with an encoded output (STR.7). Program waits
+/// in a buffer in front of the encoder; an output that keeps up takes it
+/// at once. One that falls behind (encoder too slow, network sink
+/// blocking) fills the buffer, and once it is full the oldest frames are
+/// dropped.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
+pub struct OutputLoad {
+    /// Picture waiting in the buffer now.
+    pub buffer_ms: u32,
+    /// What the buffer holds before it drops.
+    pub buffer_max_ms: u32,
+    /// Frames dropped because the output fell behind, since start.
+    pub frames_dropped: u64,
+    /// The encoder's time per frame over the last few seconds; `None`
+    /// until two readings.
+    pub encode_ms: Option<f32>,
+    /// Share of real time the encoder is busy, in percent: at 100 it no
+    /// longer keeps up. Exact for software encoders; for a hardware
+    /// encoder with several frames in flight its latency, so too high.
+    pub encoder_percent: Option<u32>,
+    /// The encoder runs on dedicated hardware (GPU): `encode_ms` is its
+    /// latency, `encoder_percent` no busy share.
+    #[serde(default)]
+    pub hardware_encoder: bool,
 }
 
 /// Link health of a running SRT output.
@@ -666,6 +695,16 @@ impl Framerate {
             Self::Fps59_94 => "60000/1001",
             Self::Fps60 => "60/1",
         }
+    }
+
+    /// One frame's duration in ns, e.g. 40 000 000 at 25 fps.
+    pub fn frame_ns(self) -> u64 {
+        let (num, den) = self
+            .fraction()
+            .split_once('/')
+            .and_then(|(n, d)| Some((n.parse::<u64>().ok()?, d.parse::<u64>().ok()?)))
+            .expect("a fraction");
+        den * 1_000_000_000 / num
     }
 }
 
@@ -756,6 +795,13 @@ fn is_zero(value: &u32) -> bool {
 mod tests {
     use super::*;
     use crate::CardMode;
+
+    #[test]
+    fn a_frame_lasts_one_over_the_rate() {
+        assert_eq!(Framerate::Fps25.frame_ns(), 40_000_000);
+        assert_eq!(Framerate::Fps29_97.frame_ns(), 33_366_666);
+        assert_eq!(Framerate::Fps60.frame_ns(), 16_666_666);
+    }
 
     #[test]
     fn the_last_card_has_a_label() {

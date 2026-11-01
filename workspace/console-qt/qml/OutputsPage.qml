@@ -260,6 +260,16 @@ AppPage {
                             ? qsTr("Link") : qsTr("Rate")
                         value: detail.output && root.links[detail.output.id] ? Texts.linkDetail(root.links[detail.output.id]) : ""
                     }
+                    // STR.7: buffer, frames dropped, encoder; marked while it falls behind.
+                    Detail {
+                        objectName: "loadDetail"
+                        readonly property var load: detail.output && root.links[detail.output.id]
+                            ? root.links[detail.output.id].load : undefined
+                        visible: !!load
+                        label: qsTr("Load", "how busy an output is")
+                        value: load ? Texts.loadDetail(load) : ""
+                        valueColor: load && Texts.loadStrained(load) ? KanteStyle.warningColor : KanteStyle.textColor
+                    }
                     Detail {
                         visible: detail.output !== null && detail.output.status.state === "failed"
                         label: qsTr("Failed")

@@ -262,6 +262,7 @@ pub fn render(snap: &Snapshot, resident: Option<u64>) -> String {
             link.packets_dropped,
         );
     }
+    render_output_load(&mut out, &outputs_with_stats);
 
     let latency = &snap.latency;
     if let (Some(median), Some(p95)) = (latency.median_ms, latency.p95_ms) {
@@ -410,6 +411,56 @@ fn render_engine(out: &mut String, state: &ShowState, engine: &EngineHealth) {
     );
 }
 
+/// How the engine keeps up with each encoded output (STR.7).
+fn render_output_load(out: &mut String, outputs: &[(String, &str, &OutputStats)]) {
+    let loads: Vec<_> = outputs
+        .iter()
+        .filter_map(|(number, name, s)| Some((number, name, s.load.as_ref()?)))
+        .collect();
+    let mut f = Family::new(
+        out,
+        "lmix_output_buffer_ms",
+        "gauge",
+        "Picture waiting in front of the encoder (0 while it keeps up).",
+    );
+    for (number, name, load) in &loads {
+        f.sample(
+            "lmix_output_buffer_ms",
+            &[("output", number), ("name", name)],
+            load.buffer_ms,
+        );
+    }
+    let mut f = Family::new(
+        out,
+        "lmix_output_frames_dropped_total",
+        "counter",
+        "Frames dropped because the output fell behind.",
+    );
+    for (number, name, load) in &loads {
+        f.sample(
+            "lmix_output_frames_dropped_total",
+            &[("output", number), ("name", name)],
+            load.frames_dropped,
+        );
+    }
+    let mut f = Family::new(
+        out,
+        "lmix_output_encoder_percent",
+        "gauge",
+        "Share of real time the output's software encoder is busy (GPU encoders: latency, left out).",
+    );
+    for (number, name, load) in &loads {
+        let Some(percent) = load.encoder_percent.filter(|_| !load.hardware_encoder) else {
+            continue;
+        };
+        f.sample(
+            "lmix_output_encoder_percent",
+            &[("output", number), ("name", name)],
+            percent,
+        );
+    }
+}
+
 /// Labels of an engine flow; `None` for flows lmix does not know.
 fn flow_labels(
     state: &ShowState,
@@ -539,5 +590,63 @@ mod tests {
             !text.contains("lmix_latency_ms{"),
             "no latency before a measurement"
         );
+    }
+
+    #[test]
+    fn renders_the_load_of_outputs() {
+        let id = lmix_types::OutputId::new();
+        let state: ShowState = serde_json::from_value(serde_json::json!({
+            "api_version": 1, "inputs": [], "transitions": [], "fade_to_black": false,
+            "slots": 2, "overlays": [null, null, null, null, null, null, null, null], "t_bar": 0.0,
+            "outputs": [{
+                "id": id, "number": 2, "name": "Stream",
+                "spec": {"kind": "rtmp", "url": "rtmp://192.0.2.1/live", "key": "k", "video_kbps": 6000},
+                "status": {"state": "running", "since_ms": 0}
+            }]
+        }))
+        .unwrap();
+        let load = |percent| lmix_types::OutputLoad {
+            buffer_ms: 40,
+            buffer_max_ms: 500,
+            frames_dropped: 3,
+            encode_ms: Some(8.0),
+            encoder_percent: percent,
+            hardware_encoder: false,
+        };
+        let stats = |percent| OutputStats {
+            output: id,
+            kbps: 6000,
+            srt: None,
+            load: Some(load(percent)),
+        };
+        let snapshot = |percent| Snapshot {
+            state: state.clone(),
+            tally: Vec::new(),
+            levels: Levels::default(),
+            outputs: vec![stats(percent)],
+            latency: Latency::of(&[]),
+            uptime_secs: 0,
+            engine: EngineHealth::default(),
+            cues: crate::cues::Lateness::default(),
+        };
+
+        let text = render(&snapshot(Some(24)), None);
+        for line in [
+            r#"lmix_output_buffer_ms{output="2",name="Stream"} 40"#,
+            r#"lmix_output_frames_dropped_total{output="2",name="Stream"} 3"#,
+            r#"lmix_output_encoder_percent{output="2",name="Stream"} 24"#,
+        ] {
+            assert!(text.lines().any(|l| l == line), "missing {line} in\n{text}");
+        }
+        // Before the encoder's second reading: no load, no sample.
+        let text = render(&snapshot(None), None);
+        assert!(!text.contains("lmix_output_encoder_percent{"), "{text}");
+        // A GPU encoder's share is latency: left out.
+        let mut gpu = snapshot(Some(140));
+        if let Some(load) = gpu.outputs[0].load.as_mut() {
+            load.hardware_encoder = true;
+        }
+        let text = render(&gpu, None);
+        assert!(!text.contains("lmix_output_encoder_percent{"), "{text}");
     }
 }

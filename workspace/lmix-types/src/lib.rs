@@ -69,8 +69,8 @@ pub use osc::{OscAddress, OscArg, OscArgs};
 pub use output::{file_name, normal_folder, DEFAULT_RECORD_FOLDER, FILE_NAME_MAX};
 pub use output::{
     Container, DisplayMode, Framerate, MasterFormat, MultiviewLayout, MultiviewMeters, Output,
-    OutputGroup, OutputId, OutputRef, OutputSource, OutputSpec, OutputStats, OutputStatus,
-    ProgramSide, RateMode, SrtLink, VideoCodec, VideoEncoding, MAX_SEND_DELAY_S,
+    OutputGroup, OutputId, OutputLoad, OutputRef, OutputSource, OutputSpec, OutputStats,
+    OutputStatus, ProgramSide, RateMode, SrtLink, VideoCodec, VideoEncoding, MAX_SEND_DELAY_S,
 };
 pub use ptz::{PtzFocus, PtzProtocol, PtzSpec};
 pub use shortcut::{Shortcut, ShortcutSpec};

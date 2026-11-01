@@ -155,6 +155,8 @@ pub struct StromEngine {
     live_mkv: std::sync::Mutex<flows::LiveMkv>,
     /// Last byte counter reading of each RTMP and recording output.
     output_rates: std::sync::Mutex<super::output_rate::OutputRates>,
+    /// Last encoder reading of each encoded output (STR.7).
+    encoder_readings: std::sync::Mutex<super::output_load::EncoderReadings>,
     /// The file each recording writes now, from strom's events (REC.8).
     recorder_files: Arc<std::sync::Mutex<std::collections::HashMap<FlowId, marks::RecorderFile>>>,
     /// Recording protocols; one mark at a time, so uploads keep order.
@@ -226,6 +228,7 @@ impl StromEngine {
             playback: Default::default(),
             live_mkv: std::sync::Mutex::new(flows::LiveMkv::No),
             output_rates: Default::default(),
+            encoder_readings: Default::default(),
             recorder_files: Default::default(),
             protocols: Default::default(),
             fresh_recordings: Default::default(),
@@ -258,6 +261,25 @@ impl StromEngine {
 
     fn url(&self, path: &str) -> String {
         format!("{}/api{}", self.base_url, path)
+    }
+
+    /// How the engine keeps up with encoded output `id` (STR.7), from the
+    /// block statistics of its flow.
+    async fn output_load(&self, id: OutputId) -> Option<lmix_types::OutputLoad> {
+        let path = format!("/flows/{}/rtp-stats", flows::output_flow_id(id));
+        let resp = self.http.get(self.url(&path)).send().await.ok()?;
+        let read: strom_types::api::FlowStatsResponse =
+            check(resp).await.ok()?.json().await.ok()?;
+        let framerate = self.format.lock().expect("format lock").framerate;
+        let mut readings = self.encoder_readings.lock().expect("encoder readings lock");
+        super::output_load::output_load(
+            &read.blocks,
+            flows::OUTPUT_PICTURE,
+            flows::OUTPUT_ENCODER,
+            id,
+            framerate,
+            &mut readings,
+        )
     }
 
     // ---- Recording protocols (REC.8) ----
@@ -2415,15 +2437,15 @@ impl Engine for StromEngine {
     /// SRT: sender statistics of the output's flow, summed over its
     /// receivers (a listener may serve several). RTMP and recordings: the
     /// rate from strom's byte counters (socket, file), from the second
-    /// reading on.
+    /// reading on. All of them: how the engine keeps up (STR.7).
     async fn output_stats(&self, id: OutputId, spec: &OutputSpec) -> Option<OutputStats> {
         let flow = flows::output_flow_id(id);
-        match spec {
+        let mut stats = match spec {
             OutputSpec::Srt { .. } => {
                 let path = format!("/flows/{flow}/srt-stats");
                 let resp = self.http.get(self.url(&path)).send().await.ok()?;
                 let stats: SrtStatsResponse = check(resp).await.ok()?.json().await.ok()?;
-                Some(sender_stats(id, &stats.stats))
+                sender_stats(id, &stats.stats)
             }
             OutputSpec::Rtmp { .. } | OutputSpec::Record { .. } => {
                 let path = format!("/flows/{flow}/output-bytes");
@@ -2440,14 +2462,17 @@ impl Engine for StromEngine {
                     bytes,
                     std::time::Instant::now(),
                 )?;
-                Some(OutputStats {
+                OutputStats {
                     output: id,
                     kbps,
                     srt: None,
-                })
+                    load: None,
+                }
             }
-            _ => None,
-        }
+            _ => return None,
+        };
+        stats.load = self.output_load(id).await;
+        Some(stats)
     }
 
     /// Cameras, microphones and NDI sources, in that order.
@@ -2557,6 +2582,7 @@ fn sender_stats(id: OutputId, stats: &SrtStats) -> OutputStats {
                 .reduce(f64::max)
                 .map(|ms| ms.round() as u32),
         }),
+        load: None,
     }
 }
 
@@ -3460,8 +3486,95 @@ mod tests {
             mode: lmix_types::DisplayMode::Window,
         };
         assert_eq!(engine.output_stats(id, &display).await, None);
+        // One request for the bytes each poll; the load once there is a rate.
         let path = format!("/api/flows/{}/output-bytes", flows::output_flow_id(id));
-        assert_eq!(*asked.lock().unwrap(), [path.clone(), path]);
+        let load = format!("/api/flows/{}/rtp-stats", flows::output_flow_id(id));
+        assert_eq!(*asked.lock().unwrap(), [path.clone(), path, load]);
+    }
+
+    /// The load of an output (STR.7) from strom's block statistics of its
+    /// flow: frames waiting in front of the encoder and dropped there, and
+    /// the encoder's time per frame from the second reading on.
+    #[tokio::test]
+    async fn outputs_report_their_load() {
+        let reading = std::sync::Arc::new(std::sync::atomic::AtomicU64::new(0));
+        let app = axum::Router::new().fallback(move |request: axum::extract::Request| {
+            let reading = reading.clone();
+            async move {
+                let n = reading.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+                if !request.uri().path().ends_with("/rtp-stats") {
+                    return axum::Json(serde_json::json!({
+                        "flow_id": FlowId::nil(),
+                        "stats": { "outputs": {
+                            "rtmp:rtmp_sink": { "medium": "network", "bytes": 50_000 * n },
+                        }}
+                    }));
+                }
+                // 25 frames of 4 ms more on each reading.
+                let encoder = strom_types::stats::VideoEncoderStats {
+                    frames: 25 * n,
+                    encode_time_ns: 100_000_000 * n,
+                    hardware: false,
+                };
+                let queue = strom_types::stats::InterInputStats {
+                    queued_buffers: 2,
+                    queued_time_ns: 80_000_000,
+                    max_time_ns: 500_000_000,
+                    dropped_buffers: 4,
+                };
+                let block = |id: &str, stats| strom_types::stats::BlockStats {
+                    block_instance_id: id.into(),
+                    block_definition_id: String::new(),
+                    block_name: String::new(),
+                    stats,
+                    collected_at: 0,
+                };
+                axum::Json(serde_json::json!(strom_types::api::FlowStatsResponse {
+                    flow_id: FlowId::nil(),
+                    flow_name: String::new(),
+                    blocks: vec![
+                        block(flows::OUTPUT_PICTURE, queue.to_statistics()),
+                        block(flows::OUTPUT_ENCODER, encoder.to_statistics()),
+                    ],
+                    collected_at: 0,
+                }))
+            }
+        });
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let addr = listener.local_addr().unwrap();
+        tokio::spawn(async move { axum::serve(listener, app).await.unwrap() });
+        let engine = StromEngine::new(
+            format!("http://{addr}"),
+            MixerBackend::Cpu,
+            MonitorOut::None,
+        );
+        let id = OutputId::new();
+        let spec = OutputSpec::Rtmp {
+            url: "rtmp://192.0.2.1/live".into(),
+            key: "key".into(),
+            video_kbps: 6000,
+            encoding: Default::default(),
+            delay_s: 0,
+        };
+
+        // A rate needs time between two readings.
+        let pause = || tokio::time::sleep(Duration::from_millis(20));
+        assert_eq!(engine.output_stats(id, &spec).await, None);
+        pause().await;
+        let first = engine.output_stats(id, &spec).await.expect("a rate");
+        let load = first.load.expect("a load");
+        // Two frames at 30 fps (the default program rate) wait.
+        assert_eq!(
+            (load.buffer_ms, load.buffer_max_ms, load.frames_dropped),
+            (66, 500, 4)
+        );
+        assert_eq!((load.encode_ms, load.encoder_percent), (None, None));
+        pause().await;
+        let second = engine.output_stats(id, &spec).await.expect("a rate");
+        let load = second.load.expect("a load");
+        // 50 frames and 200 ms of encoding between the readings.
+        assert_eq!(load.encode_ms, Some(4.0));
+        assert!(load.encoder_percent.is_some());
     }
 
     /// A recording strom keeps no counter for (MKV before GStreamer 1.26,
@@ -5070,6 +5183,7 @@ mod tests {
                     packets_dropped: 2,
                     rtt_ms: Some(31),
                 }),
+                load: None,
             }
         );
     }
