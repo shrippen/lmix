@@ -398,7 +398,10 @@ impl Service {
                 // too late to matter, and it would hold up the next.
                 let limit = std::time::Duration::from_millis(u64::from(target.timeout_ms));
                 let result = if sent.elapsed() > limit {
-                    Err(format!("{address}: not sent, waited too long"))
+                    Err(format!(
+                        "{}: not sent, waited too long",
+                        lmix_types::srt::redact_url(&address)
+                    ))
                 } else {
                     crate::targets::send_one(&http, &target, &address, &request).await
                 };

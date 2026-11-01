@@ -7249,17 +7249,36 @@ Geheimnis weiter: in Ausgangsliste, Multiview, Fernbedienung, Tally, API.
   geschwärzten Adresse (`RTMP rtmp://host/app/…`, wenn der Schlüssel am
   Ende der Adresse steht, `…@` statt `user:passwort@`), der eines
   WHIP-Inputs ohne Token (`WHIP stage?token=…`), der einer Datenquelle aus
-  einer Adresse ohne Abfrage und `user:passwort@`.
+  einer Adresse ohne Abfrage und `user:passwort@` (`https://u:pw@feed.example`
+  heißt `feed`).
 - **Alte Shows**: Beim Laden bekommt ein Input oder Ausgang, dessen Name
-  genau der alte Vorschlag ist (SRT-Input: die URI; URL/Web: die Adresse;
-  `WHIP …`, `SRT …`, `RTMP …`), den neuen Vorschlag. Eindeutig, weil nur
-  der unveränderte Vorschlag zählt; von Hand umbenannte Namen bleiben. Hätte
-  ein anderer Input bzw. Ausgang den neuen Namen schon, bleibt der alte
-  (Namen sind je Input eindeutig, INP.2). Die Datei ändert sich erst beim
-  nächsten Speichern.
+  genau der alte Vorschlag ist, den neuen Vorschlag. Der alte Vorschlag
+  wird gebaut wie beim Anlegen: beim SRT-Input die URI, bei URL/Web die
+  Adresse, sonst `WHIP …`, mit der Nummer, die ein zweiter Input derselben
+  Adresse bekam (`… (2)`, bleibt am neuen Namen); beim Ausgang `SRT …` bzw.
+  `RTMP …` mit dem Zusatz seiner Quelle (`(Multiview)`, `(Preview)`, beim
+  ISO-Ausgang der Name des Inputs vor der Umbenennung, am neuen Namen der
+  danach). Eindeutig, weil nur der unveränderte Vorschlag zählt; von Hand
+  umbenannte Namen bleiben. Hätte ein anderer Input bzw. Ausgang den neuen
+  Namen schon (ohne Groß-/Kleinschreibung), bleibt der alte (INP.2). Jede
+  Umbenennung steht im Log (`info`, Id und Art, ohne Namen). Die Datei
+  ändert sich erst beim nächsten Speichern.
+  - Was einen solchen Input oder Ausgang **über den Namen** anspricht, trifft
+    ihn danach nicht mehr: `InputRef`/`OutputRef` als Text in Makros und
+    Skripten, Companion-Tasten, `--start-outputs`. Bewusst hingenommen: es
+    betrifft nur Namen, die noch das Geheimnis zeigen, und die Ids bleiben.
+  - **Datenquellen** werden nicht umbenannt: Grafiken binden ihre Felder
+    über den Namen der Datenquelle, eine Umbenennung beim Laden würde sie
+    stumm leeren. Ihr alter Vorschlag war der letzte Pfadteil der Adresse,
+    der selten ein Geheimnis trägt.
+  - Ein RTMP-Ausgang mit leerem Schlüsselfeld und nur einem Pfadteil
+    (`rtmp://server/live`) behält ihn; abgeschnitten wird nur ein Teil hinter
+    der Anwendung, wo der Schlüssel steht.
 - **Fehlertexte**: `bad_web_url` und die Lesefehler der Datenquellen
   (`{Adresse}: {Fehler}`) nennen die Adresse über `redact_url`, die Fehler
-  von reqwest ohne ihre URL. Sie gehen an alle Clients und ins Log.
+  von reqwest ohne ihre URL. Ebenso die Ziele von Home Assistant, Companion
+  und HTTP (ungültige Adresse, Sendefehler, HTTP-Status) und das Verwerfen
+  einer zu lange wartenden Anfrage. Sie gehen an alle Clients und ins Log.
 - **Logs**: `Action::without_secrets` schwärzt auch die Adresse von
   `add_data_source` und ersetzt `body` von `http_request` und `data` von
   `ha_service` durch ihre Länge (`… (n bytes)`): darin können Passwörter,

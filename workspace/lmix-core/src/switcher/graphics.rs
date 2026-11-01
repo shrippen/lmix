@@ -510,12 +510,13 @@ impl Switcher {
                         .filter(|r| !r.trim().is_empty())
                         .map_or_else(|| "Google Sheet".into(), |r| format!("Google Sheet {r}")),
                     // An address's query or `user:password@` can hold a
-                    // secret: not in the name.
+                    // secret: not in the name, nor the `…@` left of it.
                     _ => file_name(
-                        lmix_types::srt::redact_url(spec.path())
+                        &lmix_types::srt::redact_url(spec.path())
                             .split('?')
                             .next()
-                            .unwrap_or_default(),
+                            .unwrap_or_default()
+                            .replace("…@", ""),
                     ),
                 });
                 self.show.data_sources.push(ShowDataSource {
@@ -1308,6 +1309,7 @@ mod tests {
             .collect();
         assert!(names.iter().all(|n| !n.contains("geheim")), "{names:?}");
         assert_eq!(names[0], "scores");
+        assert_eq!(names[1], "feed");
     }
 
     fn with_source(sw: &mut Switcher) -> InputId {

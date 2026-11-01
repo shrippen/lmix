@@ -547,10 +547,15 @@ fn send_delays_in_range(show: &mut Show) {
 
 /// Names lmix once proposed from an address with its secrets (SRT
 /// passphrase, RTMP key at the address's end, `user:password@`, tokens)
-/// become what it proposes now; only a name that is exactly the old
-/// proposal (one renamed by hand stays) and that no other input or output
-/// has.
+/// become what it proposes now. Only a name that is exactly an old
+/// proposal counts, built as when it was made: an input's with the
+/// number a second one of the address got (`… (2)`), an output's with
+/// its source (`… (Multiview)`, `… (Preview)`, `… (<input>)` with the
+/// input's name then; new: the input's name now). One renamed by hand
+/// stays, and so does one whose new name another input or output has.
 fn names_without_secrets(show: &mut Show) {
+    use crate::switcher::same_input_name;
+    use std::collections::HashMap;
     fn old_input_name(source: &SourceSpec) -> Option<String> {
         match source {
             SourceSpec::Srt { uri, .. } => Some(uri.clone()),
@@ -566,32 +571,60 @@ fn names_without_secrets(show: &mut Show) {
             _ => None,
         }
     }
-    fn taken(names: &[String], name: &str) -> bool {
-        names.iter().any(|n| n.eq_ignore_ascii_case(name))
+    /// `name` is `old` or `old (n)`: the `" (n)"`, if any.
+    fn numbered<'a>(name: &'a str, old: &str) -> Option<&'a str> {
+        let rest = name.strip_prefix(old)?;
+        if rest.is_empty() {
+            return Some(rest);
+        }
+        let n = rest.strip_prefix(" (")?.strip_suffix(')')?;
+        (!n.is_empty() && n.bytes().all(|b| b.is_ascii_digit())).then_some(rest)
     }
+    fn taken(names: &[String], name: &str, own: usize) -> bool {
+        names
+            .iter()
+            .enumerate()
+            .any(|(at, n)| at != own && same_input_name(n, name))
+    }
+
+    // Input names as they were: ISO outputs were named after them.
+    let before: HashMap<InputId, String> =
+        show.inputs.iter().map(|i| (i.id, i.name.clone())).collect();
     let mut names: Vec<String> = show.inputs.iter().map(|i| i.name.clone()).collect();
-    for input in &mut show.inputs {
-        let new = input.source.default_name();
-        if old_input_name(&input.source).as_deref() == Some(input.name.as_str())
-            && new != input.name
-            && !taken(&names, &new)
-        {
-            tracing::info!(to = %new, "input name without the secrets of its address");
-            names.retain(|n| n != &input.name);
-            names.push(new.clone());
+    for (at, input) in show.inputs.iter_mut().enumerate() {
+        let Some(old) = old_input_name(&input.source) else {
+            continue;
+        };
+        let Some(number) = numbered(&input.name, &old) else {
+            continue;
+        };
+        let new = format!("{}{number}", input.source.default_name());
+        if new != input.name && !taken(&names, &new, at) {
+            tracing::info!(input = %input.id, kind = "input", "name without the secrets of its address");
+            names[at] = new.clone();
             input.name = new;
         }
     }
+    let now: HashMap<InputId, String> =
+        show.inputs.iter().map(|i| (i.id, i.name.clone())).collect();
     let mut names: Vec<String> = show.outputs.iter().map(|o| o.name.clone()).collect();
-    for output in &mut show.outputs {
+    for (at, output) in show.outputs.iter_mut().enumerate() {
+        let Some(old) = old_output_name(&output.spec) else {
+            continue;
+        };
         let new = output.spec.default_name();
-        if old_output_name(&output.spec).as_deref() == Some(output.name.as_str())
-            && new != output.name
-            && !taken(&names, &new)
-        {
-            tracing::info!(to = %new, "output name without the secrets of its address");
-            names.retain(|n| n != &output.name);
-            names.push(new.clone());
+        let (old, new) = match output.source {
+            OutputSource::Program => (old, new),
+            OutputSource::Multiview => (format!("{old} (Multiview)"), format!("{new} (Multiview)")),
+            OutputSource::Preview => (format!("{old} (Preview)"), format!("{new} (Preview)")),
+            OutputSource::Input(id) => (
+                format!("{old} ({})", before.get(&id).map_or("", String::as_str)),
+                format!("{new} ({})", now.get(&id).map_or("", String::as_str)),
+            ),
+        };
+        if output.name == old && new != old && !taken(&names, &new, at) {
+            tracing::info!(output = %output.id, kind = "output", "name without the secrets of its address");
+            names[at] = new.clone();
             output.name = new;
         }
     }
@@ -1291,53 +1324,66 @@ mod tests {
     #[test]
     fn names_with_secrets_load_without_them() {
         let mut value = serde_json::to_value(sample()).unwrap();
-        let input = |name: &str, source: serde_json::Value, slot: usize| serde_json::json!({ "id": InputId::new(), "name": name, "source": source, "slot": slot });
-        let srt_uri = "srt://cam:9000?passphrase=geheim0123";
+        let input = |name: &str, uri: &str, slot: usize| {
+            serde_json::json!({ "id": InputId::new(), "name": name,
+                "source": { "kind": "srt", "uri": uri }, "slot": slot })
+        };
+        let cam = "srt://cam:9000?passphrase=geheim0123";
+        let far = "srt://far:7001?passphrase=geheim0123";
         value["inputs"] = serde_json::json!([
-            input(
-                srt_uri,
-                serde_json::json!({ "kind": "srt", "uri": srt_uri }),
-                0
-            ),
-            input(
-                "rtsp://u:geheim@cam/live",
-                serde_json::json!({ "kind": "url", "url": "rtsp://u:geheim@cam/live" }),
-                1
-            ),
+            input(cam, cam, 0),
+            serde_json::json!({ "id": InputId::new(), "name": "rtsp://u:geheim@cam/live",
+                "source": { "kind": "url", "url": "rtsp://u:geheim@cam/live" }, "slot": 1 }),
             // Renamed by hand: stays, even if it holds the address.
             input(
                 "Bühne srt://x:1?passphrase=geheim0123",
-                serde_json::json!({ "kind": "srt", "uri": "srt://x:1?passphrase=geheim0123" }),
+                "srt://x:1?passphrase=geheim0123",
                 2
             ),
             // The new name is another input's: stays as it is.
-            input(
-                "srt://cam:9000",
-                serde_json::json!({ "kind": "pattern", "pattern": "bars" }),
-                3
-            ),
-            input(
-                "srt://far:7001?passphrase=geheim0123",
-                serde_json::json!({ "kind": "srt", "uri": "srt://far:7001?passphrase=geheim0123" }),
-                4
-            ),
+            serde_json::json!({ "id": InputId::new(), "name": "srt://cam:9000",
+                "source": { "kind": "pattern", "pattern": "bars" }, "slot": 3 }),
+            input(far, far, 4),
+            // A second input of the same address got a number.
+            input(&format!("{far} (2)"), far, 5),
+            // A "number" that is none: renamed by hand.
+            input(&format!("{far} (B)"), far, 6),
         ]);
-        let output = |name: &str, spec: serde_json::Value| {
-            serde_json::json!({ "id": OutputId::new(), "name": name, "spec": spec,
-                "source": { "from": "program" } })
-        };
+        let far_id = value["inputs"][4]["id"].clone();
+        let output = |name: &str, spec: serde_json::Value, source: serde_json::Value| serde_json::json!({ "id": OutputId::new(), "name": name, "spec": spec, "source": source });
+        let program = serde_json::json!({ "from": "program" });
         value["outputs"] = serde_json::json!([
             output(
                 "RTMP rtmp://ingest.example/live/GEHEIMKEY",
-                serde_json::json!({ "kind": "rtmp", "url": "rtmp://ingest.example/live/GEHEIMKEY" })
+                serde_json::json!({ "kind": "rtmp", "url": "rtmp://ingest.example/live/GEHEIMKEY" }),
+                program.clone()
             ),
             output(
                 "SRT srt://cdn:9000?passphrase=geheim0123",
-                serde_json::json!({ "kind": "srt", "uri": "srt://cdn:9000?passphrase=geheim0123" })
+                serde_json::json!({ "kind": "srt", "uri": "srt://cdn:9000?passphrase=geheim0123" }),
+                program.clone()
             ),
             output(
                 "Stream",
-                serde_json::json!({ "kind": "rtmp", "url": "rtmp://a/b", "key": "geheim" })
+                serde_json::json!({ "kind": "rtmp", "url": "rtmp://a/b", "key": "geheim" }),
+                program.clone()
+            ),
+            output(
+                "SRT srt://cdn:9001?passphrase=geheim0123 (Multiview)",
+                serde_json::json!({ "kind": "srt", "uri": "srt://cdn:9001?passphrase=geheim0123" }),
+                serde_json::json!({ "from": "multiview" })
+            ),
+            // ISO: named after the input's name then; now its new one.
+            output(
+                &format!("SRT srt://iso:9000?passphrase=geheim0123 ({far})"),
+                serde_json::json!({ "kind": "srt", "uri": "srt://iso:9000?passphrase=geheim0123" }),
+                serde_json::json!({ "from": "input", "input": far_id })
+            ),
+            // An RTMP server without a key part keeps its application.
+            output(
+                "RTMP rtmp://server/live",
+                serde_json::json!({ "kind": "rtmp", "url": "rtmp://server/live", "key": "k" }),
+                program
             ),
         ]);
         let file =
@@ -1347,11 +1393,13 @@ mod tests {
         assert_eq!(
             inputs,
             [
-                srt_uri,
+                cam,
                 "rtsp://…@cam/live",
                 "Bühne srt://x:1?passphrase=geheim0123",
                 "srt://cam:9000",
-                "srt://far:7001"
+                "srt://far:7001",
+                "srt://far:7001 (2)",
+                "srt://far:7001?passphrase=geheim0123 (B)",
             ],
             "the first would clash with the fourth"
         );
@@ -1361,7 +1409,10 @@ mod tests {
             [
                 "RTMP rtmp://ingest.example/live/…",
                 "SRT srt://cdn:9000",
-                "Stream"
+                "Stream",
+                "SRT srt://cdn:9001 (Multiview)",
+                "SRT srt://iso:9000 (srt://far:7001)",
+                "RTMP rtmp://server/live",
             ]
         );
     }
