@@ -8013,8 +8013,11 @@ sichtbar ist nur, was einer kurzen Liste schlichter Formen entspricht.
   jedes Anbieters; Preis: HTTP-Fehler verlieren Dateinamen. Die vier
   WHIP/WHEP-Blöcke und Properties auf `endpoint` zeigen nur die Herkunft.
   Satzzeichen am Ende (`:`, `,`, `)`, Anführungszeichen) gehören nicht
-  zur URL (`srt://h:9000: Connection refused` behält den Host). Hinter
-  einem Anführungszeichen ist die URL der ganze Lauf bis zu dessen Partner,
+  zur URL (`srt://h:9000: Connection refused` behält den Host). Steht im
+  Wort vor der URL ein offenes Anführungszeichen (`"`, `'`, Backtick; direkt
+  davor wie `uri="srt://…` oder vor dem ganzen Argument wie
+  `"uri=srt://…`, in Dumps das innerste), ist die URL der ganze Lauf bis zu
+  dessen Partner,
   auch über Leerraum, wenn ihr erstes Wort maskiert wird oder ein `@` folgt
   (`uri="srt://h?passphrase=a b"`, `"srt://u:1 2@h"`); ohne Partner wird bis
   Textende maskiert. Ein anderes Präfix vor `scheme://` (`rtmp?://`,
@@ -8047,7 +8050,9 @@ Bewusst nicht abgedeckt (Prosa nicht unterscheidbar, im Doc-Kommentar von
 (`srt://u:a b@h` zeigt `b@h`), ein rohes `&` in einem geheimen Query-Wert
 vor `name=` (`passphrase=a&b=c` zeigt `b=c`), Geheimnisse im Pfad einer
 URL, die weder HTTP noch RTMP ist, Namen ohne geheime Endung oder ohne
-`=`/`:`. In Anführungszeichen ist der Leerraum in einer URL abgedeckt.
+`=`/`:`. In Anführungszeichen (um die URL oder das ganze Argument) ist der
+Leerraum in einer URL abgedeckt; ein Apostroph in einem einfach gequoteten
+Wert, auf den ein Buchstabe folgt (`'…passphrase=it's a'`), auch.
 Kosten: Werte und URL-Teile mit Sonderzeichen werden samt Rest maskiert,
 ein offenes Anführungszeichen in einem maskierten Teil maskiert bis
 Textende. Queue (strom #60): Variante (b); zurück unter die Schwelle meldet
