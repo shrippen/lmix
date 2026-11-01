@@ -828,7 +828,7 @@ fn plain_host(authority: &str) -> bool {
 
 /// Mask every URL and every secret `name=value` or `name: value` in free text:
 /// an engine error, a log line, a gst-launch string, a `{:?}` dump. A port of
-/// strom's `redact::text` (`workspace/strom/backend/src/redact.rs`), same
+/// strom's `redact::text` (`workspace/strom/backend/src/redact/mod.rs`), same
 /// rules and the same test vectors; only the mask differs (`…`).
 ///
 /// A word is a run of non-blanks; quotes do not end it.
@@ -866,11 +866,10 @@ fn plain_host(authority: &str) -> bool {
 ///   partner of the innermost one, or to the end of the text; on past it
 ///   when a letter follows (an apostrophe in the value), to the end of its
 ///   word when the value does not end there (`'a'\''b'`) or an `@` is in
-///   that word. A quote opened in the value that is still open at the
-///   partner masks to its own partner or the end of the text, so a shell
-///   quote in a quoted value hides the rest
-///   (`'passphrase="my"'\''s secret'`). The partner itself and what follows
-///   show. Inside the quote
+///   that word. When the value runs on past the partner, what follows the
+///   partner is masked as it would be behind a value that ends there (a
+///   shell `'\''` to the end of the text: `'passphrase="my"'\''s secret'`).
+///   Otherwise the partner itself and what follows show. Inside the quote
 ///   the mask ends early at a blank followed by a known pair
 ///   (`"passphrase=a b latency=120"`, see `pair_start`). A mask that ends
 ///   inside its URL, with shown parts behind it
@@ -1237,8 +1236,8 @@ impl Quotes {
         } else {
             None
         };
-        // A quote opened in the value that runs past the partner does not
-        // excuse what follows it: `'passphrase="my"'\''s secret'`.
+        // A value that runs on past the partner does not excuse what follows
+        // the partner: `'passphrase="my"'\''s secret'`.
         let stop = match (inner > close, behind) {
             (true, behind) => Stop::At(inner.max(behind.unwrap_or(0))),
             (false, Some(behind)) => Stop::At(behind),
@@ -1918,7 +1917,7 @@ mod tests {
         }
     }
 
-    // Shared test vectors: keep identical in strom `backend/src/redact.rs` and
+    // Shared test vectors: keep identical in strom `backend/src/redact/tests.rs` and
     // lmix `lmix-types/src/srt.rs`. Every input of every review round, each
     // also checked as a `{:?}` dump and a dump of a dump.
 
