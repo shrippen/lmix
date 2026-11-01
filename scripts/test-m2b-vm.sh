@@ -541,6 +541,7 @@ late_stream() {
     wait_for "$SETTLE_S" grep -qx unpublish "$log" || fail "delayed RTMP output $name: stop sent no unpublish"
     act "{\"action\":\"remove_output\",\"output\":\"$name\"}" >/dev/null
     kill "$relay" "$receiver" 2>/dev/null || true
+    wait "$relay" "$receiver" 2>/dev/null || true
 }
 late_stream onair 2 data
 pass "outputs: delayed RTMP stream stopped on air with unpublish"
