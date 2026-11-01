@@ -44,7 +44,7 @@ Abgleich mit upstream: `git fetch https://github.com/Eyevinn/strom main` und
 | CUDA-Mischer auf echter Hardware (Alpha nach Fade, Stinger, Thumbnails) | #29 | PR | offen; hängt am CUDA-Mischer |
 | Vorschaubild-Abgriff: Abhängen ohne Zustandssperre (Verklemmung mit dem Appsink-Callback) | 5f32f15, #63 | PR | offen; Test vorhanden, auch upstream `main` betroffen |
 | JSON-Speicher: Schreiben unter einer Sperre (gemeinsame Temp-Datei, verlorene Flows) | 8e7cbff, #62 | PR | offen; Test vorhanden, auch upstream `main` betroffen |
-| SRT-Passphrasen, Stream-Keys und Tokens in Logs und Bus-Fehlertexten maskieren (`redact`) | #59 | PR | offen; Branch von upstream 8fce2ee, beim Einreichen auf `main` rebasen (ein Konflikt in `bus.rs`, Warnungs-Sperre) |
+| SRT-Passphrasen, Stream-Keys und Tokens in Logs und Bus-Fehlertexten maskieren (`redact`) | #59 | PR | offen; noch nicht auf `dev`, lmix pinnt `lmix-pin-log-secrets` (dev + #59 + #60). Seit 2bf5674 fail-closed: nur schlichte URL-Teile sichtbar, Namen nach Endung; lmix `redact_text` ist eine Portierung mit denselben Test-Eingaben. Branch von upstream 8fce2ee, beim Einreichen auf `main` rebasen (ein Konflikt in `bus.rs`, Warnungs-Sperre) |
 | Queue-Warnung: eigene `min-threshold-time` zählt mit, einmal je Überschreitung | #60 | PR | offen; Branch von upstream 8fce2ee, passt ohne Konflikt auf `main` |
 
 ## Features

@@ -7993,23 +7993,51 @@ strukturierte Felder nicht sicher). Für die Queue: (a) Verzögerungs-Queues
 nur auf `debug`; (b) Schwelle = 2 s über der eigenen `min-threshold-time`,
 Warnung einmal je Überschreitung.
 
-**Entscheidung**: strom `redact` (strom #59): `url`, `text`, `value`,
-`flow`; Passphrase, Stream-Id, Userinfo, RTMP-Stream-Key, Werte von
-Properties wie `auth_token` werden `***`. Nach drei Review-Runden mit Einzelfällen
-zwei einfache Regeln, fail-closed (gleich in strom `text()` und lmix
-`redact_text`): Ein `@` hinter dem ersten `?` maskiert alles hinter dem
-Schema; eine Authority, die nicht schlicht `host[:port]`/`[v6][:port]` ist,
-wird maskiert. Ein geheimer Wert endet nie an Anführungszeichen oder
-Backslash: in Anführungszeichen bis zum gleichen Zeichen mit gleich vielen
-Backslashes davor (oder Textende), sonst bis zum nächsten Leerraum. Kosten:
-seltsame URLs verlieren ihren Host, ein Wert am Wortende das schließende `"}`. Queue (strom #60): Variante (b);
-zurück unter die Schwelle meldet `debug`. lmix-core maskiert zusätzlich
-(Verteidigung in der Tiefe) strom-Fehlertexte, die es weitergibt
-(`check()` in `engine/strom.rs`, `PipelineError` in `engine/meters.rs`),
-mit `lmix_types::srt::redact_text` (Wörter mit URL über `redact_url`,
-nackte `passphrase=…`; Wörter enden wie in strom an Leerraum, Anführungszeichen
-und spitzen Klammern). `streamid` gilt jetzt auch in lmix als Geheimnis (manche
-SRT-Server nehmen sie als Publish-Key), wie in strom.
+**Entscheidung**: strom `redact` (strom #59): `url`, `rtmp_url`, `text`,
+`value`, `flow`; Passphrase, Stream-Id, Userinfo, RTMP-Stream-Key, Werte von
+Properties wie `auth_token` werden `***`. Vier Review-Runden fanden je neue
+Einzelfälle; darum seit 2bf5674 umgekehrt, fail-closed durch die Bauart:
+sichtbar ist nur, was einer kurzen Liste schlichter Formen entspricht.
+- Ein Wort ist ein Lauf ohne Leerraum; Anführungszeichen beenden es nicht.
+- URL: sichtbar nur Schema, schlichtes `host[:port]`/`[v6%zone][:port]`,
+  Pfadsegmente aus Buchstaben, Ziffern und `.-_~%`, Query-Paare aus
+  Buchstaben, Ziffern und `.-_~`. Der Wert eines geheimen Schlüssels wird
+  maskiert; der erste nicht schlichte Teil samt allem danach ebenfalls.
+  Userinfo bis zum letzten `@` vor der Query; ein `@` in der Query maskiert
+  alles hinter dem Schema. RTMP: Anwendung bleibt, Rest des Pfads und Query
+  weg. Satzzeichen am Ende (`:`, `,`, `)`, Anführungszeichen) gehören nicht
+  zur URL (`srt://h:9000: Connection refused` behält den Host); hinter einem
+  Anführungszeichen endet die URL an dessen Partner (kompaktes JSON). Ein
+  anderes Präfix vor `scheme://` (`rtmp?://`, `us@er://`) maskiert das Wort.
+- Paare: jedes `name=` und `name:` im Wort, auch nach `&`, `;`, `,`, `?`, `(`
+  und mit Namen in Anführungszeichen. Geheim nach der Endung des Namens
+  (klein, ohne Trenner und Prozent-Kodierung: `streamKey`, `auth-token`,
+  `pass%70hrase`); der Wert läuft bis Wortende, `name:` am Wortende maskiert
+  das nächste Wort (hinter `Bearer`/`Basic`/`Digest` eines mehr).
+  `user:pass@host` ohne `//` wird ganz maskiert.
+- Öffnet in einem maskierten Teil ein Anführungszeichen (`"zwei Wörter"`,
+  `(string)"a b"`, `\"` im `{:?}`-Dump), läuft die Maske bis zum Partner
+  mit gleich vielen Backslashes davor, sonst bis Textende.
+
+lmix-core maskiert zusätzlich (Verteidigung in der Tiefe) strom-Fehlertexte,
+die es weitergibt (`check()` in `engine/strom.rs`, `PipelineError` in
+`engine/meters.rs`), mit `lmix_types::srt::redact_text`: eine Portierung von
+strom `text()` Zeile für Zeile, nur die Maske ist `…`; beide Testmodule
+führen dieselbe Liste von Angriffs-Eingaben (jede auch als `{:?}`-Dump und
+Dump eines Dumps) und unveränderten Zeilen. `redact_url` bleibt für Namen
+und kurze Hinweise (Pfad bleibt lesbar), mit denselben Namensendungen und
+Userinfo bis zum letzten `@` vor der Query. `streamid` gilt in beiden als
+Geheimnis (manche SRT-Server nehmen sie als Publish-Key).
+
+Bewusst nicht abgedeckt (Prosa nicht unterscheidbar, im Doc-Kommentar von
+`text()` genannt): ein roher Leerraum in einer URL ohne Anführungszeichen
+(`srt://u:a b@h` zeigt `b@h`), ein rohes `&` in einem geheimen Query-Wert
+vor `name=` (`passphrase=a&b=c` zeigt `b=c`), Geheimnisse im Pfad außer dem
+RTMP-Key (Token im WHIP-Pfad), Namen ohne geheime Endung oder ohne `=`/`:`.
+Kosten: Werte und URL-Teile mit Sonderzeichen werden samt Rest maskiert,
+ein offenes Anführungszeichen in einem maskierten Teil maskiert bis
+Textende. Queue (strom #60): Variante (b); zurück unter die Schwelle meldet
+`debug`.
 
 **Grenze**: Die STR.5-Queues haben 2 s Luft über der Verzögerung
 (`max-size-time`), erreichen die neue Schwelle also nie; ein volles
@@ -8021,7 +8049,10 @@ die Geheimnisse weiter (Konfiguration, keine Verschlüsselung).
 Änderung rot: `topsecret1` im Log), `pipeline_monitor::tests::a_delay_queue_within_its_delay_is_not_over`
 (vor der Änderung rot), lmix-core `a_refusal_carries_no_passphrase` (vor
 der Änderung rot: `400 Bad Request: Invalid property
-srt_uri=srt://192.0.2.1:9000?passphrase=topsecret1`).
+srt_uri=srt://192.0.2.1:9000?passphrase=topsecret1`). Gemeinsame
+Test-Eingaben: strom `redact::tests::shared_vectors_*`, lmix-types
+`srt::tests::shared_vectors_*` (jede Eingabe der vier Review-Runden, ohne
+Panic, linear auch bei 1 MB).
 
 ## 2026-11-01 — Ausgänge: Puffer und Encoder-Last (STR.7)
 
