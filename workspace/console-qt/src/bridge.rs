@@ -177,6 +177,17 @@ pub mod qobject {
         #[qinvokable]
         fn choices(self: &Core, list: &QString) -> QString;
 
+        /// The SRT address of an SRT input's fields (forms::srt_uri).
+        #[qinvokable]
+        #[cxx_name = "srtUri"]
+        fn srt_uri(self: &Core, fields: &QString) -> QString;
+
+        /// The fields of an SRT address as JSON (forms::srt_fields); empty
+        /// when it does not read.
+        #[qinvokable]
+        #[cxx_name = "srtFields"]
+        fn srt_fields(self: &Core, uri: &QString) -> QString;
+
         /// `h:mm:ss` since a Unix time in ms.
         #[qinvokable]
         #[cxx_name = "runningTime"]
@@ -626,6 +637,14 @@ impl qobject::Core {
 
     fn choices(&self, list: &QString) -> QString {
         QString::from(&forms::values(&list.to_string()).unwrap_or_else(|| "[]".into()))
+    }
+
+    fn srt_uri(&self, fields: &QString) -> QString {
+        QString::from(&forms::srt_uri(&fields.to_string()))
+    }
+
+    fn srt_fields(&self, uri: &QString) -> QString {
+        QString::from(&forms::srt_fields(&uri.to_string()))
     }
 
     fn running_time(&self, since_ms: f64) -> QString {

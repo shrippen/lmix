@@ -5,7 +5,8 @@
 
 use lmix_types::{
     Action, BusId, BusRef, CardChannels, CardMode, Container, DisplayMode, Effect, InputColor,
-    InputPress, OutputRef, OutputSource, OutputSpec, SourceSpec, TestPattern, VideoEncoding,
+    InputPress, OutputRef, OutputSource, OutputSpec, SourceSpec, SrtAddress, SrtMode, TestPattern,
+    VideoEncoding,
 };
 use serde::{Deserialize, Serialize};
 
@@ -42,6 +43,23 @@ pub fn values(list: &str) -> Option<String> {
         "containers" => Container::ALL.map(name_of).to_vec(),
         "card_modes" => CardMode::ALL.map(|m| m.nick().to_string()).to_vec(),
         "card_channels" => CardChannels::ALL.map(name_of).to_vec(),
+        "srt_modes" => SrtMode::ALL.map(name_of).to_vec(),
+        // What an SRT input's fields take (SRC.12).
+        "srt_limits" => {
+            use lmix_types::srt::*;
+            return Some(
+                serde_json::json!({
+                    "passphrase_min": SRT_PASSPHRASE_MIN,
+                    "passphrase_max": SRT_PASSPHRASE_MAX,
+                    "key_lengths": SRT_KEY_LENGTHS,
+                    "latency_ms": SRT_DEFAULT_LATENCY_MS,
+                    "latency_max_ms": SRT_LATENCY_MAX_MS,
+                    "decoder_delay_max_ms": SRT_DECODER_DELAY_MAX_MS,
+                    "stream_id_max": SRT_STREAM_ID_MAX,
+                })
+                .to_string(),
+            )
+        }
         "outputs" => OUTPUT_KINDS.iter().map(|k| k.to_string()).collect(),
         "durations" => return serde_json::to_string(&DURATION_PRESETS_MS).ok(),
         // A card output's longest sound delay.
@@ -137,7 +155,10 @@ pub fn source_of(kind: &str, value: &str) -> Option<SourceSpec> {
                 .collect(),
         },
         "url" => SourceSpec::Url { url: text },
-        "srt" => SourceSpec::Srt { uri: text },
+        "srt" => SourceSpec::Srt {
+            uri: text,
+            decoder_delay_ms: None,
+        },
         "ndi" => SourceSpec::Ndi { name: text },
         "whip" => SourceSpec::Whip { endpoint: text },
         "web" => SourceSpec::Web {
@@ -173,6 +194,8 @@ pub struct SourceOptions {
     pub mode: String,
     /// A card's channel pair, 1 to 8; 0: the first.
     pub pair: u32,
+    /// An SRT input's decoder delay in ms; 0: strom's (SRC.12).
+    pub decoder_delay_ms: u32,
 }
 
 /// `source_of` with the form's options (`SourceOptions` as JSON; empty or
@@ -194,7 +217,30 @@ pub fn source_with_options(kind: &str, value: &str, options: &str) -> Option<Sou
         *mode = CardMode::from_nick(&options.mode);
         *pair = options.pair.max(1);
     }
+    if let SourceSpec::Srt {
+        decoder_delay_ms, ..
+    } = &mut source
+    {
+        *decoder_delay_ms = (options.decoder_delay_ms > 0).then_some(options.decoder_delay_ms);
+    }
     Some(source)
+}
+
+/// The SRT address of the form's fields (`SrtAddress` as JSON, SRC.12);
+/// empty when they do not read.
+pub fn srt_uri(fields: &str) -> String {
+    serde_json::from_str::<SrtAddress>(fields)
+        .map(|address| address.uri())
+        .unwrap_or_default()
+}
+
+/// The fields of an SRT address as JSON (`SrtAddress`), for the form to
+/// show what an input has or what was pasted; empty when it does not read.
+pub fn srt_fields(uri: &str) -> String {
+    SrtAddress::parse(uri)
+        .ok()
+        .and_then(|address| serde_json::to_string(&address).ok())
+        .unwrap_or_default()
 }
 
 /// `#rrggbb` in lower case, from QML's colour text (`#RRGGBB` or
@@ -603,6 +649,50 @@ mod tests {
         assert_eq!(source_of("color", "orange"), None);
         assert_eq!(source_of("pattern", "nope"), None);
         assert_eq!(source_of("teleport", "x"), None);
+    }
+
+    #[test]
+    fn srt_fields_make_the_address_and_back() {
+        let fields = r##"{"mode":"listener","host":"","port":9000,"latency_ms":300,
+            "passphrase":"geheim & gut","key_length":32,"stream_id":"#!::r=cam1",
+            "extra":[["poll-timeout","500"]]}"##;
+        let uri = srt_uri(fields);
+        assert_eq!(
+            uri,
+            "srt://:9000?mode=listener&latency=300&passphrase=geheim%20%26%20gut&pbkeylen=32&streamid=%23%21%3A%3Ar%3Dcam1&poll-timeout=500"
+        );
+        let back: serde_json::Value = serde_json::from_str(&srt_fields(&uri)).unwrap();
+        let sent: serde_json::Value = serde_json::from_str(fields).unwrap();
+        assert_eq!(back, sent);
+        // Fields left out take their defaults: a caller without latency.
+        assert_eq!(srt_uri(r#"{"host":"cam","port":7001}"#), "srt://cam:7001");
+        assert_eq!(srt_uri("not json"), "");
+        assert_eq!(srt_fields("rtmp://cam"), "");
+    }
+
+    #[test]
+    fn srt_source_takes_its_decoder_delay() {
+        assert_eq!(
+            source_with_options("srt", "srt://cam:9000", r#"{"decoder_delay_ms":200}"#),
+            Some(SourceSpec::Srt {
+                uri: "srt://cam:9000".into(),
+                decoder_delay_ms: Some(200),
+            })
+        );
+        assert_eq!(
+            source_with_options("srt", "srt://cam:9000", r#"{"decoder_delay_ms":0}"#),
+            Some(SourceSpec::Srt {
+                uri: "srt://cam:9000".into(),
+                decoder_delay_ms: None,
+            }),
+            "0: strom's own"
+        );
+        let modes: Vec<String> = serde_json::from_str(&values("srt_modes").unwrap()).unwrap();
+        assert_eq!(modes, ["caller", "listener", "rendezvous"]);
+        let limits: serde_json::Value =
+            serde_json::from_str(&values("srt_limits").unwrap()).unwrap();
+        assert_eq!(limits["passphrase_min"], 10);
+        assert_eq!(limits["key_lengths"], serde_json::json!([16, 24, 32]));
     }
 
     #[test]

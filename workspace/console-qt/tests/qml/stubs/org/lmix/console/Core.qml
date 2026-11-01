@@ -53,6 +53,8 @@ QtObject {
     function refreshLists() {}
     function measureLatency() {}
     function choices(list) { return "[]" }
+    function srtUri(fields) { return "" }
+    function srtFields(uri) { return "" }
     function runningTime(since) { return "" }
     function shortName(name, max) { return String(name).slice(0, max) }
     function peak(key) { return NaN }

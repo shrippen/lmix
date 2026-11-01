@@ -89,6 +89,13 @@ QtObject {
             case "card": return qsTr("SDI / HDMI card")
             }
             break
+        case "srt_modes":
+            switch (value) {
+            case "caller": return qsTr("Caller", "SRT mode: lmix calls the sender")
+            case "listener": return qsTr("Listener", "SRT mode: lmix waits for the sender")
+            case "rendezvous": return qsTr("Rendezvous", "SRT mode: both sides call")
+            }
+            break
         case "card_modes":
             return cardMode(value)
         case "card_channels":
@@ -335,6 +342,7 @@ QtObject {
         case "bad_quick_play": return qsTr("Quick play: %1").arg(e.reason)
         case "no_audio": return qsTr("%1 has no sound").arg(e.reference)
         case "bad_card": return qsTr("Card: %1").arg(e.reason)
+        case "bad_srt": return qsTr("SRT: %1").arg(e.reason)
         case "bad_web_url": return qsTr("Web page %1 is not an http:// or https:// address").arg(e.url)
         case "no_page": return qsTr("%1 shows no page (not a web or graphics input)").arg(e.reference)
         case "bad_fade": return qsTr("A level fade lasts 0–%1 ms, not %2").arg(e.max).arg(e.duration_ms)

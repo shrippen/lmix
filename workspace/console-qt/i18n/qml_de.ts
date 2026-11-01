@@ -135,7 +135,7 @@
   <context>
     <name>AddInputDialog</name>
     <message>
-      <location filename="../qml/AddInputDialog.qml" line="+32" />
+      <location filename="../qml/AddInputDialog.qml" line="+36" />
       <source>Replace source of %1</source>
       <translation>Quelle von %1 ersetzen</translation>
     </message>
@@ -311,7 +311,7 @@
       <translation>Die Titel eines Grafikkanals über transparentem Hintergrund.</translation>
     </message>
     <message>
-      <location line="+8" />
+      <location line="+7" />
       <source>endpoint name, e.g. stage</source>
       <translation>Endpunktname, z. B. buehne</translation>
     </message>
@@ -321,7 +321,57 @@
       <translation>Nummer oder Name des Kanals, z. B. 1</translation>
     </message>
     <message>
-      <location line="+12" />
+      <location line="+17" />
+      <source>The sender's</source>
+      <translation>Wie der Sender</translation>
+    </message>
+    <message>
+      <location line="+1" />
+      <source>AES-%1</source>
+      <translation>AES-%1</translation>
+    </message>
+    <message>
+      <location line="+22" />
+      <source>Enter a port from 1 to 65535.</source>
+      <translation>Einen Port von 1 bis 65535 eingeben.</translation>
+    </message>
+    <message>
+      <location line="+2" />
+      <source>A caller or rendezvous needs the address of the other side.</source>
+      <translation>Caller und Rendezvous brauchen die Adresse der Gegenseite.</translation>
+    </message>
+    <message>
+      <location line="+3" />
+      <source>A passphrase has %1 to %2 characters.</source>
+      <translation>Eine Passphrase hat %1 bis %2 Zeichen.</translation>
+    </message>
+    <message>
+      <location line="+2" />
+      <source>A key length needs a passphrase.</source>
+      <translation>Eine Schlüssellänge braucht eine Passphrase.</translation>
+    </message>
+    <message>
+      <location line="+2" />
+      <source>A stream id has at most %1 characters.</source>
+      <translation>Eine Stream-ID hat höchstens %1 Zeichen.</translation>
+    </message>
+    <message>
+      <location line="+4" />
+      <source>lmix calls the sender at this address.</source>
+      <translation>lmix ruft den Sender unter dieser Adresse an.</translation>
+    </message>
+    <message>
+      <location line="+1" />
+      <source>lmix waits on this port until the sender calls. Without an address it listens on all of this machine's.</source>
+      <translation>lmix wartet auf diesem Port, bis der Sender anruft. Ohne Adresse lauscht es auf allen dieses Rechners.</translation>
+    </message>
+    <message>
+      <location line="+1" />
+      <source>Both sides call each other at once, through firewalls; the sender uses the same port.</source>
+      <translation>Beide Seiten rufen sich gleichzeitig an, auch durch Firewalls; der Sender nimmt denselben Port.</translation>
+    </message>
+    <message>
+      <location line="+35" />
       <source>Black</source>
       <translation>Schwarz</translation>
     </message>
@@ -357,7 +407,7 @@
       <translation>Die des Geräts</translation>
     </message>
     <message>
-      <location line="+196" />
+      <location line="+203" />
       <source>Pattern</source>
       <translation>Muster</translation>
     </message>
@@ -408,11 +458,13 @@
     </message>
     <message>
       <location line="+1" />
+      <location line="+72" />
+      <location line="+86" />
       <source>Address</source>
       <translation>Adresse</translation>
     </message>
     <message>
-      <location line="+14" />
+      <location line="-144" />
       <source>device id</source>
       <translation>Geräte-ID</translation>
     </message>
@@ -428,6 +480,76 @@
     </message>
     <message>
       <location line="+9" />
+      <source>Connection</source>
+      <translation>Verbindung</translation>
+    </message>
+    <message>
+      <location line="+22" />
+      <source>Local address</source>
+      <translation>Lokale Adresse</translation>
+    </message>
+    <message>
+      <location line="+7" />
+      <source>all</source>
+      <translation>alle</translation>
+    </message>
+    <message>
+      <location line="+0" />
+      <source>host or IP, or paste srt://…</source>
+      <translation>Host oder IP, oder srt://… einfügen</translation>
+    </message>
+    <message>
+      <location line="+5" />
+      <source>Port</source>
+      <translation>Port</translation>
+    </message>
+    <message>
+      <location line="+10" />
+      <source>Latency (ms)</source>
+      <translation>Latenz (ms)</translation>
+    </message>
+    <message>
+      <location line="+11" />
+      <source>Passphrase</source>
+      <translation>Passphrase</translation>
+    </message>
+    <message>
+      <location line="+6" />
+      <source>none: unencrypted</source>
+      <translation>keine: unverschlüsselt</translation>
+    </message>
+    <message>
+      <location line="+3" />
+      <source>Key length</source>
+      <translation>Schlüssellänge</translation>
+    </message>
+    <message>
+      <location line="+8" />
+      <source>Stream ID</source>
+      <translation>Stream-ID</translation>
+    </message>
+    <message>
+      <location line="+5" />
+      <source>optional, e.g. #!::r=cam1</source>
+      <translation>optional, z. B. #!::r=cam1</translation>
+    </message>
+    <message>
+      <location line="+2" />
+      <source>Decoder delay (ms)</source>
+      <translation>Decoder-Verzögerung (ms)</translation>
+    </message>
+    <message>
+      <location line="+14" />
+      <source>Latency is the receive buffer: about four times the round trip, the same on both sides. The decoder delay waits for late packets; 0 keeps the delay lowest.</source>
+      <translation>Die Latenz ist der Empfangspuffer: etwa das Vierfache der Umlaufzeit, auf beiden Seiten gleich. Die Decoder-Verzögerung wartet auf späte Pakete; 0 hält die Verzögerung am kleinsten.</translation>
+    </message>
+    <message>
+      <location line="+15" />
+      <source>Address (passphrase not shown)</source>
+      <translation>Adresse (ohne Passphrase)</translation>
+    </message>
+    <message>
+      <location line="+18" />
       <location line="+26" />
       <source>Options</source>
       <translation>Optionen</translation>
@@ -650,13 +772,13 @@
   <context>
     <name>AppShell</name>
     <message>
-      <location filename="../qml/AppShell.qml" line="+633" />
-      <location line="+112" />
+      <location filename="../qml/AppShell.qml" line="+634" />
+      <location line="+113" />
       <source>Open show</source>
       <translation>Show öffnen</translation>
     </message>
     <message>
-      <location line="-111" />
+      <location line="-112" />
       <location line="+13" />
       <source>lmix shows (*.lmix)</source>
       <translation>lmix-Shows (*.lmix)</translation>
@@ -670,12 +792,12 @@
     </message>
     <message>
       <location line="-61" />
-      <location line="+102" />
+      <location line="+103" />
       <source>Save show</source>
       <translation>Show speichern</translation>
     </message>
     <message>
-      <location line="-87" />
+      <location line="-88" />
       <source>Export settings</source>
       <translation>Einstellungen exportieren</translation>
     </message>
@@ -712,7 +834,7 @@
       <translation>Leerer Ordner für Show und Medien des Pakets</translation>
     </message>
     <message>
-      <location line="+34" />
+      <location line="+35" />
       <source>button in the page bar or at the foot of a page's window</source>
       <translation>Knopf in der Seitenleiste oder unten im Fenster einer Seite</translation>
     </message>
@@ -2604,7 +2726,7 @@
       <translation>Tasten</translation>
     </message>
     <message>
-      <location line="+6" />
+      <location line="+7" />
       <source>Shortcuts…</source>
       <translation>Belegungen…</translation>
     </message>
@@ -3016,7 +3138,7 @@
   <context>
     <name>MessageToasts</name>
     <message>
-      <location filename="../qml/MessageToasts.qml" line="+144" />
+      <location filename="../qml/MessageToasts.qml" line="+160" />
       <source>Close</source>
       <translation>Schließen</translation>
     </message>
@@ -5509,7 +5631,7 @@
       <translation>Beschriftung</translation>
     </message>
     <message>
-      <location line="+7" />
+      <location line="+12" />
       <source>Press a key…</source>
       <translation>Taste drücken…</translation>
     </message>
@@ -7130,12 +7252,12 @@
     <message>
       <location line="+1" />
       <location line="+63" />
-      <location line="+151" />
+      <location line="+158" />
       <source>NDI</source>
       <translation>NDI</translation>
     </message>
     <message>
-      <location line="-213" />
+      <location line="-220" />
       <source>WHIP (browser, OBS)</source>
       <translation>WHIP (Browser, OBS)</translation>
     </message>
@@ -7307,12 +7429,12 @@
     </message>
     <message>
       <location line="+1" />
-      <location line="+149" />
+      <location line="+156" />
       <source>Recording</source>
       <translation>Aufnahme</translation>
     </message>
     <message>
-      <location line="-147" />
+      <location line="-154" />
       <source>Screen: window</source>
       <translation>Bildschirm: Fenster</translation>
     </message>
@@ -7327,7 +7449,25 @@
       <translation>Bildschirm: Anschluss (ohne Desktop)</translation>
     </message>
     <message>
-      <location line="+7" />
+      <location line="+6" />
+      <source>Caller</source>
+      <comment>SRT mode: lmix calls the sender</comment>
+      <translation>Caller</translation>
+    </message>
+    <message>
+      <location line="+1" />
+      <source>Listener</source>
+      <comment>SRT mode: lmix waits for the sender</comment>
+      <translation>Listener</translation>
+    </message>
+    <message>
+      <location line="+1" />
+      <source>Rendezvous</source>
+      <comment>SRT mode: both sides call</comment>
+      <translation>Rendezvous</translation>
+    </message>
+    <message>
+      <location line="+6" />
       <source>%1 channels</source>
       <translation>%1 Kanäle</translation>
     </message>
@@ -7825,6 +7965,11 @@
       <location line="+1" />
       <source>Card: %1</source>
       <translation>Karte: %1</translation>
+    </message>
+    <message>
+      <location line="+1" />
+      <source>SRT: %1</source>
+      <translation>SRT: %1</translation>
     </message>
     <message>
       <location line="+1" />

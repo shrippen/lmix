@@ -17,6 +17,10 @@ import Kante
  *   [File] [Image] …  │ HDMI capture 1   free
  *   NETWORK           │ OPTIONS  Resolution  Frame rate
  *   …                 │ NAME [          ]   ☐ Then add another
+ *
+ * An SRT input (SRC.12) gets its address from fields: mode, host, port,
+ * latency, passphrase, key length, stream id and the decoder delay; a
+ * pasted srt:// address fills them, parameters without a field stay.
  */
 KanteDialog {
     id: dialog
@@ -81,7 +85,6 @@ KanteDialog {
         image: "/path/to/logo.png",
         playlist: "/clips/a.mp4; /clips/b.mp4",
         url: "https://…",
-        srt: "srt://host:port",
         whip: qsTr("endpoint name, e.g. stage"),
         web: "https://…",
         graphics: qsTr("channel number or name, e.g. 1")
@@ -89,7 +92,85 @@ KanteDialog {
 
     readonly property bool picksDevice: kind === "device" || kind === "audio_device" || kind === "ndi" || kind === "card"
     readonly property bool picksFiles: kind === "file" || kind === "image" || kind === "playlist"
-    readonly property bool typesAddress: ["url", "srt", "whip", "web", "graphics"].indexOf(kind) >= 0
+    readonly property bool typesAddress: ["url", "whip", "web", "graphics"].indexOf(kind) >= 0
+    readonly property bool picksSrt: kind === "srt"
+
+    // An SRT input's fields (SRC.12); Rust puts the address together.
+    readonly property var srtModes: Texts.choices("srt_modes", core.choices("srt_modes"))
+    readonly property var srtLimits: {
+        const limits = String(core.choices("srt_limits"))
+        return limits.charAt(0) === "{" ? JSON.parse(limits)
+            : { passphrase_min: 10, passphrase_max: 79, key_lengths: [16, 24, 32], latency_ms: 125,
+                latency_max_ms: 10000, decoder_delay_max_ms: 10000, stream_id_max: 512 }
+    }
+    /** 0: the sender's key length. */
+    readonly property var srtKeyLengths: [{ value: 0, label: qsTr("The sender's") }]
+        .concat(srtLimits.key_lengths.map(k => ({ value: k, label: qsTr("AES-%1").arg(k * 8) })))
+    property int srtModeIndex: 0
+    readonly property string srtMode: srtModes[srtModeIndex] ? srtModes[srtModeIndex].value : "caller"
+    /** Parameters of a replaced or pasted address that have no field: kept. */
+    property var srtExtra: []
+    readonly property int srtPortNumber: /^\d{1,5}$/.test(srtPort.text.trim()) ? parseInt(srtPort.text.trim()) : 0
+    /** `SrtAddress` as JSON; without the passphrase for the line that shows it. */
+    function srtFieldsJson(withPassphrase) {
+        const key = srtKeyLengths[Math.max(0, srtKeyBox.currentIndex)].value
+        return JSON.stringify({
+            mode: srtMode, host: srtHost.text.trim(), port: srtPortNumber,
+            latency_ms: srtLatency.value, passphrase: withPassphrase ? srtPassphrase.text : "",
+            key_length: key > 0 ? key : undefined, stream_id: srtStreamId.text, extra: srtExtra
+        })
+    }
+    readonly property string srtAddress: picksSrt ? core.srtUri(srtFieldsJson(true)) : ""
+    readonly property string srtShown: picksSrt ? core.srtUri(srtFieldsJson(false)) : ""
+    /** Why the fields make no address SRT accepts; empty when they do. */
+    readonly property string srtProblem: {
+        if (!picksSrt)
+            return ""
+        if (srtPortNumber < 1 || srtPortNumber > 65535)
+            return qsTr("Enter a port from 1 to 65535.")
+        if (srtHost.text.trim() === "" && srtMode !== "listener")
+            return qsTr("A caller or rendezvous needs the address of the other side.")
+        const length = srtPassphrase.text.length
+        if (length > 0 && (length < srtLimits.passphrase_min || length > srtLimits.passphrase_max))
+            return qsTr("A passphrase has %1 to %2 characters.").arg(srtLimits.passphrase_min).arg(srtLimits.passphrase_max)
+        if (length === 0 && srtKeyBox.currentIndex > 0)
+            return qsTr("A key length needs a passphrase.")
+        if (srtStreamId.text.length > srtLimits.stream_id_max)
+            return qsTr("A stream id has at most %1 characters.").arg(srtLimits.stream_id_max)
+        return ""
+    }
+    readonly property var srtModeHints: ({
+        caller: qsTr("lmix calls the sender at this address."),
+        listener: qsTr("lmix waits on this port until the sender calls. Without an address it listens on all of this machine's."),
+        rendezvous: qsTr("Both sides call each other at once, through firewalls; the sender uses the same port.")
+    })
+    /** The fields of `uri` (true), or false when it is no SRT address. */
+    function applySrt(uri) {
+        const json = core.srtFields(uri)
+        if (json === "")
+            return false
+        const a = JSON.parse(json)
+        srtModeIndex = Math.max(0, srtModes.findIndex(m => m.value === a.mode))
+        srtHost.text = a.host || ""
+        srtPort.text = a.port ? String(a.port) : ""
+        srtLatency.value = a.latency_ms !== undefined ? a.latency_ms : srtLimits.latency_ms
+        srtPassphrase.text = a.passphrase || ""
+        srtKeyBox.currentIndex = Math.max(0, srtKeyLengths.findIndex(k => k.value === (a.key_length || 0)))
+        srtStreamId.text = a.stream_id || ""
+        srtExtra = a.extra || []
+        return true
+    }
+    function resetSrt() {
+        srtModeIndex = 0
+        srtHost.text = ""
+        srtPort.text = ""
+        srtLatency.value = srtLimits.latency_ms
+        srtPassphrase.text = ""
+        srtKeyBox.currentIndex = 0
+        srtStreamId.text = ""
+        srtDecoderDelay.value = 0
+        srtExtra = []
+    }
 
     readonly property var patterns: Texts.choices("patterns", core.choices("patterns"))
     property int patternIndex: 0
@@ -142,6 +223,7 @@ KanteDialog {
         switch (kind) {
         case "pattern": return patterns[patternIndex] ? patterns[patternIndex].value : ""
         case "color": return colorValue
+        case "srt": return srtAddress
         default: return textField.text
         }
     }
@@ -151,6 +233,7 @@ KanteDialog {
                            framerate: framerates[Math.max(0, framerateBox.currentIndex)].value })
         : kind === "card" ? JSON.stringify({ mode: cardModes[Math.max(0, cardModeBox.currentIndex)].value,
                                              pair: Math.max(0, cardPairBox.currentIndex) + 1 })
+        : kind === "srt" ? JSON.stringify({ decoder_delay_ms: srtDecoderDelay.value })
         : "{}"
     /** Another input has the typed name (case aside): lmix-core would
      *  refuse it and what was typed here would be gone (INP.2). */
@@ -158,7 +241,8 @@ KanteDialog {
         const typed = nameField.text.trim().toLowerCase()
         return !replacing && typed.length > 0 && inputs.some(i => i.name.toLowerCase() === typed)
     }
-    readonly property bool complete: kind === "pattern" || kind === "color" || textField.text.trim().length > 0
+    readonly property bool complete: kind === "pattern" || kind === "color"
+        || (kind === "srt" ? srtProblem === "" && srtAddress !== "" : textField.text.trim().length > 0)
 
     function choose(k) {
         if (k !== kind) {
@@ -192,6 +276,7 @@ KanteDialog {
         framerateBox.currentIndex = 0
         cardModeBox.currentIndex = 0
         cardPairBox.currentIndex = 0
+        resetSrt()
         if (replacing && available.indexOf(replacing.source.kind) >= 0) {
             const source = replacing.source
             kind = source.kind
@@ -208,6 +293,9 @@ KanteDialog {
             } else if (source.kind === "card") {
                 cardModeBox.currentIndex = Math.max(0, cardModes.findIndex(m => m.value === (source.mode || "")))
                 cardPairBox.currentIndex = (source.pair || 1) - 1
+            } else if (source.kind === "srt") {
+                applySrt(source.uri)
+                srtDecoderDelay.value = source.decoder_delay_ms || 0
             }
         }
     }
@@ -449,6 +537,132 @@ KanteDialog {
                 text: qsTr("Or drop files from the file manager here.")
                 font: KanteStyle.smallFont
                 color: KanteStyle.mutedTextColor
+            }
+
+            // An SRT input's address and options (SRC.12).
+            KanteSectionLabel {
+                visible: dialog.picksSrt
+                Layout.topMargin: Kirigami.Units.smallSpacing
+                text: qsTr("Connection")
+            }
+            KanteSegmented {
+                objectName: "srtMode"
+                visible: dialog.picksSrt
+                model: dialog.srtModes.map(m => m.label)
+                currentIndex: dialog.srtModeIndex
+                onActivated: index => dialog.srtModeIndex = index
+            }
+            QQC2.Label {
+                visible: dialog.picksSrt
+                Layout.fillWidth: true
+                text: dialog.srtModeHints[dialog.srtMode] || ""
+                wrapMode: Text.WordWrap
+                font: KanteStyle.smallFont
+                color: KanteStyle.mutedTextColor
+            }
+            GridLayout {
+                visible: dialog.picksSrt
+                Layout.fillWidth: true
+                columns: 2
+                columnSpacing: Kirigami.Units.largeSpacing
+                QQC2.Label { text: dialog.srtMode === "listener" ? qsTr("Local address") : qsTr("Address") }
+                RowLayout {
+                    Layout.fillWidth: true
+                    KanteTextField {
+                        id: srtHost
+                        objectName: "srtHost"
+                        Layout.fillWidth: true
+                        placeholderText: dialog.srtMode === "listener" ? qsTr("all") : qsTr("host or IP, or paste srt://…")
+                        invalid: dialog.srtMode !== "listener" && text.trim() === "" && srtPort.text.trim() !== ""
+                        // A pasted srt:// address fills the fields.
+                        onTextEdited: if (/^srt:\/\//i.test(text.trim())) dialog.applySrt(text.trim())
+                    }
+                    QQC2.Label { text: qsTr("Port") }
+                    KanteTextField {
+                        id: srtPort
+                        objectName: "srtPort"
+                        Layout.preferredWidth: Kirigami.Units.gridUnit * 5
+                        inputMethodHints: Qt.ImhDigitsOnly
+                        validator: IntValidator { bottom: 1; top: 65535 }
+                        placeholderText: "9000"
+                    }
+                }
+                QQC2.Label { text: qsTr("Latency (ms)") }
+                QQC2.SpinBox {
+                    id: srtLatency
+                    objectName: "srtLatency"
+                    from: 0
+                    to: dialog.srtLimits.latency_max_ms
+                    stepSize: 20
+                    value: dialog.srtLimits.latency_ms
+                    editable: true
+                    KanteFieldSkin { control: srtLatency }
+                }
+                QQC2.Label { text: qsTr("Passphrase") }
+                KanteTextField {
+                    id: srtPassphrase
+                    objectName: "srtPassphrase"
+                    Layout.fillWidth: true
+                    echoMode: TextInput.Password
+                    placeholderText: qsTr("none: unencrypted")
+                    invalid: text.length > 0 && (text.length < dialog.srtLimits.passphrase_min || text.length > dialog.srtLimits.passphrase_max)
+                }
+                QQC2.Label { text: qsTr("Key length") }
+                KanteComboBox {
+                    id: srtKeyBox
+                    objectName: "srtKeyLength"
+                    Layout.fillWidth: true
+                    model: dialog.srtKeyLengths
+                    textRole: "label"
+                }
+                QQC2.Label { text: qsTr("Stream ID") }
+                KanteTextField {
+                    id: srtStreamId
+                    objectName: "srtStreamId"
+                    Layout.fillWidth: true
+                    placeholderText: qsTr("optional, e.g. #!::r=cam1")
+                }
+                QQC2.Label { text: qsTr("Decoder delay (ms)") }
+                QQC2.SpinBox {
+                    id: srtDecoderDelay
+                    objectName: "srtDecoderDelay"
+                    from: 0
+                    to: dialog.srtLimits.decoder_delay_max_ms
+                    stepSize: 50
+                    editable: true
+                    KanteFieldSkin { control: srtDecoderDelay }
+                }
+            }
+            QQC2.Label {
+                visible: dialog.picksSrt
+                Layout.fillWidth: true
+                text: qsTr("Latency is the receive buffer: about four times the round trip, the same on both sides. The decoder delay waits for late packets; 0 keeps the delay lowest.")
+                wrapMode: Text.WordWrap
+                font: KanteStyle.smallFont
+                color: KanteStyle.mutedTextColor
+            }
+            QQC2.Label {
+                objectName: "srtProblem"
+                visible: dialog.picksSrt && dialog.srtProblem !== ""
+                Layout.fillWidth: true
+                wrapMode: Text.WordWrap
+                color: KanteStyle.negativeTextColor
+                text: dialog.srtProblem
+            }
+            KanteSectionLabel {
+                visible: dialog.picksSrt && dialog.srtProblem === ""
+                text: srtPassphrase.text.length > 0 ? qsTr("Address (passphrase not shown)") : qsTr("Address")
+            }
+            TextEdit {
+                objectName: "srtAddress"
+                visible: dialog.picksSrt && dialog.srtProblem === ""
+                Layout.fillWidth: true
+                text: dialog.srtShown
+                readOnly: true
+                selectByMouse: true
+                wrapMode: TextEdit.WrapAnywhere
+                color: Kirigami.Theme.textColor
+                font.family: KanteStyle.monoFamily
             }
 
             // A camera's mode.
