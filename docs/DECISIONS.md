@@ -8120,11 +8120,16 @@ ein roher Leerraum im Passwort (`srt://u:a b@h`), ein rohes `&` im
 geheimen Query-Wert vor einem unbekannten Namen (`passphrase=a&b=c`),
 Token im Pfad anderer Schemata (`rtsp://h/<token>/x`), `auth-token: a b`
 und ein `@` im Pfad (`rtmp://h/live/a@b` zeigte `b` als Host).
-Seit strom #70 (Review #69): ein Shell-`'\''` in einem Wert, der selbst ein
-Anführungszeichen öffnet (`'passphrase="my"'\''s secret'` zeigte
-`secret`; das im Wert offene Anführungszeichen maskiert jetzt bis zu
-seinem Partner oder Textende), und ein HTTP-Pfadsegment mit mehreren
+Seit strom #70 (Review #69): ein Shell-`'\''` hinter einem Wert, der über
+den Partner hinausläuft (`'passphrase="my"'\''s secret'` zeigte `secret`;
+`"my"` klebt am schließenden `'`, darum endet der Wert dort nicht, und was
+hinter dem Partner folgt, wird jetzt maskiert wie hinter einem Wert, der
+dort endet: das `'\''` bis Textende), und ein HTTP-Pfadsegment mit mehreren
 Zahlenblöcken (nur je Teil auf 10 Ziffern begrenzt, jetzt je Segment).
+strom #72 verschiebt die Tests nach `redact/tests.rs` (beide Dateien unter
+1 500 Zeilen) und nennt in den Kommentaren weder lmix noch Review-Runden,
+damit `dev` und der Upstream-Branch gleich bleiben; der Sync-Hinweis steht
+nur in `srt.rs`.
 
 Bewusst nicht abgedeckt (Prosa nicht unterscheidbar, im Doc-Kommentar von
 `text()` genannt): Namen ohne geheime Endung oder ohne `=`/`:`; ein
@@ -8410,7 +8415,7 @@ Beleg: strom-Tests `test_tap_does_not_serve_a_picture_after_frames_stop` (vorher
 
 ## 2026-11-01 — vm-check: „paused clip not held on program“ erledigt, Mischer hinter der Uhr
 
-Branch `vm-paused-clip`, nur Doku; strom unverändert (Submodul bleibt auf `dev` c426a7e).
+Branch `vm-paused-clip`, nur Doku; strom unverändert (Submodul bleibt auf `dev`).
 
 - **CI-Verlauf seit 25.10.:** 5 Fehlschläge mit „paused clip not held on program“ (40261817405,
   40668775295, 40960842473, 40968188881, 41012411347, 26.–30.10.), alle mit strom vor #55 (Pins
