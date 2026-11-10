@@ -121,7 +121,7 @@ VSP und die Abnahme auf der RTX 3090.
 - Review (seit 22.10.2026): zuerst PR-Agent, die Sitzung kommentiert
   `/review` je Runde mit neuem Code oder neuer Basis; ein neuer Claude-Agent prüft die
   **Wichtig** früherer Runden und reviewt, wenn PR-Agent zweimal scheitert.
-  Ablauf und Überschriften in `agent.md` („Repository rule“), `REVIEW.md`.
+  Ablauf und Überschriften im Skill `pr-review`, `REVIEW.md`.
   Merge nur ohne offenes **Wichtig** und mit grüner CI (`github / test`,
   nach den Pfaden von `ci.yml`). Nach 3 Runden mit Wichtig: Eigentümer
   fragen. Bisher so gehandhabt (keine Regel): optionale Befunde mit

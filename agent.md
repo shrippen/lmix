@@ -38,5 +38,6 @@ the owner's machine has the rules through the global `CLAUDE.md` already and rea
 
 - CI runs on the GitHub mirror (`.github/workflows/ci.yml`, since 16.10.2026) and reports back to Gitea as the commit status `github / test`. The strom binary goes to `ghcr.io/shrippen/lmix-strom` (public) only.
 - The merge waits for: CI is green: the newest `github / test` status on the PR's commits is success, and no commit after the one it is on touches a path of `on.push.paths` in `.github/workflows/ci.yml` (one push of several commits gets one status, on its last commit). Whether CI is needed goes by the paths, not by what status is there: a PR none of whose commits (a merged base included) touches such a path needs no status; any other waits for it, and no status yet means wait, not merge. PR-Agent's status does not count here.
-- The owner also confirms: `packaging/`, and the strom image CI pushes for each strom commit counts as rebuilding; rebuilding what is already published does not count.
+- The owner also confirms: a PR that changes `packaging/`.
+- The strom image CI pushes for each strom commit counts as rebuilding; rebuilding what is already published does not count as publishing and needs no confirmation.
 - Everything else: `RULES.md` (Repository) and the skill `pr-review`.
