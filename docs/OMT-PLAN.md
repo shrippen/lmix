@@ -1,7 +1,7 @@
 # OMT-Plan (M2-Vorbereitung)
 
 Recherche-Stand, verifiziert gegen die echten GitHub-Repos (nicht nur aus
-`claude.md` übernommen). Reine Doku/Planung — keine Implementierung in M0.
+`PROJEKT.md` übernommen). Reine Doku/Planung — keine Implementierung in M0.
 
 ## libomt: Quelle, Lizenz, Build
 
@@ -15,7 +15,7 @@ Recherche-Stand, verifiziert gegen die echten GitHub-Repos (nicht nur aus
   C-Bibliothek ohne .NET-Laufzeitabhängigkeit ist.
 - **Kein Linux-Prebuilt**: laut `openmediatransport/.github/DOWNLOADS.md`
   gibt es offizielle Binärpakete nur für Windows und macOS. Auf Linux muss
-  aus Quelle gebaut werden — deckt sich mit der Annahme in `claude.md`.
+  aus Quelle gebaut werden — deckt sich mit der Annahme in `PROJEKT.md`.
 - Build (bestätigt aus `libomt/README.md` + `libomt/build/`):
   1. Verzeichnisstruktur `[root]/libomtnet` und `[root]/libomt` nebeneinander
      anlegen (Build referenziert `../libomtnet` relativ).
@@ -34,7 +34,7 @@ Recherche-Stand, verifiziert gegen die echten GitHub-Repos (nicht nur aus
 
 ## Rust-Anbindung: zwei community Optionen, nur eine zulässig
 
-Bei der Recherche gefunden, in `claude.md` nicht erwähnt:
+Bei der Recherche gefunden, in `PROJEKT.md` nicht erwähnt:
 
 | Projekt | Ansatz | Lizenz | Zulässig? |
 |---|---|---|---|
@@ -64,7 +64,7 @@ beschriebenen Dreiklang (Vorbild: `backend/src/blocks/builtin/ndi.rs`):
 **Aufwand-Treiber**: Frame-Marshalling zwischen `omt-rs`-Buffern und
 GStreamer-Buffers (Pixelformat-Konvertierung, Timing/PTS-Mapping), Threading
 (OMT-Receive-Loop darf den GStreamer-Streaming-Thread nicht blockieren —
-SPSC-Queue mit Frame-Drop bei Backpressure, wie in `claude.md` für Option (b)
+SPSC-Queue mit Frame-Drop bei Backpressure, wie in `PROJEKT.md` für Option (b)
 skizziert, gilt hier genauso). GPU-Pfad (`omt-rs`' `wgpu`-Feature) ist
 optional, für M2 erstmal nicht nötig (CPU-Pfad reicht für den
 Latenzbudget-Test).
@@ -95,7 +95,7 @@ Tendenz zu **Option (a)**: `omt-rs` senkt den ursprünglich für (a)
 angenommenen Mehraufwand (eigene C-FFI) so weit, dass der Latenzvorteil eines
 direkten Blocks den Mehraufwand gegenüber (b) vermutlich aufwiegt. Endgültige
 Entscheidung erst nach echtem libomt-Build + kurzem `omt-rs`-Spike (Empfang
-eines Test-Streams gegen `omtsendtest`), wie in `claude.md` für M2 vorgesehen.
+eines Test-Streams gegen `omtsendtest`), wie in `PROJEKT.md` für M2 vorgesehen.
 
 ## Nächste konkrete Schritte (M2, nicht M0)
 

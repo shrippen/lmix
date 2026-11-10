@@ -4,7 +4,7 @@ Stand 2026-10-16, Entwurf 3: abgeglichen mit dem QLab-5-Handbuch; Licht,
 Objekt-Audio, Effekt-Plugins und Timecode aufgenommen. Entscheidungen in §6
 (User 2026-10-16), S-E.3 und S-E.13 am 2026-10-17.
 Ergänzt `LASTENHEFT.md` (Bildmischer) um die Seite Show über demselben
-`lmix-core` (seit 2026-10-23 eine App mit Seiten, `docs/PLAN-SEITEN.md`). Abweichungen von `claude.md`, `ROADMAP.md` oder
+`lmix-core` (seit 2026-10-23 eine App mit Seiten, `docs/PLAN-SEITEN.md`). Abweichungen von `PROJEKT.md`, `ROADMAP.md` oder
 `LASTENHEFT.md` stehen in §6 zur Entscheidung, nicht stillschweigend.
 
 Dieses Dokument beschreibt **was** der Show-Modus können muss, nicht **wie**.
@@ -86,7 +86,7 @@ Es gelten CR.1 bis CR.8 aus `LASTENHEFT.md` sinngemäß, mit QLab statt vMix:
   einem anderen Rechner nach neuem Patch unverändert (lmix; QLab speichert
   Patches im Dokument).
 - Der Drehbuch-Import ist ein eigenes Werkzeug außerhalb von `lmix-core`
-  und spricht nur die API (Prozessregel `claude.md` 4).
+  und spricht nur die API (Prozessregel `PROJEKT.md` 4).
 
 ---
 

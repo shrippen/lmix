@@ -23,7 +23,7 @@ die Leinwand ist Anschauung und liegt nicht im Repo.
   Leiste zeigt, wo etwas läuft (Cue auf Standby, Lichtschleife, Aufnahme).
 - **Immer erreichbar**: Panik, Statuszeile (Aufnahme, Stream, Last,
   Verbindung, Uhr) und auf Seiten ohne eigenes Bild ein kleines Program-Bild.
-- **Prozessmodell bleibt** (claude.md, Entscheidung 4): Shell und Kern sind
+- **Prozessmodell bleibt** (PROJEKT.md, Entscheidung 4): Shell und Kern sind
   getrennte Prozesse, Grenze ist die lmix-API. Ein Absturz der Shell hält
   keinen Cue an.
 - **Arbeitsplätze statt Programme** (Konzept C): dieselbe App verbindet sich
@@ -66,7 +66,7 @@ Kern-Ablauf; es sind Ausgänge wie andere auch.
 
 ## Schritte
 
-0. **Doku** (eigener PR, vor dem Code): claude.md (Kontext, Entscheidung 7:
+0. **Doku** (eigener PR, vor dem Code): PROJEKT.md (Kontext, Entscheidung 7:
    „ein Kern, eine Shell mit Seiten“ statt „zwei Oberflächen“), DECISIONS
    (Eintrag 23.10.), Lastenhefte und ROADMAP, wo „Bedienmodus“ oder die
    Programmnamen als Anforderung stehen, todo (Licht). Was beschreibt, welche

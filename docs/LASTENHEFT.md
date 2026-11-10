@@ -1,7 +1,7 @@
 # Lastenheft: lmix als Clean-Room-Reimplementierung von vMix
 
 Stand 2026-10-08. Einzige Grundlage: vMix User Guide 29
-(<https://www.vmix.com/help29/>). Ergänzt `claude.md` und `ROADMAP.md`; Abweichungen von
+(<https://www.vmix.com/help29/>). Ergänzt `PROJEKT.md` und `ROADMAP.md`; Abweichungen von
 dort stehen in §6 zur Entscheidung, nicht stillschweigend.
 
 Dieses Dokument beschreibt **was** lmix können muss, nicht **wie**. Es ist
@@ -359,7 +359,7 @@ CasparCG-Server (T.2), aber die Titel-Fähigkeiten orientieren sich an
 CasparCG: dessen offene Vorlagen-Konvention, Ebenen-Modell und Steuerbefehle
 dienen als Vorbild. strom rendert die Vorlagen selbst (Chromium über
 `cefsrc`), also ein Takt und ein GPU-Pfad. CasparCG dient nur als
-Funktionsreferenz, kein Code (MIT, `claude.md` Entscheidung 6).
+Funktionsreferenz, kein Code (MIT, `PROJEKT.md` Entscheidung 6).
 
 | ID | Anforderung | Prio | Stand |
 |---|---|---|---|
@@ -555,7 +555,7 @@ Audio-Effekte bleiben bei AUD.11.
 | NFA.6 | Crash-Isolation: GUI-Absturz stoppt weder Engine noch Senken noch API (siehe E.4) | M |
 | NFA.7 | Dauerlauf: 8 h Soak mit Last (16 Inputs, 2 Streams, Einzelaufnahme) ohne Speicher-/Latenzdrift; zusätzlich 48 h Betrieb ohne Neustart (P2) | M |
 | NFA.8 | Bildraten 23,976/24/25/29,97/30/50/59,94/60 p, 50/59,94/60 i; Auflösungen 640×360 bis 3840×2160 | M |
-| NFA.9 | Lizenz: Repo MIT-kompatibel, keine GPL-Abhängigkeit im Repo (`claude.md` Entscheidung 6); Laufzeit-Plugins Dritter getrennt (LGPL wie GStreamer und `gstcefsrc` nur dynamisch geladen, nie im Repo; ROADMAP §5.3) | M |
+| NFA.9 | Lizenz: Repo MIT-kompatibel, keine GPL-Abhängigkeit im Repo (`PROJEKT.md` Entscheidung 6); Laufzeit-Plugins Dritter getrennt (LGPL wie GStreamer und `gstcefsrc` nur dynamisch geladen, nie im Repo; ROADMAP §5.3) | M |
 | NFA.10 | Bedienbarkeit unter Last: GUI-Reaktion < 50 ms, Tastenaktion → Program < 1 Frame + interne Latenz | M |
 | NFA.11 | Lokalisierung: alle Texte aus Katalogen, de/en | S |
 | NFA.12 | Sicherheit: APIs standardmäßig nur LAN/Loopback; keine Telemetrie; keine Herstellerdienste für Gäste | M |
@@ -618,7 +618,7 @@ nicht nach, sondern ersetzt sie durch Heutiges oder lässt sie weg
 
 | # | Frage | Entscheidung |
 |---|---|---|
-| E.1 | Ausschlüsse in `claude.md` (Control-Surfaces, 4K, Web-Oberfläche) | Aufgehoben; Haupt-GUI bleibt nativ, Web nur als Fernbedienung |
+| E.1 | Ausschlüsse in `PROJEKT.md` (Control-Surfaces, 4K, Web-Oberfläche) | Aufgehoben; Haupt-GUI bleibt nativ, Web nur als Fernbedienung |
 | E.2 | API | Eigene API, mindestens so mächtig wie die vMix-API für Fremdprogramme (API.9); vMix-Kompatibilität optional (API.8) |
 | E.3 | Import von vMix-Presets | Nie (SHW.9 = X) |
 | E.4 | Ort von Show-Zustand, Aktionskatalog, APIs | Eigener Prozess `lmix-core`; GUI und APIs sind Clients |
@@ -630,7 +630,7 @@ nicht nach, sondern ersetzt sie durch Heutiges oder lässt sie weg
 | E.6 | Skriptsprache | JavaScript (QuickJS), gleiche Sprache wie die HTML-Titel |
 | E.9 | Browser-Engine für HTML-Titel | Wahl nach Benchmark M7.0; Ausgangspunkt `cefsrc` (in strom vorhanden), Vergleich WPE WebKit (`wpesrc`), Testplan `BENCH-HTML.md`. Hartes Kriterium GFX.20 (H.264/AAC): Standard-CEF kann es nicht, nur ein eigener CEF-Build (`proprietary_codecs`, `ffmpeg_branding=Chrome`) mit Patentfragen beim Verteilen; WPE spielt Medien über GStreamer und nutzt die installierten Decoder (wie der Rest von lmix) |
 | T.1/T.2 | Titelsystem | Kein CasparCG-Server (nach Analyse: zweite Engine, zweiter Takt, Bild per NDI). Titel-Fähigkeiten nach dem Vorbild CasparCG, gerendert in strom (§3.11) |
-| E.12 | Lizenz | lmix bleibt MIT-kompatibel (`claude.md` Entscheidung 6 unverändert) |
+| E.12 | Lizenz | lmix bleibt MIT-kompatibel (`PROJEKT.md` Entscheidung 6 unverändert) |
 | E.11 | Submixe | Wie vMix: bis 15 Mix-Inputs mit Preview/Program, Cut/Übergang, Overlays, Stinger; als Quelle für Ausgänge und Vollbild (SWI.10) |
 | E.13 | Plugins (User, 2026-10-29) | Steuer-Plugins als WebAssembly in einem eigenen Host-Prozess, `exec` als Ausnahme; Companion erst koppeln, Module später nach WASM übersetzen; für Bild und Ton kein eigenes Format, fremde GStreamer-Plugins mit Warnung und Absturz-Zuordnung (§3.22, `DECISIONS.md` 2026-10-29). Verworfen: nur Prozess je Plugin, Extism/Javy, Companion-Module mit Node zur Laufzeit, native Plugins im Kern |
 | — | Wiederholung, Gäste | Später (Priorität L) |

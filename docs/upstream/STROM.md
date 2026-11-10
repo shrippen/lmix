@@ -1,6 +1,6 @@
 # strom: was auf `dev` liegt und wie es nach upstream kommt
 
-Regel: `claude.md`, Arbeitsregeln („Jede Änderung an strom geht auch nach upstream“).
+Regel: `PROJEKT.md`, Arbeitsregeln („Jede Änderung an strom geht auch nach upstream“).
 Jedes Thema auf `dev` steht hier mit seinem Stand, bis upstream es gemergt hat oder der
 User es als lmix-eigen entschieden hat.
 
