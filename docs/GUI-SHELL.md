@@ -16,7 +16,7 @@ Umstieg in den drei Schritten der Empfehlung unten.
 - **egui** (weiter wie bisher).
 - **Qt Quick / Kirigami** über cxx-qt (Rust ↔ QML, MIT/Apache-2.0).
 - **Tauri** (Web-Oberfläche im nativen Fenster): scheidet aus, weil
-  `claude.md` eine native GUI verlangt (kein Web als Produktziel).
+  `PROJEKT.md` eine native GUI verlangt (kein Web als Produktziel).
 
 ## Kriterien
 
@@ -159,7 +159,7 @@ Breeze-`MenuItem` ruft `RegExp()`, was in Delegates mit JS-Array-Modell
 scheitert; Menüs aus Listen baut deshalb `ChoiceMenu` ohne Repeater.
 
 Offen:
-- Demo-Modus mit den gemeinsamen Demodaten (`claude.md`-Regel).
+- Demo-Modus mit den gemeinsamen Demodaten (`PROJEKT.md`-Regel).
 
 ## Schritt 3: Sprache, Kante, Parität (Stand 2026-10-09)
 

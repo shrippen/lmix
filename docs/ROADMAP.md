@@ -1,7 +1,7 @@
 # Roadmap: lmix auf vMix-Niveau
 
 Stand 2026-09-27. Grundlage: vMix 29 (Feb. 2026), strom `dev` (`bd86930`),
-app-desktop `23e0606`. Ergänzt die Meilensteine in `claude.md`, ersetzt sie
+app-desktop `23e0606`. Ergänzt die Meilensteine in `PROJEKT.md`, ersetzt sie
 nicht. Feststehende Entscheidungen und Ausschlüsse von dort gelten weiter.
 
 Ziel seit 2026-10-08: Clean-Room-Reimplementierung von vMix. Was lmix können
@@ -187,7 +187,7 @@ Budget; 32 × 1080p30 NVDEC-begrenzt. Offen: sporadischer Startfehler bei
 | 1.1 | **Live-Monitore**: PGM/PVW/Multiview flüssig. Entscheidung: WHEP-Empfang des `multiview_out` in der Console vs. upstream-PR konfigurierbares Thumbnail-Intervall. Empfehlung: WHEP (echte Framerate, keine REST-Last), Hardware-Encode (M1b), Decode in der Console auf der GPU (NVDEC bzw. VA-API). | C (+S) |
 | 1.2 | Audio-follows-Video: Take schaltet zugeordnete Audiokanäle | C |
 | 1.3 | FTB-Button, DSK-Toggles | C |
-| 1.4 | Live-State-Test: Quelle weg während Transition (Akzeptanz aus `claude.md`) | C |
+| 1.4 | Live-State-Test: Quelle weg während Transition (Akzeptanz aus `PROJEKT.md`) | C |
 
 **Abnahme**: PGM-Monitor ≥ 25 fps sichtbar; Take mit AFV; Akzeptanz M1 erfüllt.
 
@@ -251,7 +251,7 @@ GPU-Punkte in `HARDWARE-TODO.md`):
 | 3.1 | Ausgangsleiste: Stream (SRT, RTMP seit 17.10.), Record, NDI/OMT-Out; Status: Bitrate, Drops, Laufzeit | C |
 | 3.2 | MultiCorder: Recorder pro Input am `inter`-Bus | C |
 | 3.3 | Fullscreen-Output auf zweitem Monitor (Sink im Engine-Prozess, nicht in der GUI — Crash-Isolation) | C |
-| 3.4 | Failover, Latenz-CI (wie `claude.md`) | C |
+| 3.4 | Failover, Latenz-CI (wie `PROJEKT.md`) | C |
 | 3.5 | GUI-Shell-Entscheidung egui vs. Qt/Tauri — Kriterien jetzt: Video-Textur-Performance (1.1, GPU-Decode direkt in Textur), Multi-Display (3.3), Dichte der Input-Leiste (2b.2), Kante-Anbindung mit Kante Light und Breeze-Rückfall (`agent.md`, GUI-Regel) | — |
 
 **Stand 2026-10-08** (Branch `m3`):
@@ -530,7 +530,7 @@ Virtual Sets.
 
 1. Live-Monitore: WHEP vs. Thumbnail-Intervall-PR (M1-Rest).
 2. M2b als eigener Meilenstein vor M3 (Empfehlung) — ändert die Reihenfolge
-   in `claude.md`.
+   in `PROJEKT.md`.
 3. ~~Lizenz CEF-Pfad~~ — geprüft 2026-10-08: `gstcefsrc` ist LGPL-2.1-or-later
    (`LICENSE`, Datei-Header, Plugin-Metadaten "LGPL", Commit `204b01b`), CEF
    BSD-3-Clause. strom lädt `cefsrc` zur Laufzeit als GStreamer-Plugin, kein

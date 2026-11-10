@@ -4,7 +4,7 @@ Format: Datum, Kontext, Optionen, Entscheidung.
 
 ## 2026-09-15 — M1: `app-desktop` als eigenständiges Crate statt Fork/Lib-Nutzung von strom-frontend
 
-**Kontext**: `claude.md` sagt für `app-desktop`: "Fork/Neuaufbau auf Basis
+**Kontext**: `PROJEKT.md` sagt für `app-desktop`: "Fork/Neuaufbau auf Basis
 strom-frontend". Vor dem Bauen zwei Explore-Agents auf `workspace/strom`
 angesetzt, um zu prüfen, was von `strom-frontend` für eine vMix-Style
 Schalter-Console wiederverwendbar ist.
@@ -32,9 +32,9 @@ Rust-Typ ersichtlich ohne einen echten Request mitzuschneiden) und
 `PropertyValue` ist `#[serde(untagged)]` mit `Int` vor `UInt` — ein
 JSON-Integer wird nie als `UInt` erkannt.
 
-## 2026-09-15 — Korrekturen an den Repo-Struktur-Annahmen in `claude.md`
+## 2026-09-15 — Korrekturen an den Repo-Struktur-Annahmen in `PROJEKT.md`
 
-**Kontext**: `claude.md` nennt Crates `strom`, `strom-frontend`, `strom-types`,
+**Kontext**: `PROJEKT.md` nennt Crates `strom`, `strom-frontend`, `strom-types`,
 `strom-mcp-server`. Beim tatsächlichen Klonen von `Eyevinn/strom` (main)
 stimmten drei Annahmen nicht mit dem Code überein.
 
@@ -56,7 +56,7 @@ ist jetzt nur genauer begründet. Punkt 3 siehe eigener Eintrag unten.
 
 ## 2026-09-15 — `--host`/`STROM_HOST`-Patch statt Firewall
 
-**Kontext**: Entscheidung 4 in `claude.md` verlangt Server nur auf
+**Kontext**: Entscheidung 4 in `PROJEKT.md` verlangt Server nur auf
 `127.0.0.1`. Upstream-Code bindet hart auf `0.0.0.0`
 (`backend/src/main.rs`, zwei Stellen). Optionen: (a) kleiner Code-Patch mit
 konfigurierbarem Host, (b) nur OS-Firewall/Netzwerk-Namespace, kein Code-Diff,
@@ -404,7 +404,7 @@ Leitprinzip "max. Inputs @ Budget".
 optional; `lmix-core` als eigener Prozess; Titel HTML über komplette
 CasparCG-Integration; Wiederholung und Gäste später; Ausschlüsse
 Control-Surfaces/4K aufgehoben; Skripte in JavaScript; Submixe wie vMix.
-**Lizenz**: GPL ist okay. `claude.md` Entscheidung 6 geändert:
+**Lizenz**: GPL ist okay. `PROJEKT.md` Entscheidung 6 geändert:
 GPL-3.0-or-later-verträgliche Abhängigkeiten erlaubt; lmix wird
 GPL-3.0-or-later, sobald GPL-Code ins Repo kommt; NDI nur zur Laufzeit
 laden. CasparCG bleibt eigener Prozess (Crash-Isolation, NFA.6).
@@ -416,7 +416,7 @@ zweite vollständige Engine neben strom, zweiter Bildtakt, Bild nur per NDI
 (Kodierung, CPU-Kopien, 1–2 Frames), Nutzen liegt fast ganz in den
 HTML-Vorlagen; strom rendert HTML bereits (`cefsrc`).
 **Entscheidung** (User): CasparCG gestrichen, lmix bleibt MIT
-(`claude.md` Entscheidung 6 wieder wie vorher). Titel-Fähigkeiten
+(`PROJEKT.md` Entscheidung 6 wieder wie vorher). Titel-Fähigkeiten
 orientieren sich an CasparCG (Vorlagen-Konvention, Ebenen, Datensätze),
 Rendering in strom.
 
@@ -668,13 +668,13 @@ Bewertung egui gegen Qt Quick/Kirigami (Tauri scheidet aus: keine
 Web-GUI) in `GUI-SHELL.md`. **Empfehlung**: Qt Quick/Kirigami über cxx-qt,
 weil Video ohne Kopie (`qml6glsink`) und die Kante/Breeze-Gestaltung
 (`qml/Kante`) dort fertig sind, in egui Eigenentwicklung. **Nicht
-entschieden**: `claude.md` legt egui fest, ein Wechsel ist Sache des
+entschieden**: `PROJEKT.md` legt egui fest, ein Wechsel ist Sache des
 Users. Bis dahin bleibt die egui-Console die Oberfläche.
 
 ## 2026-10-09 — GUI-Shell (3.5): Qt Quick/Kirigami
 
 **Entscheidung** (User): Die Console wechselt auf Qt Quick/Kirigami über
-cxx-qt, wie in `GUI-SHELL.md` empfohlen. `claude.md` Entscheidung 3
+cxx-qt, wie in `GUI-SHELL.md` empfohlen. `PROJEKT.md` Entscheidung 3
 angepasst. Vorgehen: Prototyp (QML-Fenster im Kante-Stil, PGM-Monitor über
 `qml6glsink`, Bild aus strom über `unixfdsink`/`unixfdsrc`), messen
 (H.11), dann Funktionen übertragen. Die egui-Console bleibt bis zur
@@ -686,7 +686,7 @@ Gleichwertigkeit für Selftest und VM-Screenshot.
 fehlte die Datei; Crates von `MIT OR Apache-2.0` auf `MIT`). Kante kommt
 ebenfalls unter MIT (Kante-PR #35; `kimai/` bleibt GPL-3.0-or-later,
 Schriften OFL-1.1), damit lmix die QML-Module ausliefern darf.
-Abhängigkeiten wie bisher (`claude.md` Entscheidung 6): Qt, Kirigami,
+Abhängigkeiten wie bisher (`PROJEKT.md` Entscheidung 6): Qt, Kirigami,
 GStreamer und gstcefsrc (LGPL) nur dynamisch, kein GPL-Code im Repo oder
 Paket (z. B. kein `x264enc` mitliefern), NDI-SDK zur Laufzeit.
 
@@ -2097,10 +2097,10 @@ demselben `lmix-core`.
 mit Quellenzuordnung `LASTENHEFT-SHOW-QUELLEN.md` (Clean Room gegen das
 QLab-5-Handbuch), Meilensteine S1–S3, Personas P8–P10. Licht in S1 nur
 über Home Assistant, eigene Lichtsteuerung ab S3 (User). (a) scheidet
-auch an der Lizenz (GPL, `claude.md` 6).
+auch an der Lizenz (GPL, `PROJEKT.md` 6).
 
 **Offen**: S-E.1–12 in `LASTENHEFT-SHOW.md` §6, vor Beginn von S1 zu
-entscheiden. `claude.md` nennt beide Modi (Entscheidungen 7, 8).
+entscheiden. `PROJEKT.md` nennt beide Modi (Entscheidungen 7, 8).
 
 ## 2026-10-16 — Show-Modus: S-E.1–12
 
@@ -3976,7 +3976,7 @@ AppShell.qml   Fenster: lmix-core, Stil, Datei-Knöpfe (Neu, Öffnen, Zuletzt,
   <Show>“.
 - `--mode simple|advanced` wirkt nur im Mischer; `--core`, `--style`
   (seit 19.10. `--theme`), `--window` in beiden.
-- `claude.md` Punkt 7 und SUI.1 neu gefasst (User 18.10.2026): ein Kern,
+- `PROJEKT.md` Punkt 7 und SUI.1 neu gefasst (User 18.10.2026): ein Kern,
   zwei Oberflächen; die Desktop-Dateien in `packaging/desktop/` bestätigt.
 - Skripte: `run-local.sh` startet den Mischer (`APP=show|both`),
   `test-console-qt.sh` prüft den Mischer und danach die Show am selben
@@ -4472,7 +4472,7 @@ taugt dafür nicht), Meldung an GStreamer (gst-libav, fdkaac).
 ## 2026-10-23 — Click-Dummy: einmalige Ausnahme von der Clean-Room-Regel
 
 Der Owner hat für einen Durchgang erlaubt, Bildschirmfotos der Vorbilder
-anzusehen (sonst nur Handbuchtext, claude.md Entscheidung 8). Angesehen:
+anzusehen (sonst nur Handbuchtext, PROJEKT.md Entscheidung 8). Angesehen:
 das Hauptfenster und der Tonmischer aus der vMix-Hilfe, Arbeitsfläche,
 Pult-Raster, Inspector und Licht-Dashboard aus der QLab-5-Doku, Umschalt-
 und Tonseite von ATEM Software Control (Herstellerseite), OBS Studio
@@ -4489,7 +4489,7 @@ Programm `lmix` mit Seiten (Mix, Show, Audio, Outputs, Setup; später Light)
 und einer Seitenleiste am Fuß, wie bei Resolve. Weitere Pulte (Ton, Licht)
 kommen als Seite, nicht als eigenes Programm. Mehrere Oberflächen greifen
 weiter parallel auf `lmix-core` zu, auch übers Netz (Arbeitsplätze mit
-Profil). Licht im Kern kommt dazu, aber später (todo). Ersetzt claude.md
+Profil). Licht im Kern kommt dazu, aber später (todo). Ersetzt PROJEKT.md
 Entscheidung 7 („zwei Oberflächen“) und SUI.1 (Lastenhefte und ROADMAP
 nachgezogen). Was beschreibt, welche Programme heute laufen (BUILD,
 HANDOVER, HARDWARE-TODO, GUI-SHELL, Skripte), ändert sich mit dem Code,
@@ -8520,3 +8520,14 @@ Branch `strom-dev-pin`, Submodul auf `dev` 7c14dcf (strom #74, #75, #76). Upstre
   läuft unter der Steuersperre, ein Seek danach beendet es.
 - **Offen (Review-Hinweis, nicht blockierend):** `shutdown()` gibt das Halten vor der
   Steuersperre frei; ein gleichzeitiges `pause()` kann es kurz neu starten.
+
+## 2026-11-10 — `claude.md` heißt jetzt `PROJEKT.md`
+
+**Kontext**: Claude Code lädt von sich aus nur `CLAUDE.md`, nicht `agent.md` und nicht
+`claude.md` in Kleinschreibung. Die Arbeitsregeln und die feststehenden Entscheidungen kamen
+so nur in eine Sitzung, wenn sie die Dateien zufällig las. Eine `CLAUDE.md` neben `claude.md`
+kollidiert auf Dateisystemen ohne Groß-/Kleinschreibung.
+
+**Entscheidung** (User 10.11.2026): `claude.md` wird zu `PROJEKT.md`, der Inhalt bleibt gleich.
+Die neue `CLAUDE.md` importiert `agent.md` und `PROJEKT.md`. Alle Verweise in `docs/` nennen
+den neuen Namen, auch in älteren Einträgen dieser Datei.

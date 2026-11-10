@@ -141,7 +141,7 @@ Metering, Loudness. Details:
   beides zusammen, sonst taucht er nicht im Schema auf.
 - Model Context Protocol (MCP) läuft über `/api/mcp` als Modul im Backend
   (`backend/src/mcp/`) — **kein eigenes Crate** trotz gegenteiliger Annahme in
-  `claude.md` (siehe `docs/DECISIONS.md`).
+  `PROJEKT.md` (siehe `docs/DECISIONS.md`).
 
 ## Storage-Modell
 
