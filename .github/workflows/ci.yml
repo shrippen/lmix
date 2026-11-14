@@ -49,6 +49,16 @@ on:
       - scripts/web-check.cjs
       - scripts/rtmp-unpublish.cjs
       - scripts/fetch-strom.sh
+      - tools/structure-check.py
+      - structure.baseline
+      # Everything else the structure check measures, so no measured file changes
+      # without a run.
+      - scripts/**
+      - demo/**
+      - examples/**
+      - workspace/tools/**
+      - start.sh
+      - .gitea/pr-agent/**
       - .github/workflows/ci.yml
   workflow_dispatch:
 
@@ -277,10 +287,15 @@ jobs:
     steps:
       - name: Tools
         run: |
-          pacman -Syu --noconfirm --needed git nodejs rust base-devel clang \
+          pacman -Syu --noconfirm --needed git python-pipx nodejs rust base-devel clang \
             qt6-base qt6-declarative qt6-tools kirigami gstreamer gst-plugins-base
 
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+
+      - name: Structure limits
+        run: |
+          git config --global --add safe.directory '*'
+          pipx run tools/structure-check.py
 
       - name: cargo test
         run: cd workspace/console-qt && cargo test

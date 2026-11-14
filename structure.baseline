@@ -1,0 +1,155 @@
+# What is over a structure limit today (tools/structure-check.py). An entry may shrink,
+# never grow; a raised or new entry needs its reason in the PR. Rewrite with --update.
+# Lines: exclude<TAB>glob | path<TAB>function or - for the file<TAB>metric=value ...
+exclude	workspace/console-qt/qml/Kante/*
+exclude	workspace/lmix-core/titles/sdk/lottie/*
+exclude	workspace/console-qt/i18n/de.py
+exclude	workspace/console-qt/i18n/*.ts
+demo/run.py	main	ccn=16 length=89
+demo/run.py	moods	ccn=17
+examples/tally-micropython/main.py	follow	nesting=5
+scripts/gui-frames.py	main	ccn=33
+scripts/hw-sound-cues/check.py	main	ccn=24 length=91
+scripts/qml-profile.py	main	ccn=18
+scripts/test-console-qt.sh	-	lines=882
+scripts/test-m2b-vm.sh	-	lines=1093
+workspace/console-qt/build.rs	main	length=120
+workspace/console-qt/qml/ActionRows.qml	actionOf	ccn=21
+workspace/console-qt/qml/ActionRows.qml	rowOf	ccn=42
+workspace/console-qt/qml/AddInputDialog.qml	-	lines=817
+workspace/console-qt/qml/AddOutputDialog.qml	fill	ccn=21
+workspace/console-qt/qml/AddOutputDialog.qml	form	ccn=19
+workspace/console-qt/qml/AppShell.qml	-	lines=1184
+workspace/console-qt/qml/DataSourcesDialog.qml	kindOf	nesting=6
+workspace/console-qt/qml/LayoutDialog.qml	-	lines=815
+workspace/console-qt/qml/MixPage.qml	-	lines=1100
+workspace/console-qt/qml/MoodsDialog.qml	-	lines=1241
+workspace/console-qt/qml/NarrowMixer.qml	-	lines=918
+workspace/console-qt/qml/ShortcutEditDialog.qml	Keys.onPressed	nesting=6
+workspace/console-qt/qml/ShowInspector.qml	-	lines=927
+workspace/console-qt/qml/ShowView.qml	-	lines=819
+workspace/console-qt/qml/ShowView.qml	cueName	ccn=18
+workspace/console-qt/qml/Texts.qml	keyName	ccn=28
+workspace/console-qt/qml/Texts.qml	label	ccn=66 length=97
+workspace/console-qt/qml/Texts.qml	message	ccn=80 length=91
+workspace/console-qt/src/app.rs	run	length=90
+workspace/console-qt/src/bridge.rs	-	lines=1359
+workspace/console-qt/src/bridge.rs	follow	ccn=19 length=92
+workspace/console-qt/src/bridge.rs	pipeline	ccn=31 length=98
+workspace/console-qt/src/bridge.rs	set_global_shortcuts	length=93
+workspace/console-qt/src/bridge.rs	state_patched	length=153
+workspace/console-qt/src/forms.rs	-	lines=1181
+workspace/console-qt/src/forms.rs	source_of	ccn=20
+workspace/console-qt/src/forms.rs	values	ccn=19 length=90
+workspace/console-qt/tests/qml/tst_add_input_dialog.qml	srtUri	nesting=5
+workspace/lmix-core/src/access.rs	-	lines=1262
+workspace/lmix-core/src/access.rs	browsers_and_proxies_cannot_get_around_it	length=93
+workspace/lmix-core/src/access.rs	guard	ccn=18
+workspace/lmix-core/src/access.rs	right_of	length=190
+workspace/lmix-core/src/checks.rs	finds_what_would_go_wrong	length=84
+workspace/lmix-core/src/checks.rs	walk	ccn=21 nesting=7
+workspace/lmix-core/src/cues.rs	-	lines=2438
+workspace/lmix-core/src/cues.rs	fire	ccn=19 length=120
+workspace/lmix-core/src/datasource.rs	-	lines=1033
+workspace/lmix-core/src/datasource.rs	separator	nesting=5
+workspace/lmix-core/src/engine/flows.rs	-	lines=4589
+workspace/lmix-core/src/engine/flows.rs	a_delayed_stream_waits_in_memory	length=101
+workspace/lmix-core/src/engine/flows.rs	add_audio_mixer	length=102
+workspace/lmix-core/src/engine/flows.rs	add_card_output	length=84
+workspace/lmix-core/src/engine/flows.rs	add_source	ccn=16 length=108
+workspace/lmix-core/src/engine/flows.rs	live_flow	length=83
+workspace/lmix-core/src/engine/flows.rs	mixer_flow	length=202
+workspace/lmix-core/src/engine/flows.rs	mixer_publishes_its_buses	length=95
+workspace/lmix-core/src/engine/flows.rs	output_flow	ccn=20 length=185
+workspace/lmix-core/src/engine/meters.rs	follow	ccn=20 length=123
+workspace/lmix-core/src/engine/playback_flow.rs	playback_flow	length=92
+workspace/lmix-core/src/engine/playback_flow.rs	position_bit	ccn=19
+workspace/lmix-core/src/engine/strom.rs	-	lines=5226
+workspace/lmix-core/src/engine/strom.rs	buses_change_the_running_mixer	length=96
+workspace/lmix-core/src/engine/strom.rs	fake_answer	length=81
+workspace/lmix-core/src/engine/strom.rs	patch_buses	ccn=24
+workspace/lmix-core/src/engine/strom.rs	run	ccn=65 length=247
+workspace/lmix-core/src/engine/strom.rs	start	length=81
+workspace/lmix-core/src/engine/strom.rs	the_tiles_stay_dark_until_watched	length=116
+workspace/lmix-core/src/feedback.rs	lamps	ccn=22
+workspace/lmix-core/src/feedback.rs	lamps_follow_program_and_preview	length=89
+workspace/lmix-core/src/feedback.rs	overlay_keys_light_as_their_channels_stand	length=82
+workspace/lmix-core/src/main.rs	main	ccn=24 length=162
+workspace/lmix-core/src/metrics.rs	render	ccn=16 length=205
+workspace/lmix-core/src/metrics.rs	render_engine	length=130
+workspace/lmix-core/src/metrics.rs	renders_inputs_tally_levels_and_escapes_names	length=107
+workspace/lmix-core/src/moods.rs	-	lines=1049
+workspace/lmix-core/src/osc.rs	-	lines=985
+workspace/lmix-core/src/osc.rs	decode_message	ccn=16
+workspace/lmix-core/src/osc.rs	maps_addresses_to_actions	length=172
+workspace/lmix-core/src/osc.rs	request	ccn=73 length=152
+workspace/lmix-core/src/osc.rs	send_updates	ccn=20 length=81
+workspace/lmix-core/src/osc.rs	serve	ccn=27 length=117
+workspace/lmix-core/src/package.rs	a_show_moves_with_its_files	length=133
+workspace/lmix-core/src/package.rs	export	ccn=24 length=89
+workspace/lmix-core/src/package.rs	import	ccn=32 length=83
+workspace/lmix-core/src/ptz.rs	message	ccn=20
+workspace/lmix-core/src/service.rs	-	lines=7441
+workspace/lmix-core/src/service.rs	a_cue_calls_home_assistant_and_the_secret_stays_in_its_file	length=94
+workspace/lmix-core/src/service.rs	a_stinger_goes_to_the_engine_and_overlays_follow_at_the_cut	length=81
+workspace/lmix-core/src/service.rs	an_osc_subscriber_gets_standby_remaining_time_and_panic	length=102
+workspace/lmix-core/src/service.rs	cards_are_used_only_while_switched_on	length=101
+workspace/lmix-core/src/service.rs	cues_follow_in_time_and_a_failed_cue_goes_on	length=83
+workspace/lmix-core/src/service.rs	emergency_cues_on_a_panic_layer_run_and_the_panic_mood_wins	length=96
+workspace/lmix-core/src/service.rs	execute	ccn=25 length=139
+workspace/lmix-core/src/service.rs	handle_as	ccn=122 length=540
+workspace/lmix-core/src/service.rs	inputs_of_another_show_are_appended	length=85
+workspace/lmix-core/src/service.rs	missing_media_are_marked_and_found_again	length=99
+workspace/lmix-core/src/service.rs	run_cue_outs_held	ccn=26 length=136
+workspace/lmix-core/src/service.rs	settings_go_to_a_file_and_back_without_secrets	length=100
+workspace/lmix-core/src/show.rs	-	lines=1656
+workspace/lmix-core/src/show.rs	aux_buses_become_named_buses	length=99
+workspace/lmix-core/src/show.rs	migrate_aux_buses	ccn=20 length=111
+workspace/lmix-core/src/show.rs	names_with_secrets_load_without_them	length=125
+workspace/lmix-core/src/show.rs	names_without_secrets	length=87
+workspace/lmix-core/src/show.rs	sample	length=218
+workspace/lmix-core/src/switcher.rs	-	lines=14340
+workspace/lmix-core/src/switcher.rs	a_running_output_takes_another_bus_on_air	length=170
+workspace/lmix-core/src/switcher.rs	an_emergency_cue_takes_no_layer_of_the_panic_mood	length=102
+workspace/lmix-core/src/switcher.rs	apply_action	ccn=248 length=786
+workspace/lmix-core/src/switcher.rs	buses_come_and_go_on_the_running_audio_mixer	length=95
+workspace/lmix-core/src/switcher.rs	check_cue	ccn=39 length=89
+workspace/lmix-core/src/switcher.rs	check_moods	ccn=51 length=160
+workspace/lmix-core/src/switcher.rs	check_shortcut	ccn=16
+workspace/lmix-core/src/switcher.rs	clip_end_triggers_need_a_clip_and_fire_at_the_end	length=84
+workspace/lmix-core/src/switcher.rs	layout_templates_keep_places_and_find_their_inputs_again	length=106
+workspace/lmix-core/src/switcher.rs	levels_fade_over_their_time	length=84
+workspace/lmix-core/src/switcher.rs	moods_need_distinct_names_ids_and_entries_that_are_there	length=165
+workspace/lmix-core/src/switcher.rs	overlay_channels_have_their_own_effect_and_place	length=91
+workspace/lmix-core/src/switcher.rs	preload_commands	ccn=17
+workspace/lmix-core/src/switcher.rs	remove	ccn=21 length=113
+workspace/lmix-core/src/switcher.rs	shortcuts_for_all_shows_stay_and_give_way	length=94
+workspace/lmix-core/src/switcher.rs	state	length=152
+workspace/lmix-core/src/switcher.rs	update_cue_changes_only_the_named_fields	length=96
+workspace/lmix-core/src/switcher/graphics.rs	-	lines=1543
+workspace/lmix-core/src/switcher/graphics.rs	apply_title	ccn=98 length=393
+workspace/lmix-core/src/targets.rs	set	ccn=17
+workspace/lmix-core/src/tcp.rs	client	ccn=27 length=95
+workspace/lmix-core/src/titles.rs	content_type	ccn=17
+workspace/lmix-core/titles/sdk/lmix-lottie.js	(anonymous)	length=122
+workspace/lmix-core/titles/sdk/lmix-title.js	(anonymous)	length=141
+workspace/lmix-core/titles/sdk/lmix-title.js	previewBar	ccn=17
+workspace/lmix-script/src/load.rs	apply	length=84
+workspace/lmix-script/src/parse.rs	parse_file	ccn=17 length=90
+workspace/lmix-types/src/action.rs	-	lines=1865
+workspace/lmix-types/src/card.rs	nick	ccn=21
+workspace/lmix-types/src/cue.rs	display_name	ccn=20
+workspace/lmix-types/src/input.rs	-	lines=939
+workspace/lmix-types/src/input.rs	logged_sources_and_outputs_keep_no_secrets	length=83
+workspace/lmix-types/src/output.rs	-	lines=989
+workspace/lmix-types/src/srt.rs	-	lines=2631
+workspace/lmix-types/src/srt.rs	mask_text	length=81
+workspace/lmix-types/src/srt.rs	mask_url	ccn=25 length=106
+workspace/lmix-types/src/srt.rs	mask_word	ccn=24 length=139
+workspace/selftest/src/selftest.rs	-	lines=1181
+workspace/selftest/src/selftest.rs	run_flow	ccn=44 length=286
+workspace/selftest/src/selftest.rs	verdict	length=104
+workspace/selftest/src/sources.rs	add_source	length=93
+workspace/selftest/src/sources.rs	build_flow	length=81
+workspace/selftest/src/sources.rs	label	ccn=16
+workspace/selftest/src/sources.rs	nick	ccn=16
