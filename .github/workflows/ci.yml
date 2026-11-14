@@ -51,6 +51,14 @@ on:
       - scripts/fetch-strom.sh
       - tools/structure-check.py
       - structure.baseline
+      # Everything else the structure check measures, so no measured file changes
+      # without a run.
+      - scripts/**
+      - demo/**
+      - examples/**
+      - workspace/tools/**
+      - start.sh
+      - .gitea/pr-agent/**
       - .github/workflows/ci.yml
   workflow_dispatch:
 
