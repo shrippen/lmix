@@ -19,16 +19,17 @@ own, so a crash of the window stops no picture and no cue.
 | `workspace/strom/` | The media engine (Eyevinn's strom, a submodule on the branch `dev`). Not ours: the smallest possible difference, and every change goes upstream. |
 | `workspace/lmix-types/` | The words all parts share: actions, state, events, the parts of a show. No I/O. |
 | `workspace/lmix-core/src/main.rs` | The control process: starts and wires the parts below. |
-| `…/api.rs`, `osc.rs`, `tcp.rs`, `midi.rs`, `web.rs` with `web/`, `access.rs` | The ways in: HTTP and WebSocket, OSC, text lines over TCP, MIDI, the browser pages; who may use them. |
+| `…/api.rs`, `osc.rs`, `tcp.rs`, `midi.rs`, `web.rs` with `lmix-core/web/`, `access.rs` | The ways in: HTTP and WebSocket, OSC, text lines over TCP, MIDI, the browser pages; who may use them. |
 | `…/tsl.rs`, `tally_http.rs`, `feedback.rs`, `osc_subs.rs`, `feeds.rs`, `metrics.rs`, `patch.rs` | The ways out: tally, lamps on controllers, OSC subscribers, health figures, state changes for clients. |
 | `…/service.rs` | The service: one state machine, one engine, many clients. It puts all actions in one order, reads and writes files, and sends the events. |
 | `…/switcher.rs`, `switcher/` | The state machine: applies an action to the show's state and decides what the engine must do. No I/O. In the target one part per topic, as `switcher/graphics.rs` is today. |
 | `…/cues.rs`, `moods.rs`, `checks.rs`, `playback.rs`, `stages.rs`, `zones.rs`, `clips.rs` | The rules of one topic each, used by the state machine. No I/O. |
 | `…/show.rs`, `package.rs`, `settings.rs`, `layouts.rs`, `recent.rs`, `script.rs`, `titles.rs`, `datasource.rs` | The files: the show, its package, this machine's settings, templates, data sources. |
+| `workspace/lmix-core/titles/` | The built-in title templates and the small JavaScript kit a template uses; built into the program. |
 | `…/targets.rs`, `osc_out.rs`, `ptz.rs`, `machine.rs`, `realtime.rs` | This machine and its devices: output targets, OSC out, cameras, load, the cue timer's priority. |
 | `…/engine/` | The engine drivers: turn the state machine's commands into calls to strom (`strom.rs`, with the flows it builds), or into nothing (`null.rs`, for tests and for running without an engine). |
-| `workspace/console-qt/src/` | The window's Rust side: `bridge.rs` is its only way to lmix-core; forms, state changes for QML, global shortcuts, live pictures. |
-| `workspace/console-qt/qml/` | The pages and dialogs. `Kante/` is a synced copy of the design system, never edited here. |
+| `workspace/console-qt/src/`, `cpp/` | The window's Rust side, with a few C++ helpers for Qt: `bridge.rs` is its only way to lmix-core; forms, state changes for QML, global shortcuts, live pictures. |
+| `workspace/console-qt/qml/` | The pages and dialogs. `Kante/` is a synced copy of the design system, never edited here. Translations in `../i18n/`. |
 | `workspace/lmix-script/` | Reads a script folder and loads its cue lists into lmix-core through the API. |
 | `workspace/selftest/`, `workspace/tools/` | A load and acceptance test straight at strom; a stand-in for the desktop portal in tests. |
 | `scripts/`, `packaging/`, `demo/`, `examples/`, `docs/`, `tools/` | Tests and measurements (those on real hardware name it in their header); desktop file and systemd units; the demo start and screenshots; small clients; requirements, plans, decisions; the structure check (synced copy). |
@@ -93,7 +94,7 @@ own, so a crash of the window stops no picture and no cue.
 | Something saved with the show | `lmix-types` (the type), `show.rs`; machine-bound things in `settings.rs` |
 | A new page or dialog | `console-qt/qml/`, a test in `console-qt/tests/qml/`; texts through `scripts/update-translations.sh` |
 | A new form | Its fields to actions in `console-qt/src/forms.rs` |
-| A time budget | A script in `scripts/` that names its hardware; CI counts, it does not time |
+| A time budget | A script in `scripts/` that names its hardware |
 | A design element that is missing | Kante, then `scripts/sync-kante.sh`; never `qml/Kante/` here |
 
 ## Known deviations
@@ -106,13 +107,13 @@ own, so a crash of the window stops no picture and no cue.
   limits of the core (`AUDIT.md`, finding 3).
 - Blacking out passwords lives in the module `srt` of `lmix-types`
   (`AUDIT.md`, finding 4).
-- No check builds or tests `selftest` (`AUDIT.md`, finding 5).
 - The state machine is one file of 14340 lines that holds nearly every topic
   (`AUDIT.md`, finding 6).
 - Three versions of the show file and older shortcut files are translated at
   load (`AUDIT.md`, finding 7).
-- The state machine uses constants and two functions of `engine/flows.rs`; small
+- The state machine uses constants, a type and two functions of `engine/`; small
   helpers sit in a way in or in the state machine, so modules import in a circle
   (OSC encoding in `osc.rs`, the input-name rule in `switcher.rs`, `targets.rs`
-  and `osc_out.rs`); `api.rs` loads a show file itself; two dialogs send an HTTP
+  and `osc_out.rs`); the service translates MIDI itself with a function of
+  `midi.rs`, which imports the service; `api.rs` loads a show file itself; two dialogs send an HTTP
   request from QML themselves (not in `AUDIT.md`).
