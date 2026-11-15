@@ -8543,6 +8543,8 @@ dem ersten Release verbietet Kompatibilitätsschichten.
 umgewandelt. (2) Die Übersetzung bleibt.
 
 **Entscheidung** (User 15.11.2026): Option 1. Der Soll-Aufbau steht in `ARCHITECTURE.md`;
-`REVIEW.md` und der Status von SHW.7 in `LASTENHEFT.md` sind angepasst. Die vorhandenen
+`REVIEW.md` und der Status von SHW.7 in `LASTENHEFT.md` sowie von CUE.21 und SSH.1 in
+`LASTENHEFT-SHOW.md` sind angepasst. Ab dem ersten Release gilt wieder: Eine ältere Show- oder
+Einstellungsdatei muss laden. Die vorhandenen
 Übersetzungen bleiben im Code, bis Fund 7 behoben wird; bis dahin stehen sie als bekannte
 Abweichung in `ARCHITECTURE.md`.
