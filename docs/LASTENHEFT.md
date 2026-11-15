@@ -485,7 +485,7 @@ Zurückgestellt (User 2026-10-08).
 | SHW.4 | Fehlende Dateien: markieren, suchen lassen, sonst Input offline | M | ✅ (fehlende Mediendateien markiert, in einem Ordner nach Namen gesucht; fehlende Quelle: Input offline, kommt von selbst zurück) |
 | SHW.5 | Automatische Sicherung, "letzte Show" wiederherstellen (auch nach Absturz) | M | ✅ (Autosave nach jeder Änderung, Fortsetzen nach Absturz) |
 | SHW.6 | Paket: Show + Medien + Titel in einer Datei | S | ✅ |
-| SHW.7 | Formatwechsel beim Laden bestätigen | S | ✅ (älteres Format beim Öffnen umgewandelt, Hinweis in der Console, alte Datei beim Speichern als `.v<n>.bak`) |
+| SHW.7 | Formatwechsel beim Laden bestätigen | S | ruht bis zum ersten Release (Eigentümer 15.11.2026): bis dahin wird ein geändertes Format einmal umgewandelt, nicht bei jedem Laden übersetzt (`ARCHITECTURE.md`). Gebaut ist: älteres Format beim Öffnen umgewandelt, Hinweis in der Console, alte Datei beim Speichern als `.v<n>.bak`; das entfällt mit Fund 7 des Audits |
 | SHW.8 | Globale Einstellungen getrennt ex-/importieren, Werkseinstellungen | S | ✅ (`export_settings`, `import_settings`, `reset_settings`; im Menü „Paket“; ohne Geheimnisse) |
 | SHW.9 | Import von vMix-Presets (E.3: nie) | X | – |
 | SHW.10 | Import von OBS-Szenen (Quellen, Anordnung) als Starthilfe beim Umstieg (P4) | K | – |

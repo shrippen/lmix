@@ -120,7 +120,7 @@ ausgeschlossen. **MS**: Meilenstein (§7). Stand: ✅ vorhanden · ◐ teilweise
 | CUE.18 | Ducken: solange ein Cue läuft, andere Klänge der Liste um x dB senken, mit Zeit | K | S2 | – |
 | CUE.19 | Defekter Cue (fehlende Datei, fehlendes Ziel) in einer Folge: Zeiten und Folgen laufen weiter, Fehler wird gemeldet | M | S1 | ✅ (Fehler als Ereignis `cue` `failed`) |
 | CUE.20 | Grenzen: mindestens 1000 Cues je Liste, 64 Kinder je Gruppe, Gruppen 3 Ebenen tief | S | S1 | ✅ |
-| CUE.21 | Heutige Cue-Listen (AUT.14) werden beim Laden ins neue Cue-Modell migriert und verhalten sich wie bisher (keine Zeiten, keine Folge); kein Rückwärtslesen alter Formate (S-E.5) | M | S1 | ✅ (Show-Datei Version 2) |
+| CUE.21 | Heutige Cue-Listen (AUT.14) werden beim Laden ins neue Cue-Modell migriert und verhalten sich wie bisher (keine Zeiten, keine Folge); kein Rückwärtslesen alter Formate (S-E.5) | M | S1 | ✅ (Show-Datei Version 2); die Migration beim Laden ruht bis zum ersten Release wie SHW.7 (Eigentümer 15.11.2026) |
 
 ### 3.2 Ablauf (RUN)
 
@@ -286,7 +286,7 @@ QLab kennt keinen Import aus Texten; am nächsten kommt das Anlegen von Cues
 
 | ID | Anforderung | Prio | MS | Stand |
 |---|---|---|---|---|
-| SSH.1 | Cue-Listen mit allen neuen Feldern in der Show-Datei; Format-Version steigt, ältere Shows werden beim Laden migriert (CUE.21) | M | S1 | ✅ |
+| SSH.1 | Cue-Listen mit allen neuen Feldern in der Show-Datei; Format-Version steigt, ältere Shows werden beim Laden migriert (CUE.21) | M | S1 | ✅; die Migration beim Laden ruht bis zum ersten Release wie SHW.7 (Eigentümer 15.11.2026) |
 | SSH.2 | Im Drehbuch-Betrieb speichert die Show nur den Verweis auf den Drehbuch-Ordner, nicht die erzeugten Cues | S | S1 | ◐ (Show kennt ihren Drehbuch-Ordner, lmix-core hält `lmix-script --watch` dafür am Laufen; die Cues bleiben zusätzlich in der Show) |
 | SSH.3 | Zonen-, Bühnen- und Ausgabeziel-Zuordnung liegen nicht in der Show, sondern in den Rechner-Einstellungen; ex- und importierbar | M | S1 | ✅ (Ziele, Abonnenten und Zonen-Zuordnung in `targets.json`; Bühnen mit Stufe 3) |
 | SSH.4 | Paket (SHW.6) nimmt Klang- und Bilddateien der Cues mit | S | S2 | ◐ (SHW.6) |

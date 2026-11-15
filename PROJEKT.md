@@ -60,15 +60,7 @@ Kommuniziere auf Deutsch, Code/Commits auf Englisch.
    `LASTENHEFT-SHOW-QUELLEN.md` bzw. `LASTENHEFT-QUELLEN.md` eintragen.
 
 ## Repo-Struktur
-workspace/
-  strom/          ← Upstream-Klon (eigene Branch "dev", nur minimaler Diff erlaubt)
-  lmix-core/      ← Steuerprozess (Show, Aktionen, Cue-Ablauf, API), headless
-  console-qt/     ← UNSER Client, das Programm `lmix` mit Seiten: Qt Quick/Kirigami über cxx-qt (Entscheidung 3.5)
-  selftest/       ← kopfloser Last- und Abnahmetest direkt an strom (M1b)
-  (Drehbuch-Import: eigenes Werkzeug, spricht nur die API; lmix-core kennt kein
-   Markdown, S-E.2)
-  omtpw-bridge/   ← nur falls Options (b) für OMT gewählt wird (eigenes Repo, stabile API)
-  docs/           ← Build-Doku, Architektur-Anatomie, Latenz-Messungen, Entscheide-Log
+Der Soll-Aufbau (Bausteine, Schichten, wo Neues hingehört) steht in `ARCHITECTURE.md`.
 
 ## Arbeitsregeln
 - Der Code ist die Quelle der Wahrheit (die Grundregel des Strom-Projekts selbst):

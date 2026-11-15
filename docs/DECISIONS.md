@@ -8531,3 +8531,20 @@ kollidiert auf Dateisystemen ohne Groß-/Kleinschreibung.
 **Entscheidung** (User 10.11.2026): `claude.md` wird zu `PROJEKT.md`, der Inhalt bleibt gleich.
 Die neue `CLAUDE.md` importiert `agent.md` und `PROJEKT.md`. Alle Verweise in `docs/` nennen
 den neuen Namen, auch in älteren Einträgen dieser Datei.
+
+## 2026-11-15 — `ARCHITECTURE.md`; SHW.7 ruht bis zum ersten Release
+
+**Kontext**: Das erste Code-Audit (`AUDIT.md`, Fund 7) fand, dass lmix drei Fassungen der
+Show-Datei und ältere Tastenkürzel-Dateien bei jedem Laden übersetzt, obwohl es noch kein
+Release gibt. SHW.7 und `REVIEW.md` verlangten das. Die Regel des Eigentümers für die Zeit vor
+dem ersten Release verbietet Kompatibilitätsschichten.
+
+**Optionen**: (1) SHW.7 ruht bis zum ersten Release; ein geändertes Format wird einmal
+umgewandelt. (2) Die Übersetzung bleibt.
+
+**Entscheidung** (User 15.11.2026): Option 1. Der Soll-Aufbau steht in `ARCHITECTURE.md`;
+`REVIEW.md` und der Status von SHW.7 in `LASTENHEFT.md` sowie von CUE.21 und SSH.1 in
+`LASTENHEFT-SHOW.md` sind angepasst. Ab dem ersten Release gilt wieder: Eine ältere Show- oder
+Einstellungsdatei muss laden. Die vorhandenen
+Übersetzungen bleiben im Code, bis Fund 7 behoben wird; bis dahin stehen sie als bekannte
+Abweichung in `ARCHITECTURE.md`.

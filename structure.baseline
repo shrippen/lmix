@@ -13,6 +13,7 @@ scripts/hw-sound-cues/check.py	main	ccn=24 length=91
 scripts/qml-profile.py	main	ccn=18
 scripts/test-console-qt.sh	-	lines=882
 scripts/test-m2b-vm.sh	-	lines=1093
+scripts/web-check.cjs	(anonymous)	length=125
 workspace/console-qt/build.rs	main	length=120
 workspace/console-qt/qml/ActionRows.qml	actionOf	ccn=21
 workspace/console-qt/qml/ActionRows.qml	rowOf	ccn=42
