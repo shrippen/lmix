@@ -18,8 +18,9 @@ or one that stops the operator:
   GO that is refused, a panic button that leaves anything playing.
 - **Leaks over a long show:** pipelines, pads, threads or memory that are
   not freed when a cue ends (shows run for hours).
-- **Breaks the contract:** the strom API, a show file or the machine
-  settings change so that an older file no longer loads (serde defaults).
+- **Breaks the contract:** the strom API changes without its clients. Before
+  the first release a changed show file or settings format is migrated once
+  (the PR says how), not translated at every load (`ARCHITECTURE.md`).
 - **Lies:** docs, DECISIONS, LASTENHEFT status or comments that say
   something the code does not do.
 
